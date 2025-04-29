@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4">
+  <h2 class="mb-4 text-center">Generated Bills</h2>
+
+  <form method="GET" action="{{ url_for('view_bills') }}" class="row g-1 mb-4 justify-content-center align-items-end">
+    <div class="col-auto">
+      <input type="text" name="q" class="form-control shadow-sm" style="min-width: 360px;" placeholder="Search by invoice, phone, name or company" value="{{ request.args.get('q', '') }}">
+    </div>
+    <div class="col-auto">
+      <input type="date" name="start_date" class="form-control shadow-sm" style="min-width: 150px;" value="{{ request.args.get('start_date', '') | datetimeformat('%Y-%m-%d') }}">
+    </div>
+    <div class="col-auto">
+      <input type="date" name="end_date" class="form-control shadow-sm" style="min-width: 150px;" value="{{ request.args.get('end_date', '') | datetimeformat('%Y-%m-%d') }}">
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-primary">Search</button>
+    </div>
+    <div class="col-auto">
+      <a href="{{ url_for('view_bills') }}" class="btn btn-danger">Clear</a>
+    </div>
+  </form>
+
+  {% if bills %}
+    <div class="table-responsive">
+      <table class="table table-striped table-bordered align-middle text-start">
+        <thead class="table-light">
+          <tr>
+            <th>Invoice No</th>
+            <th>Date</th>
+            <th>Customer</th>
+            <th>Total</th>
+            <th>PDF</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bill in bills %}
+          <tr>
+            <td>{{ bill.invoice_no }}</td>
+            <td>{{ bill.date | datetimeformat }}</td>
+            <td>{{ bill.customer_name }}</td>
+            <td>₹{{ bill.total }}</td>
+            <td><a href="{{ url_for('static', filename='pdfs/' + bill.filename) }}" target="_blank">View</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-center text-muted">No bills have been generated yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,65 @@
+
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4">
+  <h2 class="mb-4 text-center">Create Bill</h2>
+
+  <form method="POST" action="/create-bill">
+    <div class="mb-3">
+      <label class="form-label">Customer</label>
+      <input type="text" class="form-control" value="{{ customer.name }} ({{ customer.company }})" readonly>
+      <input type="hidden" name="customer" value="{{ customer.phone }}">
+    </div>
+
+    <hr>
+
+    <h5 class="mb-3">Items</h5>
+    <div id="items">
+      <div class="row g-3 align-items-end mb-3 item-row">
+        <div class="col-md-4">
+          <input type="text" name="description[]" class="form-control" placeholder="Description" required>
+        </div>
+        <div class="col-md-2">
+          <input type="number" name="quantity[]" class="form-control" placeholder="Qty" required>
+        </div>
+        <div class="col-md-2">
+          <input type="number" name="rate[]" class="form-control" placeholder="Rate" required>
+        </div>
+        <div class="col-md-2">
+          <input type="number" name="tax[]" class="form-control" placeholder="Tax %" required>
+        </div>
+        <div class="col-md-2 text-end">
+          <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <button type="button" id="addItem" class="btn btn-secondary">Add Item</button>
+    </div>
+
+    <div class="mb-4">
+      <label>Total: ₹</label><span id="totalAmount">0.00</span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Generate Bill</button>
+  </form>
+</div>
+
+<script>
+  document.getElementById("addItem").addEventListener("click", () => {
+    const itemRow = document.querySelector(".item-row").cloneNode(true);
+    itemRow.querySelectorAll("input").forEach(input => input.value = "");
+    document.getElementById("items").appendChild(itemRow);
+  });
+
+  document.getElementById("items").addEventListener("click", e => {
+    if (e.target.classList.contains("remove-item")) {
+      const row = e.target.closest(".item-row");
+      if (document.querySelectorAll(".item-row").length > 1) {
+        row.remove();
+      }
+    }
+  });
+</script>
+{% endblock %}

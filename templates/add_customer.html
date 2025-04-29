@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container d-flex flex-column justify-content-center align-items-center text-center py-4">
+  <h2 class="mb-4">Add New Customer</h2>
+
+  {% if duplicate %}
+    <div class="alert alert-danger text-start w-100" role="alert" style="max-width: 400px;">
+      A customer with this phone number already exists.
+    </div>
+  {% endif %}
+
+  {% if success %}
+    <div class="alert alert-success text-start w-100" role="alert" style="max-width: 400px;">
+      Customer added successfully!
+    </div>
+  {% endif %}
+
+  <form method="POST" action="{{ next_url if next_url else '/customers' }}" class="w-100" style="max-width: 400px;">
+    <div class="form-floating mb-3">
+      <input type="text" class="form-control shadow-sm" id="company" name="company" placeholder="Company Name">
+      <label for="company">Company Name</label>
+    </div>
+
+    <div class="form-floating mb-3">
+      <input type="text" class="form-control shadow-sm" id="name" name="name" placeholder="Customer Name" required>
+      <label for="name">Customer Name</label>
+    </div>
+
+
+    <div class="form-floating mb-3">
+      <input type="tel" class="form-control shadow-sm" id="phone" name="phone" placeholder="Phone Number" required>
+      <label for="phone">Phone Number</label>
+    </div>
+
+    <div class="form-floating mb-3">
+      <input type="email" class="form-control shadow-sm" id="email" name="email" placeholder="Email Address">
+      <label for="email">Email Address (optional)</label>
+    </div>
+
+    <div class="form-floating mb-3">
+      <input type="text" class="form-control shadow-sm" id="gst" name="gst" placeholder="GST Number">
+      <label for="gst">GST Number (optional)</label>
+    </div>
+
+    <div class="form-floating mb-4">
+      <textarea class="form-control shadow-sm" placeholder="Address" id="address" name="address" style="height: 100px;"></textarea>
+      <label for="address">Address (optional)</label>
+    </div>
+
+    <button type="submit" class="custom-btn w-100">Add Customer</button>
+  </form>
+</div>
+{% endblock %}

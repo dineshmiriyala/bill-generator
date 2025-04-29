@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4">
+  <h2 class="mb-4 text-center">Start Bill</h2>
+
+  <form method="POST" action="/start-bill">
+    <div class="mb-3">
+      <label for="customer" class="form-label">Select Existing Customer</label>
+      <select class="form-select" name="customer" id="customer" required>
+        <option value="">-- Choose a customer --</option>
+        {% for customer in customers %}
+          <option value="{{ customer.phone }}">{{ customer.name }} ({{ customer.company }})</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="text-center">
+      <button type="submit" class="btn btn-primary">Continue to Bill</button>
+    </div>
+
+    <div class="text-center mt-4">
+      <p>OR</p>
+      <a href="/create_customers?next_url=/create-bill" class="btn btn-secondary">Add New Customer</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

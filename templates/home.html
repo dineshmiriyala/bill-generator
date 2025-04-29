@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% set hide_navbar = True %}
+
+{% block content %}
+<div class="container d-flex flex-column justify-content-center align-items-center text-center vh-100">
+  <h1 class="mb-4">Sri Lakshmi Offset Printers</h1>
+  <p class="lead mb-5">Effortlessly generate professional bills and manage your customers.</p>
+
+  <div class="d-flex flex-column gap-3">
+    <div class="accordion" id="accordionExample">
+      <!-- Bill Main Button -->
+      <button class="custom-btn mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#billOptions" aria-expanded="false" aria-controls="billOptions">
+        Bill
+      </button>
+      <!-- Collapsible Sub-Options for Bill -->
+      <div class="collapse mb-4" id="billOptions" data-bs-parent="#accordionExample">
+          <div class="d-flex flex-column gap-2 mt-3">
+              <a href="/start-bill" class="custom-btn small-btn">Create New Bill</a>
+              <a href="/bills" class="custom-btn small-btn">View Bills</a>
+          </div>
+      </div>
+
+      <!-- Customer Main Button -->
+      <button class="custom-btn mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#customerOptions" aria-expanded="false" aria-controls="customerOptions">
+        Customer
+      </button>
+      <!-- Collapsible Sub-Options -->
+      <div class="collapse" id="customerOptions" data-bs-parent="#accordionExample">
+          <div class="d-flex flex-column gap-2 mt-3">
+              <a href="/create_customers" class="custom-btn small-btn">Add New Customer</a>
+              <a href="/view_customers" class="custom-btn small-btn">View Customers</a>
+          </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
