@@ -9,6 +9,8 @@ from flask_migrate import Migrate
 from db.models import *
 from sqlalchemy.orm import joinedload
 import os
+
+
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(__name__)
@@ -120,9 +122,71 @@ def view_inventory():
 def start_bill():
 
     if request.method == 'POST':
-        selected_phone = request.form.get("customer")
-        selected_customer = customer.query.filter_by(phone = selected_phone).first()
-        return render_template('create_bill.html', customer = selected_customer)
+        if 'description[]' in request.form:
+            selected_phone = request.form.get('customer_phone')
+            selected_customer = customer.query.filter_by(phone = selected_phone).first()
+
+            descriptions = request.form.get('description[]')
+            quantities = request.form.get('quantity[]')
+            rates = request.form.get('rate[]')
+            taxes = request.form.get('tax[]')
+
+            total = 0
+
+            item_rows = []
+
+            for desc, qty, rate, tax in zip(descriptions, quantities, rates, taxes):
+                qty = int(qty)
+                rate = float(rate)
+                tax = float(tax)
+                subtotal = qty * rate
+                tax_amt = subtotal * (tax / 100)
+                line_total = subtotal + tax_amt
+                total += line_total
+                item_rows.append([desc, qty, rate, tax, line_total])
+
+            #creating invoice entry
+            new_invoice = invoice(
+                customerId = selected_customer.id,
+                createdAt = datetime.utcnow(),
+                totalAmount = round(total, 2),
+                pdfPath = "", # to be filled after filename is known
+                invoiceId = "" # temporary placeholder
+            )
+
+            db.session.add(new_invoice)
+            db.session.commit()
+
+            #generating PDF id and PDF name
+            inv_name = f"SLP-{datetime.now().strftime('%d%m%y')}-{str(new_invoice.id).zfill(5)}"
+            pdf_filename = f"{inv_name}.pdf"
+            pdf_path = os.path.join("static/pdfs", pdf_filename)
+
+            new_invoice.invoiceId = inv_name
+            new_invoice.pdfPath = pdf_path
+            db.session.commit()
+
+            # add invoice Items
+
+            for desc, qty, rate, tax, line_total in item_rows:
+                db.session.add(invoiceItem(
+                    invoiceId = new_invoice.id,
+                    itemId = None, #skipping for now,
+                    quantity = qty,
+                    rate = float(rate),
+                    discount = 0,
+                    taxPercentage = float(tax),
+                    line_total = line_total
+                ))
+
+            db.session.commit()
+
+            # NEED TO WORK
+
+        else:
+            selected_phone = request.form.get("customer")
+            selected_customer = customer.query.filter_by(phone = selected_phone).first()
+            return render_template('create_bill.html', customer = selected_customer, inventory=item.query.all())
 
     return render_template('select_customer.html')
 

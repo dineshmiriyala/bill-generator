@@ -39,17 +39,22 @@
     <div id="items">
       <div class="row g-3 align-items-end mb-3 item-row">
         <div class="col-md-4">
-          <input type="text" name="description[]" class="form-control" placeholder="Description" required>
+          <input type="text" name="description[]" class="form-control item-description" list="inventoryList" placeholder="Item Name" required>
+          <datalist id="inventoryList">
+            {% for item in inventory %}
+            <option value="{{ item.name }}">
+            {% endfor %}
+          </datalist>
           <input type="hidden" name="item_id[]" value="">
         </div>
         <div class="col-md-2">
           <input type="number" name="quantity[]" class="form-control" placeholder="Qty" required>
         </div>
         <div class="col-md-2">
-          <input type="number" name="rate[]" class="form-control" placeholder="Rate" required>
+          <input type="number" name="rate[]" class="form-control" placeholder="Unit Price" required>
         </div>
         <div class="col-md-2">
-          <input type="number" name="tax[]" class="form-control" placeholder="Tax %" required>
+          <input type="number" name="tax[]" class="form-control" placeholder="Tax %">
         </div>
         <div class="col-md-2 text-end">
           <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
@@ -84,5 +89,49 @@
       }
     }
   });
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const inventoryData = {
+    {% for item in inventory %}
+    "{{ item.name }}": {
+      rate: {{ item.unitPrice }},
+      tax: {{ item.taxPercentage or 0 }}
+    },
+    {% endfor %}
+  };
+
+  document.getElementById("items").addEventListener("input", function(e) {
+    if (e.target.classList.contains("item-description")) {
+      const selectedItem = e.target.value;
+      const row = e.target.closest(".item-row");
+      const rateInput = row.querySelector('[name="rate[]"]');
+      const taxInput = row.querySelector('[name="tax[]"]');
+
+      if (inventoryData[selectedItem]) {
+        rateInput.value = inventoryData[selectedItem].rate;
+        taxInput.value = inventoryData[selectedItem].tax;
+      }
+    }
+  });
+});
+</script>
+
+<script>
+function calculateTotal() {
+  let total = 0;
+  document.querySelectorAll(".item-row").forEach(row => {
+    const qty = parseFloat(row.querySelector('[name="quantity[]"]').value) || 0;
+    const rate = parseFloat(row.querySelector('[name="rate[]"]').value) || 0;
+    const tax = parseFloat(row.querySelector('[name="tax[]"]').value) || 0;
+    const subtotal = qty * rate;
+    const taxAmount = subtotal * (tax / 100);
+    total += subtotal + taxAmount;
+  });
+  document.getElementById("totalAmount").textContent = total.toFixed(2);
+}
+
+document.getElementById("items").addEventListener("input", calculateTotal);
 </script>
 {% endblock %}
