@@ -26,6 +26,7 @@
             <th>Email</th>
             <th>GST</th>
             <th>Address</th>
+            <th>Joined On</th>
             <th>Bills</th>
           </tr>
         </thead>
@@ -38,6 +39,7 @@
             <td>{{ c.email }}</td>
             <td>{{ c.gst }}</td>
             <td>{{ c.address }}</td>
+            <td>{{c.createdAt.strftime('%d-%b-%Y %I :%M %p') if c.createdAt else ''}}</td>
             <td><a href="{{ url_for('view_bills') }}?phone={{ c.phone }}">View Bills</a></td>
           </tr>
           {% endfor %}
@@ -45,7 +47,7 @@
       </table>
     </div>
   {% else %}
-    <p class="text-center text-muted">No customers yet.</p>
+    <p class="text-center text-muted">No customer found.</p>
   {% endif %}
 </div>
 {% endblock %}

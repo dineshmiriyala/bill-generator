@@ -5,7 +5,7 @@
 
   {% if duplicate %}
     <div class="alert alert-danger text-start w-100" role="alert" style="max-width: 400px;">
-      A customer with this phone number already exists.
+      A customer with this phone number already exists!
     </div>
   {% endif %}
 
@@ -15,7 +15,7 @@
     </div>
   {% endif %}
 
-  <form method="POST" action="{{ next_url if next_url else '/customers' }}" class="w-100" style="max-width: 400px;">
+  <form method="POST" action="{{ next_url if next_url else '/create_customers' }}" class="w-100" style="max-width: 400px;">
     <div class="form-floating mb-3">
       <input type="text" class="form-control shadow-sm" id="company" name="company" placeholder="Company Name">
       <label for="company">Company Name</label>
@@ -40,6 +40,11 @@
     <div class="form-floating mb-3">
       <input type="text" class="form-control shadow-sm" id="gst" name="gst" placeholder="GST Number">
       <label for="gst">GST Number (optional)</label>
+    </div>
+
+    <div class="form-floating mb-3">
+      <input type="text" class="form-control shadow-sm" id="businessType" name="businessType" placeholder="Business Type">
+      <label for="businessType">Business Type (optional)</label>
     </div>
 
     <div class="form-floating mb-4">

@@ -4,7 +4,7 @@
 {% block content %}
 <div class="container d-flex flex-column justify-content-center align-items-center text-center vh-100">
   <h1 class="mb-4">Sri Lakshmi Offset Printers</h1>
-  <p class="lead mb-5">Effortlessly generate professional bills and manage your customers.</p>
+  <p class="lead mb-5">Making prints as colorful as your life. Since 1973.</p>
 
   <div class="d-flex flex-column gap-3">
     <div class="accordion" id="accordionExample">
@@ -15,8 +15,8 @@
       <!-- Collapsible Sub-Options for Bill -->
       <div class="collapse mb-4" id="billOptions" data-bs-parent="#accordionExample">
           <div class="d-flex flex-column gap-2 mt-3">
-              <a href="/start-bill" class="custom-btn small-btn">Create New Bill</a>
-              <a href="/bills" class="custom-btn small-btn">View Bills</a>
+              <a href="/select_customer" class="custom-btn small-btn">Create New Bill</a>
+              <a href="/view_bills" class="custom-btn small-btn">View Bills</a>
           </div>
       </div>
 
@@ -25,12 +25,26 @@
         Customer
       </button>
       <!-- Collapsible Sub-Options -->
-      <div class="collapse" id="customerOptions" data-bs-parent="#accordionExample">
+      <div class="collapse mb-4" id="customerOptions" data-bs-parent="#accordionExample">
           <div class="d-flex flex-column gap-2 mt-3">
               <a href="/create_customers" class="custom-btn small-btn">Add New Customer</a>
               <a href="/view_customers" class="custom-btn small-btn">View Customers</a>
           </div>
       </div>
+
+
+       <!-- Inventory Main Button -->
+      <button class="custom-btn mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#inventoryOptions" aria-expanded="false" aria-controls="inventoryOptions">
+        Inventory
+      </button>
+      <!-- Collapsible Sub-Options -->
+      <div class="collapse mb-4" id="inventoryOptions" data-bs-parent="#accordionExample">
+          <div class="d-flex flex-column gap-2 mt-3">
+              <a href="/view_inventory" class="custom-btn small-btn">View Items</a>
+              <a href="/add_inventory" class="custom-btn small-btn">Add New Item</a>
+          </div>
+      </div>
+
     </div>
   </div>
 </div>
