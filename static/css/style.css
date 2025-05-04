@@ -70,3 +70,27 @@ body {
     height: auto;
     transition: height 0.5s ease;
 }
+
+/* Print-specific rules */
+@media print {
+    .d-print-none,
+    .no-print {
+        display: none !important;
+    }
+
+    body {
+        margin: 0;
+        padding: 0;
+        font-size: 12px;
+    }
+
+    .table th, .table td {
+        padding: 6px;
+        font-size: 11px;
+    }
+
+    .container {
+        width: 100%;
+        padding: 0;
+    }
+}

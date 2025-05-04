@@ -11,6 +11,8 @@ from sqlalchemy.orm import joinedload
 import os
 
 
+
+
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(__name__)
@@ -126,10 +128,10 @@ def start_bill():
             selected_phone = request.form.get('customer_phone')
             selected_customer = customer.query.filter_by(phone = selected_phone).first()
 
-            descriptions = request.form.get('description[]')
-            quantities = request.form.get('quantity[]')
-            rates = request.form.get('rate[]')
-            taxes = request.form.get('tax[]')
+            descriptions = request.form.getlist('description[]')
+            quantities = request.form.getlist('quantity[]')
+            rates = request.form.getlist('rate[]')
+            taxes = request.form.getlist('tax[]')
 
             total = 0
 
@@ -137,8 +139,8 @@ def start_bill():
 
             for desc, qty, rate, tax in zip(descriptions, quantities, rates, taxes):
                 qty = int(qty)
-                rate = float(rate)
-                tax = float(tax)
+                rate = float(rate or 0)
+                tax = float(tax or 0)
                 subtotal = qty * rate
                 tax_amt = subtotal * (tax / 100)
                 line_total = subtotal + tax_amt
@@ -169,19 +171,40 @@ def start_bill():
             # add invoice Items
 
             for desc, qty, rate, tax, line_total in item_rows:
+                matched_item = item.query.filter_by(name = desc).first()
+                if matched_item:
+                    item_id = matched_item.id
+                else:
+                    new_item = item(
+                        name = desc,
+                        hsn = 'N/A', #place holder for future
+                        unitPrice = rate,
+                        quantity = 0,
+                        taxPercentage = tax
+                    )
+                    db.session.add(new_item)
+                    db.session.commit()
+                    item_id = new_item.id
+
                 db.session.add(invoiceItem(
                     invoiceId = new_invoice.id,
-                    itemId = None, #skipping for now,
+                    itemId = item_id,
                     quantity = qty,
-                    rate = float(rate),
+                    rate = rate,
                     discount = 0,
-                    taxPercentage = float(tax),
+                    taxPercentage = tax,
                     line_total = line_total
                 ))
 
             db.session.commit()
 
-            # NEED TO WORK
+            return render_template(
+                'create_bill.html',
+                customer = selected_customer,
+                inventory = item.query.all(),
+                success = True,
+                filename = pdf_filename,
+            )
 
         else:
             selected_phone = request.form.get("customer")
@@ -220,14 +243,14 @@ def view_bills():
 
     for inv in invoices:
         customer = inv.customer
-        dateStr = inv.created_at.strftime('%m/%d/%Y')
+        dateStr = inv.createdAt.strftime('%m/%d/%Y')
         invoiceFilename = f"{inv.invoiceId}.pdf"
         record = {
             "invoice_no" : inv.invoiceId,
             "date" : dateStr,
             "customer_name" : customer.name,
             "phone" : customer.phone,
-            "total" : f"{inv.total_amount: ,.2f}",
+            "total" : f"{inv.totalAmount: ,.2f}",
             "filename" : invoiceFilename
         }
         results.append(record)
@@ -251,6 +274,68 @@ def view_bills():
     return render_template('view_bills.html', bills=bills)
 
 
+@app.route('/bill_preview')
+def bill_preview():
+
+    current_invoice = invoice.query.order_by(invoice.id.desc()).first()
+    if not current_invoice:
+        return "No invoice found"
+
+    current_customer = customer.query.get(current_invoice.customerId)
+    items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
+    item_data = []
+
+    for i in items:
+        item_name = item.query.get(i.itemId).name if i.itemId else "Unknown"
+
+        entry = (
+            item_name,
+            "N/A",
+            i.quantity,
+            i.rate,
+            i.discount,
+            i.taxPercentage,
+            i.line_total
+        )
+
+        item_data.append(entry)
+
+    return render_template('bill_preview.html', invoice = current_invoice, customer = current_customer, items=item_data)
+
+
+
+@app.route('/downlaod-pdf/<int:invoice_id>')
+def downlaod_pdf(invoice_id):
+    current_invoice = invoice.query.get_or_404(invoice_id)
+    current_customer = customer.query.get(current_invoice.customerId)
+    items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
+    item_data = []
+
+    for i in items:
+        item_name = item.query.get(i.itemId).name if i.itemId else "Unknown"
+        entry = (
+            item_name,
+            "N/A",
+            i.quantity,
+            i.rate,
+            i.discount,
+            i.taxPercentage,
+            i.line_total
+        )
+        item_data.append(entry)
+
+    html_content = render_template(
+        'bill_preview.html',
+        invoice = current_invoice,
+        customer = current_customer,
+        items = item_data
+    )
+
+    filename = f"{current_invoice.invoiceId}.pdf"
+    filepath = os.path.join(app.root_path, 'static/pdf', filename)
+    HTML(string = html_content, base_url = request.base.url).write_pdf(filepath)
+
+    return f"PDF Generated Successfully! <a href = '/static/pdfs/{filename}' target = '_blank'>View PDF</a>"
 @app.route('/generate-pdf')
 def generate_pdf(invoice_id, customer, items, total):
     generate_invoice_pdf()

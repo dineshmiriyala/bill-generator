@@ -71,6 +71,13 @@
     </div>
 
     <button type="submit" class="btn btn-primary">Generate Bill</button>
+
+    {% if success %}
+    <div class="alert alert-success mt-4">
+      Bill generated successfully!
+      <a href="{{ url_for('bill_preview') }}" target="_blank" class="btn btn-outline-primary btn-sm ms-2">Preview Bill</a>
+    </div>
+    {% endif %}
   </form>
 </div>
 
