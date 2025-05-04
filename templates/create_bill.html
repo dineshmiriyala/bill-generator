@@ -37,29 +37,57 @@
 
     <h5 class="mb-3">Items</h5>
     <div id="items">
-      <div class="row g-3 align-items-end mb-3 item-row">
-        <div class="col-md-4">
-          <input type="text" name="description[]" class="form-control item-description" list="inventoryList" placeholder="Item Name" required>
-          <datalist id="inventoryList">
-            {% for item in inventory %}
-            <option value="{{ item.name }}">
-            {% endfor %}
-          </datalist>
-          <input type="hidden" name="item_id[]" value="">
+      {% if success %}
+        {% for description, quantity, rate, tax in zip(descriptions, quantities, rates, taxes) %}
+          <div class="row g-3 align-items-end mb-3 item-row">
+            <div class="col-md-4">
+              <input type="text" name="description[]" class="form-control item-description" list="inventoryList" placeholder="Item Name" value="{{ description }}" required>
+              <datalist id="inventoryList">
+                {% for item in inventory %}
+                <option value="{{ item.name }}">
+                {% endfor %}
+              </datalist>
+              <input type="hidden" name="item_id[]" value="">
+            </div>
+            <div class="col-md-2">
+              <input type="number" name="quantity[]" class="form-control" placeholder="Qty" value="{{ quantity }}" required>
+            </div>
+            <div class="col-md-2">
+              <input type="number" name="rate[]" class="form-control" placeholder="Unit Price" value="{{ rate }}" required>
+            </div>
+            <div class="col-md-2">
+              <input type="number" name="tax[]" class="form-control" placeholder="Tax %" value="{{ tax }}">
+            </div>
+            <div class="col-md-2 text-end">
+              <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="row g-3 align-items-end mb-3 item-row">
+          <div class="col-md-4">
+            <input type="text" name="description[]" class="form-control item-description" list="inventoryList" placeholder="Item Name" required>
+            <datalist id="inventoryList">
+              {% for item in inventory %}
+              <option value="{{ item.name }}">
+              {% endfor %}
+            </datalist>
+            <input type="hidden" name="item_id[]" value="">
+          </div>
+          <div class="col-md-2">
+            <input type="number" name="quantity[]" class="form-control" placeholder="Qty" required>
+          </div>
+          <div class="col-md-2">
+            <input type="number" name="rate[]" class="form-control" placeholder="Unit Price" required>
+          </div>
+          <div class="col-md-2">
+            <input type="number" name="tax[]" class="form-control" placeholder="Tax %">
+          </div>
+          <div class="col-md-2 text-end">
+            <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
+          </div>
         </div>
-        <div class="col-md-2">
-          <input type="number" name="quantity[]" class="form-control" placeholder="Qty" required>
-        </div>
-        <div class="col-md-2">
-          <input type="number" name="rate[]" class="form-control" placeholder="Unit Price" required>
-        </div>
-        <div class="col-md-2">
-          <input type="number" name="tax[]" class="form-control" placeholder="Tax %">
-        </div>
-        <div class="col-md-2 text-end">
-          <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
-        </div>
-      </div>
+      {% endif %}
     </div>
 
     <div class="mb-3">
@@ -67,15 +95,23 @@
     </div>
 
     <div class="mb-4">
-      <label>Total: ₹</label><span id="totalAmount">0.00</span>
+      <label>Total: ₹</label>
+      <span id="totalAmount">
+        {% if success and grand_total %}
+          {{ grand_total }}
+        {% else %}
+          0.00
+        {% endif %}
+      </span>
     </div>
 
     <button type="submit" class="btn btn-primary">Generate Bill</button>
+    <button type="button" id="clearForm" class="btn btn-outline-danger ms-2">Clear Form</button>
 
     {% if success %}
     <div class="alert alert-success mt-4">
       Bill generated successfully!
-      <a href="{{ url_for('bill_preview') }}" target="_blank" class="btn btn-outline-primary btn-sm ms-2">Preview Bill</a>
+      <a href="{{ url_for('latest_bill_preview') }}" target="_blank" class="btn btn-outline-primary btn-sm ms-2">Preview Bill</a>
     </div>
     {% endif %}
   </form>
@@ -140,5 +176,23 @@ function calculateTotal() {
 }
 
 document.getElementById("items").addEventListener("input", calculateTotal);
+</script>
+<script>
+document.getElementById("clearForm").addEventListener("click", () => {
+  document.querySelectorAll(".item-row").forEach((row, index) => {
+    row.querySelectorAll("input").forEach(input => input.value = "");
+    if (index > 0) row.remove();  // Keep only the first row
+  });
+  document.getElementById("totalAmount").textContent = "0.00";
+});
+</script>
+
+</script>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if ("{{ success }}".toLowerCase() === "true"){
+      calculateTotal();
+    }
+  });
 </script>
 {% endblock %}

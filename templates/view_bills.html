@@ -40,7 +40,7 @@
             <td>{{ bill.date | datetimeformat }}</td>
             <td>{{ bill.customer_name }}</td>
             <td>₹{{ bill.total }}</td>
-            <td><a href="{{ url_for('static', filename='pdfs/' + bill.filename) }}" target="_blank">View</a></td>
+            <td><a href="{{ url_for('bill_preview', invoicenumber=bill.invoice_no) }}" target="_blank">View</a></td>
           </tr>
           {% endfor %}
         </tbody>

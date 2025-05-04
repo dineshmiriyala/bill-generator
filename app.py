@@ -204,6 +204,11 @@ def start_bill():
                 inventory = item.query.all(),
                 success = True,
                 filename = pdf_filename,
+                descriptions = descriptions,
+                quantities = quantities,
+                rates = rates,
+                taxes = taxes,
+                total = total
             )
 
         else:
@@ -273,9 +278,35 @@ def view_bills():
 
     return render_template('view_bills.html', bills=bills)
 
+@app.route('/bill_preview/<invoicenumber>')
+def bill_preview(invoicenumber):
+    current_invoice = invoice.query.filter_by(invoiceId = invoicenumber).first()
+    if not current_invoice:
+        return f"No invoice found for {invoicenumber}"
 
-@app.route('/bill_preview')
-def bill_preview():
+    current_customer = customer.query.get(current_invoice.customerId)
+    items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
+    item_data = []
+    for i in items:
+        item_name = item.query.get(i.itemId).name if i.itemId else "Unknown"
+        entry = (
+            item_name,
+            "N/A",
+            i.quantity,
+            i.rate,
+            i.discount,
+            i.taxPercentage,
+            i.line_total
+        )
+        item_data.append(entry)
+
+    return render_template('bill_preview.html', invoice = current_invoice, customer = current_customer, items = item_data)
+
+
+
+
+@app.route('/bill_preview/latest')
+def latest_bill_preview():
 
     current_invoice = invoice.query.order_by(invoice.id.desc()).first()
     if not current_invoice:
@@ -342,6 +373,8 @@ def generate_pdf(invoice_id, customer, items, total):
 
     return f"PDF generated successfully! <a href = '/static/pdfs/generated_invoice.pdf' target='_blank'>View PDF</a>"
 
+
+app.jinja_env.globals.update(zip=zip)
 
 if __name__ == '__main__':
     app.run(debug=True)
