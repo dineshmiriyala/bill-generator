@@ -126,13 +126,13 @@ Then go to `http://127.0.0.1:5000` in your browser.
 ## 🖼 Screenshots
 
 #### Homepage
-![Home Page](images/homepage.png)
+![Home Page](images/HomePage.png)
 #### Bill Creation
-![Create Bill](images/createBill.png)
+![Create Bill](images/CreateBill.png)
 #### Customer Search
 ![Customer Search](images/CustomerSearch.png)
 #### Sample Invoice
-![Invoice Preview](images/invoice.png)
+![Invoice Preview](images/Invoice.png)
 
 ---
 
