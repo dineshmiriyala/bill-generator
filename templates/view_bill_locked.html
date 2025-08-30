@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4">
+  <!-- Header / Title -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h2 class="mb-0">View Bill</h2>
+      <div class="text-muted small">Invoice No: <strong>{{ invoice_no }}</strong></div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-warning" href="{{ url_for('edit_bill', invoicenumber=invoice_no) }}">Edit</a>
+      <a class="btn btn-secondary" target="_blank" href="{{ url_for('bill_preview', invoicenumber=invoice_no) }}">Print Bill Again</a>
+      <form id="deleteForm" method="POST" action="{{ url_for('delete_bill', invoicenumber=invoice_no) }}" class="d-inline">
+        <input type="hidden" name="next" id="nextField" value="">
+        <button type="submit" class="btn btn-danger">Delete</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Customer Details Card -->
+  <div class="card mb-4">
+    <div class="card-header">Customer Details</div>
+    <div class="card-body p-0">
+      <table class="table table-striped table-bordered align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Name</th>
+            <th>Company</th>
+            <th>Phone</th>
+            <th>GST</th>
+            <th>Address</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{ customer.name }}</td>
+            <td>{{ customer.company }}</td>
+            <td>{{ customer.phone }}</td>
+            <td>{{ customer.gst }}</td>
+            <td>{{ customer.address }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Items Card -->
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Items</span>
+      {% if dcno %}
+        <span class="badge bg-info text-dark">DC No enabled</span>
+      {% else %}
+        <span class="badge bg-secondary">No DC No</span>
+      {% endif %}
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width:6rem;">Serial No</th>
+            <th>Description</th>
+            {% if dcno %}<th>Delivery Challan No</th>{% endif %}
+            <th style="width:10rem;">Quantity</th>
+            <th style="width:10rem;">Rate</th>
+            <th style="width:12rem;" class="text-end">Line Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for desc, qty, rate in zip(descriptions, quantities, rates) %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ desc }}</td>
+            {% if dcno %}
+              <td>{{ dc_numbers[loop.index0] if dc_numbers is defined and dc_numbers|length > loop.index0 else '' }}</td>
+            {% endif %}
+            <td>{{ qty }}</td>
+            <td>{{ rate }}</td>
+            <td class="text-end">{{ (qty | float) * (rate | float) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th colspan="{% if dcno %}5{% else %}4{% endif %}" class="text-end">Total</th>
+            <th class="text-end">{{ total }}</th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+  (function(){
+    const form = document.getElementById('deleteForm');
+    const nextField = document.getElementById('nextField');
+    if (!form || !nextField) return;
+
+    // Prefer going back to the bills list; if we came from the list, use that exact URL (preserves filters/sort)
+    const listFallback = '{{ url_for('view_bills') }}';
+    const ref = document.referrer || '';
+    if (ref.includes('/view_bills')) {
+      nextField.value = ref;
+    } else {
+      nextField.value = listFallback;
+    }
+
+    form.addEventListener('submit', function(e){
+      if (!confirm('Are you sure you want to delete this bill permanently?')) {
+        e.preventDefault();
+      }
+    });
+  })();
+</script>
+{% endblock %}

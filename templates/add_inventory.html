@@ -4,42 +4,48 @@
   <h2 class="mb-4 text-center">Add Inventory Item</h2>
 
   {% if duplicate %}
-    <div class = 'alert alert-danger text-start w-100' role = 'alert' style = 'max-width': 400px;">
-      A item with the same HSN code already exists!
+    <div class="alert alert-danger text-center w-100 mx-auto" role="alert" style="max-width: 500px; margin: 0 auto;">
+      An item with the same <strong>SKU</strong> already exists!
     </div>
   {% endif %}
 
   {% if success %}
-    <div class = 'alert alert-success text-start w-100' role = 'alert' style = 'max-width': 400px;">
+    <div class="alert alert-success text-center w-100 mx-auto" role="alert" style="max-width: 500px; margin: 0 auto;">
       Item added successfully!
     </div>
   {% endif %}
 
   <form method="POST" action="{{ next_url if next_url else '/add_inventory'}}" class="w-100" style="max-width: 500px; margin: 0 auto;">
     <div class="form-floating mb-3">
-      <input type="text" class="form-control shadow-sm" id="name" name="name" placeholder="Item Name" required>
-      <label for="name">Item Name</label>
+      <input type="text" class="form-control shadow-sm" id="name" name="name" placeholder="Description" required>
+      <label for="name">Description</label>
     </div>
 
-    <div class="form-floating mb-3">
-      <input type="text" class="form-control shadow-sm" id="hsn" name="hsn" placeholder="HSN Code" required>
-      <label for="hsn">HSN Code</label>
+    <div class="form-floating mb-1">
+      <input type="text" class="form-control shadow-sm" id="sku" placeholder="Auto-assigned" disabled>
+      <label for="sku">SKU (auto-assigned)</label>
     </div>
+    <div class="form-text mb-3">SKU will be generated automatically when you save the item.</div>
 
     <div class="form-floating mb-3">
       <input type="number" class="form-control shadow-sm" id="unitPrice" name="unitPrice" placeholder="Unit Price" step="0.01" required>
       <label for="unitPrice">Unit Price</label>
     </div>
 
-    <div class="form-floating mb-3">
-      <input type="number" class="form-control shadow-sm" id="quantity" name="quantity" placeholder="Available Quantity" required>
+    <div class="form-floating mb-1">
+      <input type="number" class="form-control shadow-sm" id="quantity" name="quantity" placeholder="Available Quantity">
       <label for="quantity">Available Quantity</label>
     </div>
+    <div class="form-text mb-3">Default value will be 10000.</div>
 
-    <div class="form-floating mb-4">
+
+    <div class="form-floating mb-1">
       <input type="number" class="form-control shadow-sm" id="tax" name="taxPercentage" placeholder="Tax Percentage" step="0.1">
       <label for="tax">Tax %</label>
     </div>
+    <div class="form-text mb-3">Default value is 0.0.</div>
+
+
 
     <button type="submit" class="btn btn-primary w-100">Add Item</button>
   </form>

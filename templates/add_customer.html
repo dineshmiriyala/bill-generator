@@ -4,55 +4,59 @@
   <h2 class="mb-4">Add New Customer</h2>
 
   {% if duplicate %}
-    <div class="alert alert-danger text-start w-100" role="alert" style="max-width: 400px;">
+    <div class="alert alert-danger text-center w-100 mx-auto" role="alert" style="max-width: 500px; margin: 0 auto;">
       A customer with this phone number already exists!
     </div>
   {% endif %}
 
   {% if success %}
-    <div class="alert alert-success text-start w-100" role="alert" style="max-width: 400px;">
+    <div class="alert alert-success text-center w-100 mx-auto" role="alert" style="max-width: 500px; margin: 0 auto;">
       Customer added successfully!
     </div>
   {% endif %}
 
   <form method="POST" action="{{ next_url if next_url else '/create_customers' }}" class="w-100" style="max-width: 400px;">
     <div class="form-floating mb-3">
-      <input type="text" class="form-control shadow-sm" id="company" name="company" placeholder="Company Name">
+      <input type="text" class="form-control shadow-sm" id="company" name="company" placeholder="Company Name" value="{{ request.form.get('company','') }}">
       <label for="company">Company Name</label>
     </div>
 
     <div class="form-floating mb-3">
-      <input type="text" class="form-control shadow-sm" id="name" name="name" placeholder="Customer Name" required>
+      <input type="text" class="form-control shadow-sm" id="name" name="name" placeholder="Customer Name" value="{{ request.form.get('name','') }}" required>
       <label for="name">Customer Name</label>
     </div>
 
 
     <div class="form-floating mb-3">
-      <input type="tel" class="form-control shadow-sm" id="phone" name="phone" placeholder="Phone Number" required>
+      <input type="tel" class="form-control shadow-sm" id="phone" name="phone" placeholder="Phone Number" value="{{ request.form.get('phone','') }}" required>
       <label for="phone">Phone Number</label>
     </div>
 
     <div class="form-floating mb-3">
-      <input type="email" class="form-control shadow-sm" id="email" name="email" placeholder="Email Address">
+      <input type="email" class="form-control shadow-sm" id="email" name="email" placeholder="Email Address" value="{{ request.form.get('email','') }}">
       <label for="email">Email Address (optional)</label>
     </div>
 
     <div class="form-floating mb-3">
-      <input type="text" class="form-control shadow-sm" id="gst" name="gst" placeholder="GST Number">
+      <input type="text" class="form-control shadow-sm" id="gst" name="gst" placeholder="GST Number" value="{{ request.form.get('gst','') }}">
       <label for="gst">GST Number (optional)</label>
     </div>
 
     <div class="form-floating mb-3">
-      <input type="text" class="form-control shadow-sm" id="businessType" name="businessType" placeholder="Business Type">
+      <input type="text" class="form-control shadow-sm" id="businessType" name="businessType" placeholder="Business Type" value="{{ request.form.get('businessType','') }}">
       <label for="businessType">Business Type (optional)</label>
     </div>
 
     <div class="form-floating mb-4">
-      <textarea class="form-control shadow-sm" placeholder="Address" id="address" name="address" style="height: 100px;"></textarea>
+      <textarea class="form-control shadow-sm" placeholder="Address" id="address" name="address" style="height: 100px;">{{ request.form.get('address','') }}</textarea>
       <label for="address">Address (optional)</label>
     </div>
 
     <button type="submit" class="custom-btn w-100">Add Customer</button>
+    <div class="text-center text-muted my-2">or</div>
+    <button type="submit" name="action" value="create_and_bill" class="btn btn-outline-success rounded-pill w-100 py-2 shadow-sm">
+      Create bill for this customer
+    </button>
   </form>
 </div>
 {% endblock %}

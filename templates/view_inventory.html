@@ -5,7 +5,7 @@
 
   <form method="GET" action="{{ url_for('view_inventory') }}" class="row g-2 mb-4 justify-content-center align-items-end">
     <div class="col-auto">
-      <input type="text" name="q" class="form-control shadow-sm" style="min-width: 300px;" placeholder="Search by item name, HSN, or code" value="{{ request.args.get('q', '') }}">
+      <input type="text" name="q" class="form-control shadow-sm" style="min-width: 300px;" placeholder="Search by item name or SKU" value="{{ request.args.get('q', '') }}">
     </div>
     <div class="col-auto">
       <button type="submit" class="btn btn-primary">Search</button>
@@ -21,7 +21,7 @@
         <thead class="table-light">
           <tr>
             <th>Item Name</th>
-            <th>HSN Code</th>
+            <th>SKU</th>
             <th>Unit Price</th>
             <th>Available Quantity</th>
             <th>Tax %</th>
@@ -31,8 +31,8 @@
           {% for item in inventory %}
           <tr>
             <td>{{ item.name }}</td>
-            <td>{{ item.hsn }}</td>
-            <td>₹{{ item.unitPrice }}</td>
+            <td>{{ item.sku }}</td>
+            <td>₹{{ '%.2f'|format(item.unitPrice or 0) }}</td>
             <td>{{ item.quantity }}</td>
             <td>{{ item.taxPercentage }}%</td>
           </tr>

@@ -28,6 +28,7 @@
             <th>Address</th>
             <th>Joined On</th>
             <th>Bills</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -39,8 +40,16 @@
             <td>{{ c.email }}</td>
             <td>{{ c.gst }}</td>
             <td>{{ c.address }}</td>
-            <td>{{c.createdAt.strftime('%d-%b-%Y %I :%M %p') if c.createdAt else ''}}</td>
+            <td class="text-nowrap">{{ c.createdAt.strftime('%d %b %Y, %I:%M %p') if c.createdAt else '' }}</td>
             <td><a href="{{ url_for('view_bills') }}?phone={{ c.phone }}">View Bills</a></td>
+            <td>
+              <form method="POST" action="{{ url_for('view_customers') }}" class="d-inline">
+                <input type="hidden" name="customer" value="{{ c.phone }}">
+                <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-3 shadow-sm" style="white-space: nowrap;">
+                  Create&nbsp;Bill
+                </button>
+              </form>
+            </td>
           </tr>
           {% endfor %}
         </tbody>

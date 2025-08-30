@@ -3,7 +3,7 @@
 <div class="container py-4">
   <h2 class="mb-4 text-center">Generated Bills</h2>
 
-  <form method="GET" action="{{ url_for('view_bills') }}" class="row g-1 mb-4 justify-content-center align-items-end">
+  <form id="billsFilterForm" method="GET" action="{{ url_for('view_bills') }}" class="row g-1 mb-4 justify-content-center align-items-end">
     <div class="col-auto">
       <input type="text" name="q" class="form-control shadow-sm" style="min-width: 360px;" placeholder="Search by invoice, phone, name or company" value="{{ request.args.get('q', '') }}">
     </div>
@@ -12,6 +12,20 @@
     </div>
     <div class="col-auto">
       <input type="date" name="end_date" class="form-control shadow-sm" style="min-width: 150px;" value="{{ request.args.get('end_date', '') | datetimeformat('%Y-%m-%d') }}">
+    </div>
+    <div class="col-auto">
+      <select id="sortSelect" name="sort" class="form-select shadow-sm">
+        <option value="date" {{ 'selected' if request.args.get('sort','date') == 'date' else '' }}>Sort by Date</option>
+        <option value="total" {{ 'selected' if request.args.get('sort') == 'total' else '' }}>Sort by Total</option>
+        <option value="invoice" {{ 'selected' if request.args.get('sort') == 'invoice' else '' }}>Sort by Invoice No</option>
+        <option value="customer" {{ 'selected' if request.args.get('sort') == 'customer' else '' }}>Sort by Customer</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <select id="dirSelect" name="dir" class="form-select shadow-sm">
+        <option value="desc" {{ 'selected' if request.args.get('dir','desc') == 'desc' else '' }}>Descending</option>
+        <option value="asc"  {{ 'selected' if request.args.get('dir') == 'asc' else '' }}>Ascending</option>
+      </select>
     </div>
     <div class="col-auto">
       <button type="submit" class="btn btn-primary">Search</button>
@@ -30,7 +44,7 @@
             <th>Date</th>
             <th>Customer</th>
             <th>Total</th>
-            <th>PDF</th>
+            <th>View</th>
           </tr>
         </thead>
         <tbody>
@@ -40,7 +54,7 @@
             <td>{{ bill.date | datetimeformat }}</td>
             <td>{{ bill.customer_name }}</td>
             <td>₹{{ bill.total }}</td>
-            <td><a href="{{ url_for('bill_preview', invoicenumber=bill.invoice_no) }}" target="_blank">View</a></td>
+            <td><a href="{{ url_for('view_bill_locked', invoicenumber=bill.invoice_no) }}">View Bill</a></td>
           </tr>
           {% endfor %}
         </tbody>
@@ -50,4 +64,13 @@
     <p class="text-center text-muted">No bills have been generated yet.</p>
   {% endif %}
 </div>
+<script>
+  (function(){
+    const form = document.getElementById('billsFilterForm');
+    const sortSel = document.getElementById('sortSelect');
+    const dirSel  = document.getElementById('dirSelect');
+    if (form && sortSel) sortSel.addEventListener('change', () => form.submit());
+    if (form && dirSel)  dirSel.addEventListener('change',  () => form.submit());
+  })();
+</script>
 {% endblock %}

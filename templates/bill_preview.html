@@ -4,60 +4,137 @@
     <meta charset="UTF-8">
     <title>{{ invoice.invoiceId }} - Invoice</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      .brand-logo {
+        height: 60px; /* adjust as needed */
+        display: block;
+      }
+      @media print {
+        .brand-logo { height: 48px; }
+      }
+      .signature-img {
+        max-width: 160px; /* reduced size */
+        height: auto;
+        display: block;
+        margin-bottom: 0.25rem;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+      @media print {
+        .signature-img { max-width: 140px; }
+      }
+      .payment-info { font-size: 0.95rem; }
+      .signature-wrap {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center; /* center caption to image width */
+      }
+      .signature-caption {
+        width: 100%;
+        text-align: center;
+      }
+      /* Extra-thin table borders (screen) */
+      table.table { border-collapse: collapse; }
+      .table-bordered > :not(caption) > * { border-width: 0.5px !important; }
+      .table-bordered td, .table-bordered th { border-width: 0.5px !important; }
+      .table { border-color: #c8c8c8 !important; }
+      /* Print/PDF sizing */
+      @page {
+        size: A4;
+        margin: 16mm;
+      }
+      @media print {
+        body { font-size: 14px !important; line-height: 1.35; }
+        .container { max-width: 100% !important; }
+        /* Headings scaled between 12–18px range */
+        h1 { font-size: 18px !important; }
+        h2 { font-size: 18px !important; }
+        h3 { font-size: 17px !important; }
+        h4 { font-size: 16px !important; }
+        h5 { font-size: 15px !important; }
+        h6 { font-size: 14px !important; }
+        /* Tables and misc text */
+        table, .table, .table th, .table td { font-size: 14px !important; }
+        .payment-info { font-size: 14px !important; }
+        .text-muted { color: #6c757d !important; }
+        /* Keep logo and signature tidy for print */
+        .brand-logo { height: 42px !important; }
+        .signature-img { max-width: 130px !important; }
+        /* Ultra-thin table borders (print/PDF) */
+        table.table { table-layout: fixed !important; width: 100% !important; }
+        .table { border-color: #b5b5b5 !important; }
+        .table-bordered > :not(caption) > * { border-width: 0.4px !important; }
+        .table-bordered td, .table-bordered th { border-width: 0.4px !important; }
+      }
+      .bill-heading { text-align:center; margin-top:4px; font-size:20px; font-weight:bold; color:#1a2a6c; }
+      .highlight-info { color:#1a2a6c; }
+      .masthead { text-align: center; }
+      .brand-logo { margin-left: auto; margin-right: auto; }
+    </style>
 </head>
 <body class="p-5">
 
     <div class="container">
-        <h2 class="mb-4">Sri Lakshmi Offset Printers Invoice</h2>
-
+        <div class="masthead text-center mb-2">
+          <h1 class="visually-hidden">Sri Lakshmi Offset Printers — ESTD: 1973</h1>
+          <img class="brand-logo mx-auto d-block" src="{{ url_for('static', filename='img/brand-wordmark.svg') }}" alt="Sri Lakshmi Offset Printers — ESTD: 1973">
+          <h2 class="bill-heading">Bill of Supply</h2>
+        </div>
 
         <div class="row mb-4">
             <div class="col-sm-6">
                 <h5>From:</h5>
-                <p><strong>Sri Lakshmi Offset Printers</strong><br>
-                Pamarru, Andhra Pradesh - 521157<br>
+                <p>
+                    <strong>Sri Lakshmi Offset Printers</strong><br>
+                PAMARRU, Krishna Dist - 521157<br>
                 GST: 37AVEPM5991R3ZG<br>
-                Phone: +91 9848992207<br>
-                Place of Supply: Andhra Pradesh (IN)<br>
-                Reverse Charge: N</p>
+                Phone: 9848992207<br>
+                email: haripress@gmail.com<br>
+                </p>
             </div>
             <div class="col-sm-6 text-end">
                 <h5>To:</h5>
-                <p><strong>{{ customer.name }}</strong><br>
-                {{ customer.address }}<br>
-                GST: {{ customer.gst }}<br>
-                Phone: {{ customer.phone }}</p>
+                <p class="highlight-info">
+                    {% if customer.name %}<strong>{{ customer.name }}</strong><br>{% endif %}
+                    {% if customer.address %}{{ customer.address }}<br>{% endif %}
+                    {% if customer.gst %}GST: {{ customer.gst }}<br>{% endif %}
+                    {% if customer.phone %}Phone: {{ customer.phone }}{% endif %}
+                </p>
             </div>
         </div>
 
         <div class="row mb-3">
             <div class="col-sm-6">
-                <p><strong>Invoice No:</strong> {{ invoice.invoiceId }}</p>
-                <p><strong>Date:</strong> {{ invoice.createdAt.strftime('%d-%m-%Y') }}</p>
+                <p class="highlight-info"><strong>Invoice No:</strong> {{ invoice.invoiceId }}</p>
+                <p class="highlight-info"><strong>Date:</strong> {{ invoice.createdAt.strftime('%d-%m-%Y') }}</p>
             </div>
         </div>
 
         <table class="table table-bordered text-center">
             <thead class="table-light">
                 <tr>
+                    <th>Serial No</th>
                     <th>Description</th>
-                    <th>HSN</th>
-                    <th>Qty</th>
-                    <th>Rate</th>
-                    <th>Disc.%</th>
-                    <th>Tax%</th>
+                    {% if dcno %}<th>Delivery Challan No</th>{% endif %}
+                    <th>Quantity</th>
                     <th>Amount</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in items %}
                 <tr>
+                    <td>{{ loop.index }}</td>
                     <td>{{ item[0] }}</td>
-                    <td>{{ item[1] }}</td>
+                    {% if dcno %}
+                    <td>{{ dc_numbers[loop.index0] if dc_numbers is defined and dc_numbers|length > loop.index0 else '' }}</td>
+                    {% endif %}
                     <td>{{ item[2] }}</td>
-                    <td>{{ item[3] }}</td>
-                    <td>{{ item[4] }}</td>
-                    <td>{{ item[5] }}</td>
                     <td>{{ item[6] }}</td>
                 </tr>
                 {% endfor %}
@@ -65,7 +142,28 @@
         </table>
 
         <div class="text-end">
-            <h5>Total: ₹ {{ invoice.totalAmount }}</h5>
+            <h5>Total: ₹ {{ '%.2f'|format(invoice.totalAmount or 0) }}</h5>
+            {% if total_in_words %}
+            <div class="text-muted" style="font-size: 0.95rem;">Amount in words: <em>{{ total_in_words }}</em></div>
+            {% endif %}
+        </div>
+
+        <div class="mt-3 text-end">
+          <small class="text-muted" style="font-size: 0.7rem;">Composition Taxable Person. Not eligible to collect Tax on supplies.</small><br>
+          <small class="text-muted" style="font-size: 0.7rem;">Computer generated receipt – signature not required</small>
+        </div>
+
+        <div class="row mt-5">
+          <div class="col-12 payment-info">
+            <h6 class="mb-2">Payment Information</h6>
+            <div>
+              Account Name: <strong>Sri Lakshmi Offset Printers</strong><br>
+              Bank: <strong>State Bank of India, Pamarru</strong><br>
+              Account Number: <strong>38588014977</strong><br>
+              IFSC: <strong>SBIN0002776</strong><br>
+              Any UPI app: <strong>9848992207</strong>
+            </div>
+          </div>
         </div>
 
         <div class="text-center mt-4 d-print-none">

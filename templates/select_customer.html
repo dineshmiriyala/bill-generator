@@ -1,7 +1,12 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="container py-4">
-  <h2 class="mb-4 text-center">Start Bill - Select Customer</h2>
+  <h2 class="mb-2 text-center">Start Bill - Select Customer</h2>
+  {% if not request.args.get('q') %}
+    <p class="text-center text-muted mb-4">Showing recently added customers</p>
+  {% else %}
+    <p class="text-center text-muted mb-4">Search results</p>
+  {% endif %}
 
   <form method="GET" action="{{ url_for('select_customer') }}" class="row g-2 mb-4 justify-content-center align-items-end">
     <div class="col-auto">

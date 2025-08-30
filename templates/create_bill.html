@@ -3,7 +3,18 @@
 <div class="container py-4">
   <h2 class="mb-4 text-center">Create Bill</h2>
 
-  <form method="POST" action="/create-bill">
+  {% if edit_mode %}
+  <div class="alert alert-info d-flex justify-content-between align-items-center" role="alert">
+    <div>
+      <strong>Editing Invoice:</strong> <span class="badge bg-secondary">{{ prev_invoice_no or invoice_no }}</span>
+      <span class="ms-3 text-muted">Created at: {{ prev_created_at }}</span>
+    </div>
+    <a href="{{ url_for('bill_preview', invoicenumber=invoice_no) }}" target="_blank" class="btn btn-sm btn-outline-primary">Open current PDF</a>
+  </div>
+  {% endif %}
+
+  <form method="POST" action="{% if edit_mode %}{{ url_for('update_bill', invoicenumber=invoice_no) }}{% else %}/create-bill{% endif %}">
+    {% if edit_mode %}<input type="hidden" name="invoice_no" value="{{ invoice_no }}">{% endif %}
     <div class="mb-4">
       <h5>Customer Details</h5>
       <table class="table table-striped table-bordered align-middle text-start">
@@ -25,7 +36,7 @@
             <td>{{ customer.gst }}</td>
             <td>{{ customer.address }}</td>
             <td>
-              <a href="{{ url_for('select_customer') }}" class="btn btn-sm btn-success">Change</a>
+              {% if not edit_mode %}<a href="{{ url_for('select_customer') }}" class="btn btn-sm btn-success">Change</a>{% endif %}
             </td>
           </tr>
         </tbody>
@@ -35,10 +46,15 @@
 
     <hr>
 
+    <div class="form-check form-switch mb-2">
+      <input class="form-check-input" type="checkbox" id="toggleDC" {% if dcno %}checked{% endif %}>
+      <label class="form-check-label" for="toggleDC">Include Delivery Challan No per item</label>
+    </div>
+
     <h5 class="mb-3">Items</h5>
     <div id="items">
-      {% if success %}
-        {% for description, quantity, rate, tax in zip(descriptions, quantities, rates, taxes) %}
+      {% if success or edit_mode %}
+        {% for description, quantity, rate in zip(descriptions, quantities, rates) %}
           <div class="row g-3 align-items-end mb-3 item-row">
             <div class="col-md-4">
               <input type="text" name="description[]" class="form-control item-description" list="inventoryList" placeholder="Item Name" value="{{ description }}" required>
@@ -49,16 +65,16 @@
               </datalist>
               <input type="hidden" name="item_id[]" value="">
             </div>
+            <div class="col-md-3 dc-col" style="{% if not dcno %}display:none;{% endif %}">
+              <input type="text" name="dc_no[]" class="form-control dc-input" placeholder="DC No" {% if not dcno %}disabled{% endif %} value="{{ dc_numbers[loop.index0] if dc_numbers is defined and dc_numbers|length > loop.index0 else '' }}">
+            </div>
             <div class="col-md-2">
               <input type="number" name="quantity[]" class="form-control" placeholder="Qty" value="{{ quantity }}" required>
             </div>
             <div class="col-md-2">
               <input type="number" name="rate[]" class="form-control" placeholder="Unit Price" value="{{ rate }}" required>
             </div>
-            <div class="col-md-2">
-              <input type="number" name="tax[]" class="form-control" placeholder="Tax %" value="{{ tax }}">
-            </div>
-            <div class="col-md-2 text-end">
+            <div class="col-md-1 text-end">
               <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
             </div>
           </div>
@@ -66,7 +82,7 @@
       {% else %}
         <div class="row g-3 align-items-end mb-3 item-row">
           <div class="col-md-4">
-            <input type="text" name="description[]" class="form-control item-description" list="inventoryList" placeholder="Item Name" required>
+            <input type="text" name="description[]" class="form-control item-description" list="inventoryList" placeholder="Description" required>
             <datalist id="inventoryList">
               {% for item in inventory %}
               <option value="{{ item.name }}">
@@ -74,16 +90,16 @@
             </datalist>
             <input type="hidden" name="item_id[]" value="">
           </div>
+          <div class="col-md-3 dc-col" style="display:none;">
+            <input type="text" name="dc_no[]" class="form-control dc-input" placeholder="DC No" disabled>
+          </div>
           <div class="col-md-2">
             <input type="number" name="quantity[]" class="form-control" placeholder="Qty" required>
           </div>
           <div class="col-md-2">
             <input type="number" name="rate[]" class="form-control" placeholder="Unit Price" required>
           </div>
-          <div class="col-md-2">
-            <input type="number" name="tax[]" class="form-control" placeholder="Tax %">
-          </div>
-          <div class="col-md-2 text-end">
+          <div class="col-md-1 text-end">
             <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
           </div>
         </div>
@@ -105,14 +121,41 @@
       </span>
     </div>
 
-    <button type="submit" class="btn btn-primary">Generate Bill</button>
-    <button type="button" id="clearForm" class="btn btn-outline-danger ms-2">Clear Form</button>
+    {% if edit_mode %}
+      <button type="submit" class="btn btn-primary">Update Bill</button>
+      <!-- Appears only when changes are detected -->
+      <button type="submit" id="createNewBillBtn" class="btn btn-success ms-2 d-none" formaction="/create-bill" formmethod="POST">Create New Bill</button>
+      <a href="{{ url_for('select_customer') }}" class="btn btn-outline-secondary ms-2">Start Fresh</a>
+    {% else %}
+      <button type="submit" class="btn btn-primary">Generate Bill</button>
+      <button type="button" id="clearForm" class="btn btn-outline-danger ms-2">Clear Form</button>
+    {% endif %}
+
+    {% if edit_mode %}
+    <div class="mt-3">
+      <a href="{{ url_for('bill_preview', invoicenumber=invoice_no) }}" target="_blank" class="btn btn-outline-primary btn-sm">Preview Current Bill</a>
+    </div>
+    {% endif %}
 
     {% if success %}
-    <div class="alert alert-success mt-4">
-      Bill generated successfully!
-      <a href="{{ url_for('latest_bill_preview') }}" target="_blank" class="btn btn-outline-primary btn-sm ms-2">Preview Bill</a>
-    </div>
+      {% set bill_label = invoice_no or filename %}
+      {% if edit_mode %}
+      <div class="alert alert-success mt-4 d-flex justify-content-between align-items-center">
+        <div>
+          <strong>Bill updated successfully</strong>
+          {% if bill_label %}<span class="ms-2">(Invoice: <span class="badge bg-secondary">{{ bill_label }}</span>)</span>{% endif %}
+        </div>
+        <a href="{{ url_for('bill_preview', invoicenumber=invoice_no) }}" target="_blank" class="btn btn-outline-primary btn-sm">Preview Bill</a>
+      </div>
+      {% else %}
+      <div class="alert alert-success mt-4 d-flex justify-content-between align-items-center">
+        <div>
+          <strong>Bill generated successfully</strong>
+          {% if bill_label %}<span class="ms-2">(Invoice: <span class="badge bg-secondary">{{ bill_label }}</span>)</span>{% endif %}
+        </div>
+        <a href="{{ url_for('latest_bill_preview') }}" target="_blank" class="btn btn-outline-primary btn-sm">Preview Bill</a>
+      </div>
+      {% endif %}
     {% endif %}
   </form>
 </div>
@@ -121,6 +164,15 @@
   document.getElementById("addItem").addEventListener("click", () => {
     const itemRow = document.querySelector(".item-row").cloneNode(true);
     itemRow.querySelectorAll("input").forEach(input => input.value = "");
+    // Show/hide dc-col and enable/disable dc-input based on toggleDC
+    const toggleChecked = document.getElementById("toggleDC").checked;
+    itemRow.querySelectorAll(".dc-col").forEach(col => {
+      col.style.display = toggleChecked ? '' : 'none';
+    });
+    itemRow.querySelectorAll(".dc-input").forEach(inp => {
+      inp.disabled = !toggleChecked;
+      if (!toggleChecked) inp.value = '';
+    });
     document.getElementById("items").appendChild(itemRow);
   });
 
@@ -139,8 +191,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const inventoryData = {
     {% for item in inventory %}
     "{{ item.name }}": {
-      rate: {{ item.unitPrice }},
-      tax: {{ item.taxPercentage or 0 }}
+      rate: {{ item.unitPrice }}
     },
     {% endfor %}
   };
@@ -150,11 +201,9 @@ document.addEventListener("DOMContentLoaded", function () {
       const selectedItem = e.target.value;
       const row = e.target.closest(".item-row");
       const rateInput = row.querySelector('[name="rate[]"]');
-      const taxInput = row.querySelector('[name="tax[]"]');
 
       if (inventoryData[selectedItem]) {
         rateInput.value = inventoryData[selectedItem].rate;
-        taxInput.value = inventoryData[selectedItem].tax;
       }
     }
   });
@@ -167,10 +216,8 @@ function calculateTotal() {
   document.querySelectorAll(".item-row").forEach(row => {
     const qty = parseFloat(row.querySelector('[name="quantity[]"]').value) || 0;
     const rate = parseFloat(row.querySelector('[name="rate[]"]').value) || 0;
-    const tax = parseFloat(row.querySelector('[name="tax[]"]').value) || 0;
     const subtotal = qty * rate;
-    const taxAmount = subtotal * (tax / 100);
-    total += subtotal + taxAmount;
+    total += subtotal;
   });
   document.getElementById("totalAmount").textContent = total.toFixed(2);
 }
@@ -178,21 +225,107 @@ function calculateTotal() {
 document.getElementById("items").addEventListener("input", calculateTotal);
 </script>
 <script>
-document.getElementById("clearForm").addEventListener("click", () => {
+const clearBtn = document.getElementById("clearForm"); if (clearBtn) {
+clearBtn.addEventListener("click", () => {
   document.querySelectorAll(".item-row").forEach((row, index) => {
     row.querySelectorAll("input").forEach(input => input.value = "");
     if (index > 0) row.remove();  // Keep only the first row
   });
+  document.querySelectorAll(".dc-input").forEach(inp => inp.value = "");
   document.getElementById("totalAmount").textContent = "0.00";
 });
+}
 </script>
 
+<script>
+  function applyDCToggle(checked){
+    document.querySelectorAll('.dc-col').forEach(col => { col.style.display = checked ? '' : 'none'; });
+    document.querySelectorAll('.dc-input').forEach(inp => { inp.disabled = !checked; });
+  }
+  const dcToggle = document.getElementById('toggleDC');
+  if (dcToggle) {
+    dcToggle.addEventListener('change', (e) => {
+      // Retain existing DC values; just hide/show and disable/enable inputs
+      applyDCToggle(e.target.checked);
+    });
+  }
+  // initialize on load based on server value
+  const initialDC = {{ 'true' if dcno else 'false' }};
+  try { document.getElementById('toggleDC').checked = initialDC; } catch (e) {}
+  applyDCToggle(initialDC);
 </script>
+
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    if ("{{ success }}".toLowerCase() === "true"){
+    const isSuccess = "{{ success }}".toLowerCase() === "true";
+    const isEdit = {{ 'true' if edit_mode else 'false' }};
+    if (isSuccess || isEdit) {
       calculateTotal();
     }
   });
+</script>
+<script>
+(function(){
+  // Build an initial snapshot of the form when the page loads (edit mode only)
+  const isEdit = {{ 'true' if edit_mode else 'false' }};
+  if (!isEdit) return;
+
+  function readRows() {
+    const rows = [];
+    document.querySelectorAll('#items .item-row').forEach((row) => {
+      const desc = (row.querySelector('[name="description[]"]').value || '').trim();
+      const qty  = (row.querySelector('[name="quantity[]"]').value || '').trim();
+      const rate = (row.querySelector('[name="rate[]"]').value || '').trim();
+      const dcInp = row.querySelector('[name="dc_no[]"]');
+      const dc   = dcInp ? (dcInp.value || '').trim() : '';
+      rows.push({desc, qty, rate, dc});
+    });
+    return rows;
+  }
+
+  function snapshot() {
+    return {
+      dcEnabled: document.getElementById('toggleDC')?.checked || false,
+      rows: readRows()
+    };
+  }
+
+  const initial = snapshot();
+
+  function differ(a, b){
+    try { return JSON.stringify(a) !== JSON.stringify(b); } catch(e){ return true; }
+  }
+
+  function updateCreateButton(){
+    const btn = document.getElementById('createNewBillBtn');
+    if (!btn) return;
+    const changed = differ(initial, snapshot());
+    if (changed) {
+      btn.classList.remove('d-none');
+      btn.disabled = false;
+    } else {
+      btn.classList.add('d-none');
+      btn.disabled = true;
+    }
+  }
+
+  // Watch for any input changes, row adds/removes, and DC toggle changes
+  document.getElementById('items').addEventListener('input', updateCreateButton);
+  document.getElementById('items').addEventListener('click', (e)=>{
+    if (e.target.classList.contains('remove-item')) {
+      // Defer until DOM updates
+      setTimeout(updateCreateButton, 0);
+    }
+  });
+  const addBtn = document.getElementById('addItem');
+  if (addBtn) {
+    addBtn.addEventListener('click', ()=> setTimeout(updateCreateButton, 0));
+  }
+  const dcToggleEl = document.getElementById('toggleDC');
+  if (dcToggleEl) dcToggleEl.addEventListener('change', updateCreateButton);
+
+  // Initial evaluation
+  updateCreateButton();
+})();
 </script>
 {% endblock %}

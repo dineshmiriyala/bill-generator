@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 style="margin: 16px 0;">Statements</h1>
+{% if error %}
+<div class="alert alert-warning" role="alert" style="margin: 12px 0;">
+  {{ error }}
+</div>
+{% endif %}
+
+<style>
+  .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-bottom: 12px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 14px; color: #333; }
+  .field input, .field select { padding: 6px 8px; font-size: 14px; }
+  .btn { padding: 8px 12px; font-size: 14px; cursor: pointer; }
+  .btn.primary { background: #1f6feb; color: #fff; border: none; }
+  .btn.ghost { background: transparent; border: 1px solid #ccc; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .button-group { display: flex; gap: 10px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #e5e5e5; padding: 8px; text-align: left; }
+  th { background: #f8f8f8; }
+  .right { text-align: right; }
+  .muted { color: #666; }
+  .hidden { display: none; }
+</style>
+<form method="get" action="{{ url_for('statements') }}">
+  <div class="form-row">
+    <div class="field">
+      <label for="scope">Scope</label>
+      <select name="scope" id="scope">
+        <option value="month" {% if scope == 'month' %}selected{% endif %}>Month</option>
+        <option value="year" {% if scope == 'year' %}selected{% endif %}>Year</option>
+        <option value="custom" {% if scope == 'custom' %}selected{% endif %}>Custom</option>
+      </select>
+    </div>
+
+    <div class="field hidden" id="wrapYear">
+      <label for="year">Year</label>
+      <input type="number" name="year" id="year" min="2000" max="2100" value="{{ request.args.get('year','') }}" />
+    </div>
+
+    <div class="field hidden" id="wrapMonth">
+      <label for="month">Month</label>
+      <input type="number" name="month" id="month" min="1" max="12" value="{{ request.args.get('month','') }}" />
+    </div>
+
+    <div class="field hidden" id="wrapStart">
+      <label for="start">Start</label>
+      <input type="date" name="start" id="start" value="{{ request.args.get('start','') }}" />
+    </div>
+
+    <div class="field hidden" id="wrapEnd">
+      <label for="end">End</label>
+      <input type="date" name="end" id="end" value="{{ request.args.get('end','') }}" />
+    </div>
+
+    <div class="field">
+      <label for="phone">Phone</label>
+      <input type="text" name="phone" id="phone" value="{{ request.args.get('phone','') }}" />
+    </div>
+
+    <div class="button-group">
+      <button type="submit" class="btn primary">Search</button>
+      <a class="btn ghost" href="{{ url_for('statements_blank') }}">Clear</a>
+      <a class="btn ghost" id="csvLink" href="#" target="_blank">Download CSV</a>
+    </div>
+  </div>
+</form>
+
+<div style="margin: 16px 0;">
+  <div class="muted">Range: <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong></div>
+  <div style="margin-top:6px;">Total invoices: <strong>{{ total_invoices }}</strong> | Total amount: <strong>{{ '%.2f'|format(total_amount) }}</strong></div>
+  {% if phone %}<div class="muted">Filtered by phone: <code>{{ phone }}</code></div>{% endif %}
+</div>
+
+<h3>Per-customer breakdown</h3>
+<table>
+  <thead>
+    <tr><th>Customer</th><th class="right">Count</th><th class="right">Amount</th></tr>
+  </thead>
+  <tbody>
+    {% for cust, data in per_customer.items() %}
+    <tr>
+      <td>{{ cust }}</td>
+      <td class="right">{{ data['count'] }}</td>
+      <td class="right">{{ '%.2f'|format(data['amount']) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3 style="margin-top: 20px;">Invoices</h3>
+<table>
+  <thead>
+    <tr><th>#</th><th>Invoice No</th><th>Date</th><th>Customer</th><th>Phone</th><th class="right">Total</th></tr>
+  </thead>
+  <tbody>
+    {% for inv in invs %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoiceId) }}">{{ inv.invoiceId }}</a></td>
+      <td>{{ inv.createdAt.strftime('%Y-%m-%d') }}</td>
+      <td>{{ inv.customer.name if inv.customer else 'Unknown' }}</td>
+      <td>{{ inv.customer.phone if inv.customer else '' }}</td>
+      <td class="right">{{ '%.2f'|format(inv.totalAmount or 0) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script>
+(function() {
+  const scopeEl = document.getElementById('scope');
+  const wrapYear = document.getElementById('wrapYear');
+  const wrapMonth = document.getElementById('wrapMonth');
+  const wrapStart = document.getElementById('wrapStart');
+  const wrapEnd = document.getElementById('wrapEnd');
+  const csvLink = document.getElementById('csvLink');
+
+  function toggleByScope() {
+    const scope = scopeEl.value;
+    // Hide all first
+    wrapYear.classList.add('hidden');
+    wrapMonth.classList.add('hidden');
+    wrapStart.classList.add('hidden');
+    wrapEnd.classList.add('hidden');
+
+    if (scope === 'year') {
+      wrapYear.classList.remove('hidden');
+    } else if (scope === 'month') {
+      wrapYear.classList.remove('hidden');
+      wrapMonth.classList.remove('hidden');
+    } else { // custom
+      wrapStart.classList.remove('hidden');
+      wrapEnd.classList.remove('hidden');
+    }
+  }
+
+  function buildCsvHref() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('format', 'csv');
+    csvLink.href = url.toString();
+  }
+
+  scopeEl.addEventListener('change', toggleByScope);
+  toggleByScope();
+  buildCsvHref();
+})();
+</script>
+
+{% endblock %}
