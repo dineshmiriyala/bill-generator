@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from collections import defaultdict
 import uuid
 from sqlalchemy import func
+from sqlalchemy import inspect
 import os
 from pathlib import Path
 
@@ -83,25 +84,42 @@ from db.models import db, customer, invoice, invoiceItem, item  # import your mo
 db.init_app(app)
 migrate = Migrate(app, db)
 
+# add at top with other imports
+from sqlalchemy import inspect
+
 def _ensure_db_initialized():
     """
-    If DB file doesn't exist:
-      - copy seed if present, else create empty schema with create_all()
+    Ensure database schema exists.
+    - If DB file missing: create schema (or copy seed if present + desktop).
+    - If DB file exists but has no tables: create schema.
     """
     seed_db = basedir / "db" / "app.db"  # optional seed; ok if missing
-    if not db_file.exists():
-        try:
-            if seed_db.exists() and is_desktop:
-                shutil.copy2(seed_db, db_file)
-                print("[info] Copied seed DB to desktop data dir.")
-            else:
-                with app.app_context():
-                    db.create_all()
-                print("[info] Created empty database schema (no seed).")
-        except Exception as e:
-            print(f"[warn] DB init path failed ({e}); fallback to create_all()")
-            with app.app_context():
-                db.create_all()
+
+    with app.app_context():
+        # create file if missing (and optionally copy seed on desktop)
+        if not db_file.exists():
+            try:
+                if seed_db.exists() and is_desktop:
+                    shutil.copy2(seed_db, db_file)
+                    print("[info] Copied seed DB to desktop data dir.")
+                else:
+                    # touch file so engine can open it cleanly
+                    db_file.parent.mkdir(parents=True, exist_ok=True)
+                    db_file.touch(exist_ok=True)
+                    print("[info] Created empty DB file.")
+            except Exception as e:
+                print(f"[warn] could not prepare DB file: {e}")
+
+        # check whether tables exist
+        insp = inspect(db.engine)
+        tables = set(insp.get_table_names())
+
+        required = {"customer", "invoice", "invoice_item", "item"}
+        # adjust names if your table names differ
+
+        if not required.issubset(tables):
+            print("[info] Creating/migrating schema via create_all()…")
+            db.create_all()
 
 # ✅ Call this AFTER importing models, so metadata is populated
 with app.app_context():
