@@ -56,7 +56,7 @@
     </div>
 
     <div class="field">
-      <label for="phone">Phone</label>
+      <label for="phone">Phone/ID</label>
       <input type="text" name="phone" id="phone" value="{{ request.args.get('phone','') }}" />
     </div>
 
@@ -71,18 +71,18 @@
 <div style="margin: 16px 0;">
   <div class="muted">Range: <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong></div>
   <div style="margin-top:6px;">Total invoices: <strong>{{ total_invoices }}</strong> | Total amount: <strong>{{ '%.2f'|format(total_amount) }}</strong></div>
-  {% if phone %}<div class="muted">Filtered by phone: <code>{{ phone }}</code></div>{% endif %}
+  {% if phone %}<div class="muted">Filtered by phone/ID: <code>{{ phone }}</code></div>{% endif %}
 </div>
 
-<h3>Per-customer breakdown</h3>
+<h3>Per-company breakdown</h3>
 <table>
   <thead>
-    <tr><th>Customer</th><th class="right">Count</th><th class="right">Amount</th></tr>
+    <tr><th>Company</th><th class="right">Count</th><th class="right">Amount</th></tr>
   </thead>
   <tbody>
-    {% for cust, data in per_customer.items() %}
+    {% for company, data in per_customer.items() %}
     <tr>
-      <td>{{ cust }}</td>
+      <td>{{ company }}</td>
       <td class="right">{{ data['count'] }}</td>
       <td class="right">{{ '%.2f'|format(data['amount']) }}</td>
     </tr>
@@ -93,19 +93,33 @@
 <h3 style="margin-top: 20px;">Invoices</h3>
 <table>
   <thead>
-    <tr><th>#</th><th>Invoice No</th><th>Date</th><th>Customer</th><th>Phone</th><th class="right">Total</th></tr>
+    <tr><th>#</th><th>Invoice No</th><th>Date</th><th>Company</th><th>Phone/ID</th><th class="right">Total</th></tr>
   </thead>
   <tbody>
-    {% for inv in invs %}
-    <tr>
-      <td>{{ loop.index }}</td>
-      <td><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoiceId) }}">{{ inv.invoiceId }}</a></td>
-      <td>{{ inv.createdAt.strftime('%Y-%m-%d') }}</td>
-      <td>{{ inv.customer.name if inv.customer else 'Unknown' }}</td>
-      <td>{{ inv.customer.phone if inv.customer else '' }}</td>
-      <td class="right">{{ '%.2f'|format(inv.totalAmount or 0) }}</td>
-    </tr>
-    {% endfor %}
+    {% if inv_rows is defined and inv_rows %}
+      {% for row in inv_rows %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td><a href="{{ url_for('view_bill_locked', invoicenumber=row.invoice_no) }}">{{ row.invoice_no }}</a></td>
+        <td>{{ row.date }}</td>
+        <td>{{ row.company }}</td>
+        <td>{{ row.phone }}</td>
+        <td class="right">{{ '%.2f'|format(row.total) }}</td>
+      </tr>
+      {% endfor %}
+    {% else %}
+      {# Fallback for legacy context if inv_rows wasn't provided #}
+      {% for inv in invs %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoiceId) }}">{{ inv.invoiceId }}</a></td>
+        <td>{{ inv.createdAt.strftime('%Y-%m-%d') }}</td>
+        <td>{{ inv.customer.company if inv.customer and inv.customer.company else '(No Company)' }}</td>
+        <td>{{ inv.customer.phone if inv.customer else '' }}</td>
+        <td class="right">{{ '%.2f'|format(inv.totalAmount or 0) }}</td>
+      </tr>
+      {% endfor %}
+    {% endif %}
   </tbody>
 </table>
 

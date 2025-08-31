@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block title %}About{% endblock %}
+{% block content %}
+<div class="container py-3">
+
+  <!-- Toolbar: top-left buttons -->
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <a href="{{ url_for('about_user', section='about') }}" class="btn btn-sm btn-outline-primary">About Press</a>
+    <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#customerSearch" aria-expanded="false" aria-controls="customerSearch">
+      Search Customer
+    </button>
+    <a href="{{ url_for('about_user') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+    <a href="javascript:history.back()" class="btn btn-sm btn-outline-dark">← Back</a>
+  </div>
+
+  <!-- Collapsible search form (left aligned, persists values) -->
+  <div class="collapse {% if request.args.get('phone') or request.args.get('customer_id') %}show{% endif %}" id="customerSearch">
+    <div class="card card-body mb-3">
+      <form class="row g-2 align-items-end" method="get" action="{{ url_for('about_user') }}">
+        <div class="col-sm-4">
+          <label class="form-label form-label-sm">Phone / ID</label>
+          <input type="text" class="form-control form-control-sm" name="phone" placeholder="e.g. 9848 / ID-12" value="{{ request.args.get('phone','') }}">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label form-label-sm">Customer ID</label>
+          <input type="number" class="form-control form-control-sm" name="customer_id" placeholder="e.g. 42" value="{{ request.args.get('customer_id','') }}">
+        </div>
+        <div class="col-sm-5 d-flex gap-2">
+          <button class="btn btn-sm btn-primary mt-3" type="submit">Show</button>
+          <a href="{{ url_for('about_user') }}" class="btn btn-sm btn-outline-secondary mt-3">Clear</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if request.args.get('section') == 'about' %}
+  <!-- Business / Owner profile -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="row g-4">
+        <div class="col-md-6">
+          <h5 class="mb-3">Business</h5>
+          <div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Name</div><div>{{ (user.company if user else None) or (user.name if user else None) or 'Your Business' }}</div></div>
+          {% if user and user.businessType %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Type</div><div>{{ user.businessType }}</div></div>{% endif %}
+          {% if user and user.gst %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">GSTIN</div><div><code>{{ user.gst }}</code></div></div>{% endif %}
+          {% if user and user.pan %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">PAN</div><div><code>{{ user.pan }}</code></div></div>{% endif %}
+          {% if user and user.established %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Established</div><div>{{ user.established }}</div></div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <h5 class="mb-3">Contact</h5>
+          {% if user and user.address %}<div class="mb-2">{{ user.address|replace('\n','<br>')|safe }}</div>{% endif %}
+          {% if user and user.phone %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Phone</div><div>{{ user.phone }}</div></div>{% endif %}
+          {% if user and user.email %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Email</div><div><a href="mailto:{{ user.email }}">{{ user.email }}</a></div></div>{% endif %}
+          {% if user and user.website %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Website</div><div><a href="{{ user.website }}" target="_blank">{{ user.website }}</a></div></div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Banking -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <h5 class="mb-3">Banking</h5>
+      {% if user and user.bank %}
+        <div class="row g-3">
+          {% if user.bank.accountName %}<div class="col-sm-6 d-flex"><div class="me-3 text-muted" style="width:160px">Account Name</div><div>{{ user.bank.accountName }}</div></div>{% endif %}
+          {% if user.bank.bankName %}<div class="col-sm-6 d-flex"><div class="me-3 text-muted" style="width:160px">Bank</div><div>{{ user.bank.bankName }}</div></div>{% endif %}
+          {% if user.bank.branch %}<div class="col-sm-6 d-flex"><div class="me-3 text-muted" style="width:160px">Branch</div><div>{{ user.bank.branch }}</div></div>{% endif %}
+          {% if user.bank.accountNumber %}<div class="col-sm-6 d-flex"><div class="me-3 text-muted" style="width:160px">Account No.</div><div><code>{{ user.bank.accountNumber }}</code></div></div>{% endif %}
+          {% if user.bank.ifsc %}<div class="col-sm-6 d-flex"><div class="me-3 text-muted" style="width:160px">IFSC</div><div><code>{{ user.bank.ifsc }}</code></div></div>{% endif %}
+          {% if user.bank.upi %}<div class="col-sm-6 d-flex"><div class="me-3 text-muted" style="width:160px">UPI</div><div><code>{{ user.bank.upi }}</code></div></div>{% endif %}
+        </div>
+      {% else %}
+        <div class="text-muted">No banking details configured.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- System / Stats -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <h5 class="mb-3">System</h5>
+      <div class="row g-3">
+        {% if user and user.invoiceCount is not none %}<div class="col-auto"><span class="badge rounded-pill text-bg-light border">Invoices: <strong>{{ user.invoiceCount }}</strong></span></div>{% endif %}
+        {% if user and user.customerCount is not none %}<div class="col-auto"><span class="badge rounded-pill text-bg-light border">Customers: <strong>{{ user.customerCount }}</strong></span></div>{% endif %}
+        {% if user and user.totalBilled %}<div class="col-auto"><span class="badge rounded-pill text-bg-light border">Total Billed: <strong>{{ user.totalBilled }}</strong></span></div>{% endif %}
+        <div class="w-100"></div>
+        {% if user and user.createdAt %}<div class="col-sm-6 d-flex"><div class="me-3 text-muted" style="width:160px">First Activity</div><div>{{ user.createdAt.strftime('%d %b %Y, %I:%M %p') if user.createdAt.__class__.__name__ == 'datetime' else user.createdAt }}</div></div>{% endif %}
+        {% if user and user.updatedAt %}<div class="col-sm-6 d-flex"><div class="me-3 text-muted" style="width:160px">Last Activity</div><div>{{ user.updatedAt.strftime('%d %b %Y, %I:%M %p') if user.updatedAt.__class__.__name__ == 'datetime' else user.updatedAt }}</div></div>{% endif %}
+        {% if user and (user.firstInvoiceNo or user.lastInvoiceNo) %}
+          <div class="col-sm-6 d-flex"><div class="me-3 text-muted" style="width:160px">First Invoice</div><div>{{ user.firstInvoiceNo }}</div></div>
+          <div class="col-sm-6 d-flex"><div class="me-3 text-muted" style="width:160px">Latest Invoice</div><div>{{ user.lastInvoiceNo }}</div></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Latest Customer snapshot (always available when found) -->
+  {% if latest_customer %}
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <h5 class="mb-3">Latest Customer {% if request.args.get('phone') or request.args.get('customer_id') %}<span class="badge text-bg-light border ms-2">Filtered</span>{% endif %}</h5>
+      {% if request.args.get('phone') or request.args.get('customer_id') %}
+      <div class="mb-2">
+        {% if request.args.get('phone') %}<span class="badge rounded-pill text-bg-light border me-1">Phone/ID: <strong>{{ request.args.get('phone') }}</strong></span>{% endif %}
+        {% if request.args.get('customer_id') %}<span class="badge rounded-pill text-bg-light border me-1">Customer ID: <strong>{{ request.args.get('customer_id') }}</strong></span>{% endif %}
+      </div>
+      {% endif %}
+      <div class="row g-4">
+        <div class="col-md-6">
+          <div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Company</div><div><strong>{{ latest_customer.company or '-' }}</strong></div></div>
+          {% if latest_customer.name %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Contact</div><div>{{ latest_customer.name }}</div></div>{% endif %}
+          {% if latest_customer.businessType %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Type</div><div>{{ latest_customer.businessType }}</div></div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          {% if latest_customer.gst %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">GSTIN</div><div><code>{{ latest_customer.gst }}</code></div></div>{% endif %}
+          {% if latest_customer.phone %}
+            <div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">{{ 'ID No' if latest_customer.phone.startswith('ID-') else 'Phone' }}</div><div>{{ latest_customer.phone }}</div></div>
+          {% endif %}
+          {% if latest_customer.email %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Email</div><div><a href="mailto:{{ latest_customer.email }}">{{ latest_customer.email }}</a></div></div>{% endif %}
+        </div>
+      </div>
+      {% if latest_customer.address %}
+        <div class="mt-2"><div class="me-3 text-muted" style="width:160px">Address</div><div>{{ latest_customer.address|replace('\n','<br>')|safe }}</div></div>
+      {% endif %}
+      <div class="mt-3">
+        <span class="badge rounded-pill text-bg-light border">Customer Invoices: <strong>{{ cust_stats.invoiceCount or 0 }}</strong></span>
+        {% if cust_stats.totalBilled %}
+        <span class="badge rounded-pill text-bg-light border">Billed: <strong>{{ cust_stats.totalBilled }}</strong></span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if cust_invs and cust_invs|length > 0 %}
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <h5 class="mb-3">Recent Invoices ({% if request.args.get('phone') or request.args.get('customer_id') %}Selected Customer{% else %}Latest Customer{% endif %})</h5>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Invoice No</th>
+              <th>Date</th>
+              <th class="text-end">Amount</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in cust_invs %}
+            <tr>
+              {% set invno = inv.invoice_no or inv.invoiceId %}
+              <td><a href="{{ url_for('view_bill_locked', invoicenumber=invno) }}">{{ invno }}</a></td>
+              <td>{{ inv.createdAt.strftime('%d %b %Y') if inv.createdAt.__class__.__name__ == 'datetime' else inv.createdAt }}</td>
+              <td class="text-end">{{ '₹{:,.2f}'.format(inv.totalAmount) if inv.totalAmount is not none else '-' }}</td>
+              <td class="text-center">
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('view_bill_locked', invoicenumber=invno) }}">View</a>
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('bill_preview', invoicenumber=invno) }}">Preview</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
+</div>
+{% endblock %}

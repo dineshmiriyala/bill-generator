@@ -5,7 +5,7 @@
 
   <form id="billsFilterForm" method="GET" action="{{ url_for('view_bills') }}" class="row g-1 mb-4 justify-content-center align-items-end">
     <div class="col-auto">
-      <input type="text" name="q" class="form-control shadow-sm" style="min-width: 360px;" placeholder="Search by invoice, phone, name or company" value="{{ request.args.get('q', '') }}">
+      <input type="text" name="q" class="form-control shadow-sm" style="min-width: 360px;" placeholder="Search by invoice, phone/ID, name or company" value="{{ request.args.get('q', '') }}">
     </div>
     <div class="col-auto">
       <input type="date" name="start_date" class="form-control shadow-sm" style="min-width: 150px;" value="{{ request.args.get('start_date', '') | datetimeformat('%Y-%m-%d') }}">
@@ -42,7 +42,10 @@
           <tr>
             <th>Invoice No</th>
             <th>Date</th>
-            <th>Customer</th>
+            <th>
+              <div class="fw-semibold">Company</div>
+              <div class="text-muted small">Customer</div>
+            </th>
             <th>Total</th>
             <th>View</th>
           </tr>
@@ -52,7 +55,12 @@
           <tr>
             <td>{{ bill.invoice_no }}</td>
             <td>{{ bill.date | datetimeformat }}</td>
-            <td>{{ bill.customer_name }}</td>
+            <td>
+              <div class="fw-semibold">{{ bill.customer_company or bill.company or '—' }}</div>
+              {% if bill.customer_name %}
+                <div class="text-muted small">{{ bill.customer_name }}</div>
+              {% endif %}
+            </td>
             <td>₹{{ bill.total }}</td>
             <td><a href="{{ url_for('view_bill_locked', invoicenumber=bill.invoice_no) }}">View Bill</a></td>
           </tr>

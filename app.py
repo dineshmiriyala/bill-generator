@@ -1,12 +1,5 @@
-from logging import exception
-
 from flask import Flask, render_template, render_template_string, request, Response, jsonify, redirect, url_for
 from datetime import datetime, timedelta, timezone
-
-from pandas.core.computation import scope
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from pdf import generate_invoice_pdf
 from flask_migrate import Migrate
 from db.models import *
 from sqlalchemy.orm import joinedload
@@ -14,7 +7,40 @@ import os
 import csv, io
 from urllib.parse import urlparse
 from collections import defaultdict
+import uuid
+from sqlalchemy import func
 
+def _format_customer_id(n: int) -> str:
+    return f"ID-{n:06d}"
+
+
+# ---- Owner / Business profile (edit these to your real values) ----
+USER_PROFILE = {
+    "company": "Sri Lakshmi Offset Printers",
+    "name": "Sri Lakshmi Offset Printers",
+    "tagline": "Quality since 1973",
+    "address": "Pamarru, Krishna Dist - 521157",
+    "phone": "9848992207",
+    "email": "haripress@gmail.com",
+    "gst": "37ABCDE1234F1Z5",
+    "pan": None,
+    "businessType": "Composition",
+    "established": "1973",
+    "website": None,  # e.g., "https://example.com"
+    "billType": "Bill of Supply",
+    "isComposition": True,
+    "showRemarks": False,
+    "logo_path": "img/brand-wordmark.svg",  # under /static
+
+    "bank": {
+        "accountName": "Sri Lakshmi Offset Printers",
+        "bankName": "State Bank of India",
+        "branch": "Pamarru",
+        "accountNumber": "38588014977",
+        "ifsc": "SBIN0002776",
+        "PhonePe/GPay": "9848992207",
+    },
+}
 
 
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -35,6 +61,94 @@ def _parse_date(date_str):
         return datetime.strptime(date_str, '%Y-%m-%d').date()
     except Exception:
         return None
+@app.route("/about_user")
+def about_user():
+    """Owner/Business profile page with live stats + customer snapshot.
+    Use optional query params ?customer_id=<int> or ?phone=<substr> to choose a customer.
+    Falls back to most recently added customer when none provided.
+    """
+    prof = dict(USER_PROFILE)
+
+    # Invoices query (exclude soft-deleted if exists)
+    try:
+        q_inv = db.session.query(invoice).filter(invoice.isDeleted == False)
+    except Exception:
+        q_inv = db.session.query(invoice)
+
+    # Basic stats
+    prof["invoiceCount"]  = q_inv.count()
+    prof["customerCount"] = db.session.query(func.count(customer.id)).scalar() or 0
+
+    # Activity (timestamps + invoice numbers)
+    first_inv = q_inv.order_by(invoice.createdAt.asc()).first()
+    last_inv  = q_inv.order_by(invoice.createdAt.desc()).first()
+    prof["createdAt"]      = getattr(first_inv, "createdAt", None)
+    prof["updatedAt"]      = getattr(last_inv,  "createdAt", None)
+    prof["firstInvoiceNo"] = getattr(first_inv, "invoiceId", None)
+    prof["lastInvoiceNo"]  = getattr(last_inv,  "invoiceId", None)
+
+    # Total billed
+    try:
+        total_billed = db.session.query(
+            func.coalesce(func.sum(invoice.totalAmount), 0)
+        ).filter(invoice.isDeleted == False).scalar() or 0
+    except Exception:
+        total_billed = db.session.query(
+            func.coalesce(func.sum(invoice.totalAmount), 0)
+        ).scalar() or 0
+    prof["totalBilled"] = f"₹{float(total_billed):,.2f}"
+
+    # ---- Choose customer: by id, by phone substring, else latest ----
+    cust = None
+    cid = (request.args.get('customer_id') or '').strip()
+    cphone = (request.args.get('phone') or '').strip()
+
+    if cid:
+        try:
+            cust = customer.query.get(int(cid))
+        except Exception:
+            cust = None
+    if not cust and cphone:
+        like = f"%{cphone}%"
+        cust = (customer.query
+                .filter(customer.phone.ilike(like))
+                .order_by(customer.id.desc())
+                .first())
+    if not cust:
+        cust = customer.query.order_by(customer.id.desc()).first()
+
+    latest_cust = cust
+    cust_stats, cust_invs = {}, []
+    if latest_cust:
+        invs_q = (invoice.query
+                  .filter(invoice.customerId == latest_cust.id,
+                          getattr(invoice, 'isDeleted', False) == False)
+                  .order_by(invoice.createdAt.desc()))
+        cust_invs = invs_q.limit(10).all()
+
+        # Stats for this customer
+        first_inv_c = invs_q.order_by(invoice.createdAt.asc()).first()
+        last_inv_c  = cust_invs[0] if cust_invs else None
+        total_val = db.session.query(func.coalesce(func.sum(invoice.totalAmount), 0)).filter(
+            invoice.customerId == latest_cust.id,
+            getattr(invoice, 'isDeleted', False) == False
+        ).scalar() or 0
+        cust_stats = {
+            'invoiceCount': invs_q.count(),
+            'firstInvoiceDate': first_inv_c.createdAt.strftime('%d %b %Y') if getattr(first_inv_c, 'createdAt', None) else None,
+            'lastInvoiceDate':  last_inv_c.createdAt.strftime('%d %b %Y')  if getattr(last_inv_c,  'createdAt', None) else None,
+            'totalBilled': f"₹{float(total_val):,.2f}",
+        }
+
+    return render_template(
+        'about_user.html',
+        user=prof,
+        latest_customer=latest_cust,
+        cust_stats=cust_stats,
+        cust_invs=cust_invs
+    )
+
+
 
 # Custom Jinja filter to format dates as DD-MM-YYYY
 @app.template_filter('datetimeformat')
@@ -57,10 +171,9 @@ def home():
 #customers page (temperory placeholder)
 @app.route('/create_customers', methods=['GET', 'POST'])
 def add_customers():
-    # this is the functon to create a new customer
-    # refer to add_customer.html to see frontend
     if request.method == 'POST':
-        action = (request.form.get('action') or 'save').lower()  # 'save' or 'create_and_bill'
+        action = (request.form.get('action') or 'save').lower()
+        use_auto = bool(request.form.get('use_auto_id'))               # <-- NEW
         phone = (request.form.get('phone') or '').strip()
         name = (request.form.get('name') or '').strip()
         company = (request.form.get('company') or '').strip()
@@ -69,53 +182,58 @@ def add_customers():
         address = (request.form.get('address') or '').strip()
         businessType = (request.form.get('businessType') or '').strip()
 
-        # Basic validation
-        if not phone or not name:
-            return render_template('add_customer.html', success=False, duplicate=False, error='Name and phone are required.')
+        # Basic validation: Name is required; Phone is required only when not using auto-ID
+        if not name or (not use_auto and not phone):
+            return render_template('add_customer.html', success=False, duplicate=False,
+                                   error='Name is required. Phone is required unless you use computer-generated ID.')
 
-        # Try to find existing by phone (unique)
-        existing = customer.query.filter_by(phone=phone).first()
+        # If user supplied a real phone (not auto), do the usual duplicate check
+        if not use_auto and phone:
+            existing = customer.query.filter_by(phone=phone).first()
+            if action == 'create_and_bill':
+                if existing:
+                    sel = existing
+                else:
+                    sel = customer(
+                        name=name, company=company, phone=phone, email=email,
+                        gst=gst, address=address, businessType=businessType
+                    )
+                    db.session.add(sel)
+                    db.session.commit()
+                return render_template('create_bill.html', customer=sel, inventory=item.query.all())
 
-        if action == 'create_and_bill':
-            # Use existing if present; else create then proceed to bill
             if existing:
-                sel = existing
-            else:
-                sel = customer(
-                    name=name,
-                    company=company,
-                    phone=phone,
-                    email=email,
-                    gst=gst,
-                    address=address,
-                    businessType=businessType
-                )
-                db.session.add(sel)
-                db.session.commit()
-            # Open the create bill page preloaded
-            return render_template('create_bill.html', customer=sel, inventory=item.query.all())
+                return render_template('add_customer.html', duplicate=True)
 
-        # Normal save flow
-        if existing:
-            # Show duplicate message, preserve form values (template already binds request.form)
-            return render_template('add_customer.html', duplicate=True)
+            new_customer = customer(
+                name=name, company=company, phone=phone, email=email,
+                gst=gst, address=address, businessType=businessType
+            )
+            db.session.add(new_customer)
+            db.session.commit()
+            return render_template('add_customer.html', success=True)
+
+        # ---- Auto-ID path (no real phone or checkbox checked) ----
+        # phone is NOT NULL + UNIQUE in DB, so we insert with a unique temporary value,
+        # flush to get .id, then set phone = ID-XXXXXX and commit.
+        temp_phone = f"ID-TEMP-{uuid.uuid4().hex[:8]}"
 
         new_customer = customer(
-            name=name,
-            company=company,
-            phone=phone,
-            email=email,
-            gst=gst,
-            address=address,
-            businessType=businessType
+            name=name, company=company, phone=temp_phone, email=email,
+            gst=gst, address=address, businessType=businessType
         )
         db.session.add(new_customer)
+        db.session.flush()  # assigns new_customer.id without committing
+
+        new_customer.phone = _format_customer_id(new_customer.id)
         db.session.commit()
+
+        if action == 'create_and_bill':
+            return render_template('create_bill.html', customer=new_customer, inventory=item.query.all())
 
         return render_template('add_customer.html', success=True)
 
     return render_template('add_customer.html')
-
 
 
 @app.route('/add_inventory', methods=['GET', 'POST'])
@@ -206,7 +324,6 @@ def view_inventory():
         ]
 
     return render_template('view_inventory.html', inventory=inventory)
-
 @app.route('/statements', methods=['GET'])
 def statements():
     """HTML/CSV Statement for month/year/custom with optional phone filter.
@@ -255,6 +372,7 @@ def statements():
                     phone=phone or '',
                     per_customer={},
                     invs=[],
+                    inv_rows=[],
                     scope='custom',
                     error='Please choose a date range to view custom statements.'
                 )
@@ -284,32 +402,57 @@ def statements():
     total_invoices = len(invs)
     total_amount = sum(float(inv.totalAmount or 0) for inv in invs)
 
-    per_customer = defaultdict(lambda: {"count": 0, "amount": 0.0})
+    # ---- Group by Company (not customer name) ----
+    per_company = defaultdict(lambda: {"count": 0, "amount": 0.0})
     for inv in invs:
         cust = inv.customer
-        label = f"{cust.name} ({cust.phone})" if cust else 'Unknown'
-        per_customer[label]["count"] += 1
-        per_customer[label]["amount"] += float(inv.totalAmount or 0)
+        company_label = (cust.company or '').strip() if cust else ''
+        if not company_label:
+            company_label = '(No Company)'
+        per_company[company_label]["count"] += 1
+        per_company[company_label]["amount"] += float(inv.totalAmount or 0)
 
     if fmt == 'csv':
+        # CSV already Company-first
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow(["Invoice No", "Date", "Customer", "Phone", "Total Amount"])
+        writer.writerow(["Invoice No", "Date", "Company", "Phone", "Total Amount"])
         for inv in invs:
             cust = inv.customer
+            company_label = (cust.company or '').strip() if cust else ''
+            if not company_label:
+                company_label = '(No Company)'
             writer.writerow([
                 inv.invoiceId,
                 inv.createdAt.strftime('%Y-%m-%d'),
-                cust.name if cust else 'Unknown',
+                company_label,
                 cust.phone if cust else '',
                 f"{float(inv.totalAmount or 0):.2f}"
             ])
         writer.writerow([])
         writer.writerow(["TOTAL INVOICES", total_invoices])
         writer.writerow(["TOTAL AMOUNT", f"{total_amount:.2f}"])
-        # simple filename
-        return Response(buf.getvalue(), mimetype='text/csv',
-                        headers={'Content-Disposition': 'attachment; filename=statement.csv'})
+        return Response(
+            buf.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment; filename=statement.csv'}
+        )
+
+    # ---- Build rows for HTML (Company only) ----
+    inv_rows = []
+    for inv in invs:
+        cust = inv.customer
+        company_label = (cust.company or '').strip() if cust else ''
+        if not company_label:
+            company_label = '(No Company)'
+
+        inv_rows.append({
+            "invoice_no": inv.invoiceId,
+            "date": inv.createdAt.strftime('%Y-%m-%d'),
+            "company": company_label,
+            "phone": cust.phone if cust else '',
+            "total": float(inv.totalAmount or 0),
+        })
 
     return render_template(
         'statement.html',
@@ -317,13 +460,13 @@ def statements():
         end_date=end_dt.date(),
         total_invoices=total_invoices,
         total_amount=round(total_amount, 2),
-        per_customer=per_customer,
-        invs=invs,
+        per_customer=per_company,  # name kept for template compatibility
+        invs=invs,                 # keep if template references it elsewhere
+        inv_rows=inv_rows,         # <-- use this in the table
         scope=scope,
         phone=phone,
         request=request,
     )
-
 @app.route('/api/statements', methods=['GET'])
 def api_statements_summary():
     """JSON summary for dashboards.
@@ -570,7 +713,8 @@ def view_customers():
 
     # GET: current behavior (optional search)
     query = (request.args.get('q') or '').lower()
-    customers = customer.query.all()
+    customers = (customer.query.
+                 order_by(customer.createdAt.is_(None)).all())
 
     if query:
         customers = [
@@ -629,6 +773,7 @@ def view_bills():
             "phone": cust.phone if cust else '',
             "total": f"{inv.totalAmount: ,.2f}",
             "filename": f"{inv.invoiceId}.pdf",
+            "customer_company": cust.company if cust else 'Unknown',
         })
 
     bills = results
@@ -932,11 +1077,17 @@ def latest_bill_preview():
         item_data.append(entry)
     dc_numbers = [i.dcNo or '' for i in items]
     dcno = any(bool((x or '').strip()) for x in dc_numbers)
-    return render_template('bill_preview.html', invoice=current_invoice, customer=current_customer, items=item_data, dcno=dcno, dc_numbers=dc_numbers)
+    return render_template('bill_preview.html',
+                           invoice=current_invoice,
+                           customer=current_customer,
+                           items=item_data,
+                           dcno=dcno,
+                           dc_numbers=dc_numbers,
+                           total_in_words=amount_to_words(current_invoice.totalAmount))
 
 
 
-@app.route('/downlaod-pdf/<int:invoice_id>')
+"""@app.route('/downlaod-pdf/<int:invoice_id>')
 def downlaod_pdf(invoice_id):
     current_invoice = invoice.query.get_or_404(invoice_id)
     current_customer = customer.query.get(current_invoice.customerId)
@@ -976,7 +1127,7 @@ def generate_pdf(invoice_id, customer, items, total):
     generate_invoice_pdf()
 
     return f"PDF generated successfully! <a href = '/static/pdfs/generated_invoice.pdf' target='_blank'>View PDF</a>"
-
+"""
 
 app.jinja_env.globals.update(zip=zip)
 

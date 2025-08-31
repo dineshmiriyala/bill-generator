@@ -19,6 +19,7 @@
     <div class="form-floating mb-3">
       <input type="text" class="form-control shadow-sm" id="company" name="company" placeholder="Company Name" value="{{ request.form.get('company','') }}">
       <label for="company">Company Name</label>
+      <div class="form-text text-muted">Note: Only the company name will be displayed on the invoice.</div>
     </div>
 
     <div class="form-floating mb-3">
@@ -26,10 +27,21 @@
       <label for="name">Customer Name</label>
     </div>
 
-
-    <div class="form-floating mb-3">
-      <input type="tel" class="form-control shadow-sm" id="phone" name="phone" placeholder="Phone Number" value="{{ request.form.get('phone','') }}" required>
-      <label for="phone">Phone Number</label>
+    <div class="mb-3">
+      <div class="row g-2 align-items-center">
+        <div class="col">
+          <div class="form-floating">
+            <input type="tel" class="form-control shadow-sm" id="phone" name="phone" placeholder="Phone Number" value="{{ request.form.get('phone','') }}" required>
+            <label for="phone">Phone Number</label>
+          </div>
+        </div>
+        <div class="col-auto">
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" value="1" id="use_auto_id" name="use_auto_id" {% if request.form.get('use_auto_id') %}checked{% endif %}>
+            <label class="form-check-label" for="use_auto_id">Use computer-generated ID</label>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="form-floating mb-3">
@@ -57,6 +69,39 @@
     <button type="submit" name="action" value="create_and_bill" class="btn btn-outline-success rounded-pill w-100 py-2 shadow-sm">
       Create bill for this customer
     </button>
+    <script>
+      (function() {
+        const cb = document.getElementById('use_auto_id');
+        const phone = document.getElementById('phone');
+        function sync() {
+          if (!cb || !phone) return;
+          if (cb.checked) {
+            // remember current value to restore later
+            if (!phone.dataset.prev) {
+              phone.dataset.prev = phone.value || '';
+            }
+            phone.value = '';
+            phone.setAttribute('data-was-required', phone.required ? '1' : '0');
+            phone.required = false;
+            phone.placeholder = 'Will be auto-generated';
+            phone.disabled = true; // make it non-editable and excluded from submission
+            phone.classList.add('bg-light');
+          } else {
+            phone.disabled = false;
+            phone.classList.remove('bg-light');
+            if (phone.getAttribute('data-was-required') !== '0') phone.required = true;
+            phone.placeholder = 'Phone Number';
+            // restore previous value if any
+            if (phone.dataset.prev !== undefined) {
+              phone.value = phone.dataset.prev;
+              delete phone.dataset.prev;
+            }
+          }
+        }
+        document.addEventListener('DOMContentLoaded', sync);
+        if (cb) cb.addEventListener('change', sync);
+      })();
+    </script>
   </form>
 </div>
 {% endblock %}

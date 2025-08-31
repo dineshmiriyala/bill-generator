@@ -13,6 +13,9 @@
     <div class="col-auto">
       <a href="{{ url_for('view_customers') }}" class="btn btn-danger">Clear</a>
     </div>
+    <div class="col-auto">
+      <a href="{{ url_for('add_customers') }}" class="btn btn-success">Add New Customer</a>
+    </div>
   </form>
 
   {% if customers %}
@@ -22,12 +25,13 @@
           <tr>
             <th>Company</th>
             <th>Name</th>
-            <th>Phone</th>
+            <th>Phone/ID</th>
             <th>Email</th>
             <th>GST</th>
             <th>Address</th>
             <th>Joined On</th>
             <th>Bills</th>
+            <th>About</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -42,6 +46,11 @@
             <td>{{ c.address }}</td>
             <td class="text-nowrap">{{ c.createdAt.strftime('%d %b %Y, %I:%M %p') if c.createdAt else '' }}</td>
             <td><a href="{{ url_for('view_bills') }}?phone={{ c.phone }}">View Bills</a></td>
+            <td>
+              <a class="btn btn-sm btn-outline-info rounded-pill px-3 shadow-sm" href="{{ url_for('about_user') }}?customer_id={{ c.id }}">
+                About
+              </a>
+            </td>
             <td>
               <form method="POST" action="{{ url_for('view_customers') }}" class="d-inline">
                 <input type="hidden" name="customer" value="{{ c.phone }}">
