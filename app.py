@@ -43,7 +43,6 @@ USER_PROFILE = {
         "PhonePe/GPay": "9848992207",
     },
 }
-
 # --- top of app.py: imports & app/db config ---
 import os, sys, shutil
 from pathlib import Path
@@ -77,13 +76,12 @@ else:
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
+# ✅ Reuse the ONE db from your models module
+from db.models import db, customer, invoice, invoiceItem, item  # import your models & shared db
 
-# --- define your model classes here ---
-# class customer(db.Model): ...
-# class invoice(db.Model): ...
-# etc.
+# Attach to this Flask app
+db.init_app(app)
+migrate = Migrate(app, db)
 
 def _ensure_db_initialized():
     """
@@ -105,9 +103,9 @@ def _ensure_db_initialized():
             with app.app_context():
                 db.create_all()
 
-# ✅ Call this AFTER models are defined
-_ensure_db_initialized()
-
+# ✅ Call this AFTER importing models, so metadata is populated
+with app.app_context():
+    _ensure_db_initialized()
 # --- routes continue below as usual ---
 
 # Helpers for statement engine
