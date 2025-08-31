@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 from collections import defaultdict
 import uuid
 from sqlalchemy import func
+import os
+from pathlib import Path
 
 def _format_customer_id(n: int) -> str:
     return f"ID-{n:06d}"
@@ -42,15 +44,71 @@ USER_PROFILE = {
     },
 }
 
-
-basedir = os.path.abspath(os.path.dirname(__file__))
+# --- top of app.py: imports & app/db config ---
+import os, sys, shutil
+from pathlib import Path
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'db', 'app.db')}"
+basedir = Path(__file__).parent.resolve()
+
+def _desktop_data_dir(app_name: str) -> Path:
+    if os.name == "nt":
+        return Path(os.getenv("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / app_name
+    elif sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / app_name
+    else:
+        return Path.home() / ".local" / "share" / app_name
+
+APP_NAME   = "SLO BILL"
+is_desktop = os.getenv("BG_DESKTOP") == "1"
+
+if is_desktop:
+    data_dir = _desktop_data_dir(APP_NAME)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    db_file = data_dir / "app.db"
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file.as_posix()}"
+else:
+    db_file = basedir / "db" / "app.db"
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file.as_posix()}"
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db.init_app(app)
+db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+
+# --- define your model classes here ---
+# class customer(db.Model): ...
+# class invoice(db.Model): ...
+# etc.
+
+def _ensure_db_initialized():
+    """
+    If DB file doesn't exist:
+      - copy seed if present, else create empty schema with create_all()
+    """
+    seed_db = basedir / "db" / "app.db"  # optional seed; ok if missing
+    if not db_file.exists():
+        try:
+            if seed_db.exists() and is_desktop:
+                shutil.copy2(seed_db, db_file)
+                print("[info] Copied seed DB to desktop data dir.")
+            else:
+                with app.app_context():
+                    db.create_all()
+                print("[info] Created empty database schema (no seed).")
+        except Exception as e:
+            print(f"[warn] DB init path failed ({e}); fallback to create_all()")
+            with app.app_context():
+                db.create_all()
+
+# ✅ Call this AFTER models are defined
+_ensure_db_initialized()
+
+# --- routes continue below as usual ---
 
 # Helpers for statement engine
 def _parse_date(date_str):
