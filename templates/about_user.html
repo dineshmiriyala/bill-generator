@@ -100,7 +100,10 @@
   {% if latest_customer %}
   <div class="card shadow-sm mb-3">
     <div class="card-body">
-      <h5 class="mb-3">Latest Customer {% if request.args.get('phone') or request.args.get('customer_id') %}<span class="badge text-bg-light border ms-2">Filtered</span>{% endif %}</h5>
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0">Latest Customer {% if request.args.get('phone') or request.args.get('customer_id') %}<span class="badge text-bg-light border ms-2">Filtered</span>{% endif %}</h5>
+        <a class="btn btn-success btn-sm" href="{{ url_for('start_bill', customer_id=latest_customer.id) }}">Generate Bill</a>
+      </div>
       {% if request.args.get('phone') or request.args.get('customer_id') %}
       <div class="mb-2">
         {% if request.args.get('phone') %}<span class="badge rounded-pill text-bg-light border me-1">Phone/ID: <strong>{{ request.args.get('phone') }}</strong></span>{% endif %}

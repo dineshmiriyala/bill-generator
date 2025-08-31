@@ -246,67 +246,55 @@ def home():
 @app.route('/create_customers', methods=['GET', 'POST'])
 def add_customers():
     if request.method == 'POST':
-        action = (request.form.get('action') or 'save').lower()
-        use_auto = bool(request.form.get('use_auto_id'))               # <-- NEW
-        phone = (request.form.get('phone') or '').strip()
-        name = (request.form.get('name') or '').strip()
-        company = (request.form.get('company') or '').strip()
-        email = (request.form.get('email') or '').strip()
-        gst = (request.form.get('gst') or '').strip()
-        address = (request.form.get('address') or '').strip()
+        use_auto = bool(request.form.get('use_auto_id'))
+        phone    = (request.form.get('phone') or '').strip()
+        name     = (request.form.get('name') or '').strip()
+        company  = (request.form.get('company') or '').strip()
+        email    = (request.form.get('email') or '').strip()
+        gst      = (request.form.get('gst') or '').strip()
+        address  = (request.form.get('address') or '').strip()
         businessType = (request.form.get('businessType') or '').strip()
 
-        # Basic validation: Name is required; Phone is required only when not using auto-ID
+        # Basic validation: name is required; phone required only if not using auto-ID
         if not name or (not use_auto and not phone):
-            return render_template('add_customer.html', success=False, duplicate=False,
-                                   error='Name is required. Phone is required unless you use computer-generated ID.')
+            return render_template(
+                'add_customer.html',
+                success=False, duplicate=False,
+                error='Name is required. Phone is required unless you use computer-generated ID.'
+            )
 
-        # If user supplied a real phone (not auto), do the usual duplicate check
+        # If user supplied a real phone (not auto), check duplicate
         if not use_auto and phone:
             existing = customer.query.filter_by(phone=phone).first()
-            if action == 'create_and_bill':
-                if existing:
-                    sel = existing
-                else:
-                    sel = customer(
-                        name=name, company=company, phone=phone, email=email,
-                        gst=gst, address=address, businessType=businessType
-                    )
-                    db.session.add(sel)
-                    db.session.commit()
-                return render_template('create_bill.html', customer=sel, inventory=item.query.all())
-
             if existing:
-                return render_template('add_customer.html', duplicate=True)
+                # Already present → take the user to that customer's snapshot
+                return redirect(url_for('about_user', customer_id=existing.id))
 
-            new_customer = customer(
+            # Create with real phone
+            c = customer(
                 name=name, company=company, phone=phone, email=email,
                 gst=gst, address=address, businessType=businessType
             )
-            db.session.add(new_customer)
+            db.session.add(c)
             db.session.commit()
-            return render_template('add_customer.html', success=True)
+            return redirect(url_for('about_user', customer_id=c.id))
 
-        # ---- Auto-ID path (no real phone or checkbox checked) ----
-        # phone is NOT NULL + UNIQUE in DB, so we insert with a unique temporary value,
-        # flush to get .id, then set phone = ID-XXXXXX and commit.
+        # ---- Auto-ID path (no real phone or toggle checked) ----
+        # Insert a temporary unique phone, flush to get PK, then set phone = ID-XXXXXX and commit.
         temp_phone = f"ID-TEMP-{uuid.uuid4().hex[:8]}"
-
-        new_customer = customer(
+        c = customer(
             name=name, company=company, phone=temp_phone, email=email,
             gst=gst, address=address, businessType=businessType
         )
-        db.session.add(new_customer)
-        db.session.flush()  # assigns new_customer.id without committing
-
-        new_customer.phone = _format_customer_id(new_customer.id)
+        db.session.add(c)
+        db.session.flush()            # assigns c.id
+        c.phone = _format_customer_id(c.id)
         db.session.commit()
 
-        if action == 'create_and_bill':
-            return render_template('create_bill.html', customer=new_customer, inventory=item.query.all())
+        # PRG to about_user showing the newly added customer
+        return redirect(url_for('about_user', customer_id=c.id))
 
-        return render_template('add_customer.html', success=True)
-
+    # GET → show the form
     return render_template('add_customer.html')
 
 
@@ -680,101 +668,129 @@ def statements_blank():
         scope = 'custom',
     )
 
-@app.route('/create-bill', methods = ['GET', 'POST'])
+@app.route('/create-bill', methods=['GET', 'POST'])
 def start_bill():
+    # --- GET: prefill if customer_id is supplied; otherwise show selector ---
+    if request.method == 'GET':
+        cid = request.args.get('customer_id', type=int)
+        if cid:
+            # SQLAlchemy 2.x preferred getter; fallback to Query.get if needed
+            try:
+                cust = db.session.get(customer, cid)
+            except Exception:
+                cust = customer.query.get(cid)
 
-    if request.method == 'POST':
-        if 'description[]' in request.form:
-            selected_phone = request.form.get('customer_phone')
-            selected_customer = customer.query.filter_by(phone=selected_phone).first()
+            if not cust:
+                flash('Customer not found', 'warning')
+                return redirect(url_for('about_user'))
 
-            descriptions = request.form.getlist('description[]')
-            quantities = request.form.getlist('quantity[]')
-            rates = request.form.getlist('rate[]')
-            dc_numbers = request.form.getlist('dc_no[]')  # present only if toggle is on
-
-            total = 0
-            item_rows = []
-            for i in range(len(descriptions)):
-                desc = descriptions[i]
-                qty = int(quantities[i]) if i < len(quantities) and quantities[i] else 0
-                rate = float(rates[i]) if i < len(rates) and rates[i] else 0.0
-                dc_val = (dc_numbers[i].strip() if i < len(dc_numbers) and dc_numbers[i] else '')
-                line_total = qty * rate
-                total += line_total
-                item_rows.append([desc, qty, rate, line_total, dc_val])
-
-            #creating invoice entry
-            new_invoice = invoice(
-                customerId = selected_customer.id,
-                createdAt = datetime.now(timezone.utc),
-                totalAmount = round(total, 2),
-                pdfPath = "", # to be filled after filename is known
-                invoiceId = "" # temporary placeholder
-            )
-
-            db.session.add(new_invoice)
-            db.session.commit()
-
-            #generating PDF id and PDF name
-            inv_name = f"SLP-{datetime.now().strftime('%d%m%y')}-{str(new_invoice.id).zfill(5)}"
-            pdf_filename = f"{inv_name}.pdf"
-            pdf_path = os.path.join("static/pdfs", pdf_filename)
-
-            new_invoice.invoiceId = inv_name
-            new_invoice.pdfPath = pdf_path
-            db.session.commit()
-
-            # add invoice Items
-            for desc, qty, rate, line_total, dc_val in item_rows:
-                matched_item = item.query.filter_by(name=desc).first()
-                if matched_item:
-                    item_id = matched_item.id
-                else:
-                    new_item = item(
-                        name=desc,  # place holder for future
-                        unitPrice=rate,
-                        quantity=0,
-                        taxPercentage=0
-                    )
-                    db.session.add(new_item)
-                    db.session.commit()
-                    item_id = new_item.id
-
-                db.session.add(invoiceItem(
-                    invoiceId=new_invoice.id,
-                    itemId=item_id,
-                    quantity=qty,
-                    rate=rate,
-                    discount=0,
-                    taxPercentage=0,
-                    line_total=line_total,
-                    dcNo=(dc_val if dc_val else None)
-                ))
-
-            db.session.commit()
-
+            # Prefilled create bill for this customer
             return render_template(
                 'create_bill.html',
-                customer=selected_customer,
-                inventory=item.query.all(),
-                success=True,
-                filename=pdf_filename,
-                descriptions=descriptions,
-                quantities=quantities,
-                rates=rates,
-                dc_numbers=dc_numbers,
-                dcno=any(x.strip() for x in dc_numbers),
-                total=total
+                customer=cust,
+                inventory=item.query.order_by(item.name.asc()).all()
             )
 
+        # No customer specified: show your existing select-customer page
+        return render_template('select_customer.html')
+
+    # --- POST: either (A) customer selection submit OR (B) final bill submit ---
+    # (A) User chose a customer from the selector
+    if 'description[]' not in request.form:
+        selected_phone = request.form.get("customer") or request.form.get("customer_phone")
+        sel = customer.query.filter_by(phone=selected_phone).first()
+        if not sel:
+            flash('Please pick a valid customer', 'warning')
+            return render_template('select_customer.html')
+        return render_template('create_bill.html', customer=sel, inventory=item.query.all())
+
+    # (B) Final bill submission with line items
+    selected_phone = request.form.get('customer_phone')
+    selected_customer = customer.query.filter_by(phone=selected_phone).first()
+    if not selected_customer:
+        flash('Customer not found. Please reselect the customer.', 'warning')
+        return render_template('select_customer.html')
+
+    descriptions = request.form.getlist('description[]')
+    quantities   = request.form.getlist('quantity[]')
+    rates        = request.form.getlist('rate[]')
+    dc_numbers   = request.form.getlist('dc_no[]')  # may be [] if toggle off
+
+    total = 0.0
+    item_rows = []
+    for i in range(len(descriptions)):
+        desc = (descriptions[i] or '').strip()
+        if not desc:
+            continue
+        qty  = int(quantities[i]) if i < len(quantities) and quantities[i] else 0
+        rate = float(rates[i])    if i < len(rates)      and rates[i]      else 0.0
+        dc_val = ''
+        if dc_numbers and i < len(dc_numbers) and dc_numbers[i]:
+            dc_val = dc_numbers[i].strip()
+        line_total = qty * rate
+        total += line_total
+        item_rows.append([desc, qty, rate, line_total, dc_val])
+
+    # Create invoice
+    new_invoice = invoice(
+        customerId=selected_customer.id,
+        createdAt=datetime.now(timezone.utc),
+        totalAmount=round(total, 2),
+        pdfPath="",     # set after inv_name built
+        invoiceId=""    # temporary
+    )
+    db.session.add(new_invoice)
+    db.session.commit()
+
+    # Generate invoice Id + pdf path (even if you’re printing, you keep id)
+    inv_name = f"SLP-{datetime.now().strftime('%d%m%y')}-{str(new_invoice.id).zfill(5)}"
+    pdf_filename = f"{inv_name}.pdf"
+    pdf_path = os.path.join("static/pdfs", pdf_filename)
+
+    new_invoice.invoiceId = inv_name
+    new_invoice.pdfPath = pdf_path
+    db.session.commit()
+
+    # Add line items (re-using existing or creating placeholder items)
+    for desc, qty, rate, line_total, dc_val in item_rows:
+        matched_item = item.query.filter_by(name=desc).first()
+        if matched_item:
+            item_id = matched_item.id
         else:
-            selected_phone = request.form.get("customer")
-            selected_customer = customer.query.filter_by(phone = selected_phone).first()
-            return render_template('create_bill.html', customer = selected_customer, inventory=item.query.all())
+            new_item = item(name=desc, unitPrice=rate, quantity=0, taxPercentage=0)
+            db.session.add(new_item)
+            db.session.commit()
+            item_id = new_item.id
 
-    return render_template('select_customer.html')
+        db.session.add(invoiceItem(
+            invoiceId=new_invoice.id,
+            itemId=item_id,
+            quantity=qty,
+            rate=rate,
+            discount=0,
+            taxPercentage=0,
+            line_total=line_total,
+            dcNo=(dc_val if dc_val else None)
+        ))
 
+    db.session.commit()
+
+    # Did user include any DC values?
+    dc_present = any((x or '').strip() for x in (dc_numbers or []))
+
+    return render_template(
+        'create_bill.html',
+        customer=selected_customer,
+        inventory=item.query.all(),
+        success=True,
+        filename=pdf_filename,
+        descriptions=[r[0] for r in item_rows],
+        quantities=[r[1] for r in item_rows],
+        rates=[r[2] for r in item_rows],
+        dc_numbers=[r[4] for r in item_rows],  # keep same order/length
+        dcno=dc_present,
+        total=total
+    )
 
 
 @app.route('/view_customers', methods=['GET', 'POST'])
