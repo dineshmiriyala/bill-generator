@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+.env
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Local DB & instance
+db/app.db
+instance/
+
+# Generated
+*.pdf
+static/img/.DS_Store
+
+# Alembic logs (keep versions/)
+migrations/*.log
