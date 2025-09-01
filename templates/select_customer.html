@@ -18,6 +18,9 @@
     <div class="col-auto">
       <a href="{{ url_for('select_customer') }}" class="btn btn-danger">Clear</a>
     </div>
+    <div class="col-auto">
+      <a href="/create_customers?next_url=/create-bill&bill_generation=true" class="btn btn-secondary">Create New Customer</a>
+    </div>
   </form>
 
   {% if customers %}
@@ -58,8 +61,5 @@
     <p class="text-center text-muted">No customers found for your search.</p>
   {% endif %}
 
-  <div class="text-center mt-4">
-    <a href="/create_customers?next_url=/create-bill&bill_generation=true" class="btn btn-secondary">Create New Customer</a>
-  </div>
 </div>
 {% endblock %}

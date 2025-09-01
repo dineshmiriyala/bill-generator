@@ -30,6 +30,18 @@
     </div>
   </div>
 </nav>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="container mt-3">
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'warning' if category == 'warn' else category }} alert-dismissible fade show shadow-sm" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
 {% endif %}
 
 <main class="flex-fill">
@@ -57,4 +69,18 @@
 </script>
 
 </body>
+<script>
+  document.addEventListener('DOMContentLoaded', function(){
+    const alerts = document.querySelectorAll('.alert');
+    if (alerts.length > 0) {
+      setTimeout(() => {
+        alerts.forEach(el => {
+          try {
+            bootstrap.Alert.getOrCreateInstance(el).close();
+          } catch(e){}
+        });
+      }, 4000);
+    }
+  });
+</script>
 </html>

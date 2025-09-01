@@ -53,9 +53,18 @@
 
     <h5 class="mb-3">Items</h5>
     <div id="items">
+      <div id="items-header" class="row g-3 align-items-end mb-2 fw-semibold small text-muted">
+        <div class="col-md-1">S.No</div>
+        <div class="col-md-4">Description</div>
+        <div class="col-md-2 dc-col" style="{% if not dcno %}display:none;{% endif %}">DC No</div>
+        <div class="col-md-2">Qty</div>
+        <div class="col-md-2">Unit Price</div>
+        <div class="col-md-1 text-end"></div>
+      </div>
       {% if success or edit_mode %}
         {% for description, quantity, rate in zip(descriptions, quantities, rates) %}
           <div class="row g-3 align-items-end mb-3 item-row">
+            <div class="col-md-1 serial-col"><span class="serial-index">{{ loop.index }}</span></div>
             <div class="col-md-4">
               <input type="text" name="description[]" class="form-control item-description" list="inventoryList" placeholder="Item Name" value="{{ description }}" required>
               <datalist id="inventoryList">
@@ -65,14 +74,14 @@
               </datalist>
               <input type="hidden" name="item_id[]" value="">
             </div>
-            <div class="col-md-3 dc-col" style="{% if not dcno %}display:none;{% endif %}">
+            <div class="col-md-2 dc-col" style="{% if not dcno %}display:none;{% endif %}">
               <input type="text" name="dc_no[]" class="form-control dc-input" placeholder="DC No" {% if not dcno %}disabled{% endif %} value="{{ dc_numbers[loop.index0] if dc_numbers is defined and dc_numbers|length > loop.index0 else '' }}">
             </div>
             <div class="col-md-2">
-              <input type="number" name="quantity[]" class="form-control" placeholder="Qty" value="{{ quantity }}" required>
+              <input type="number" name="quantity[]" class="form-control" placeholder="Qty" step="1" inputmode="numeric" value="{{ quantity }}" required>
             </div>
             <div class="col-md-2">
-              <input type="number" name="rate[]" class="form-control" placeholder="Unit Price" value="{{ rate }}" required>
+              <input type="number" name="rate[]" class="form-control rate-input" placeholder="Unit Price" step="0.01" inputmode="decimal" value="{{ rate }}" required>
             </div>
             <div class="col-md-1 text-end">
               <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
@@ -81,6 +90,7 @@
         {% endfor %}
       {% else %}
         <div class="row g-3 align-items-end mb-3 item-row">
+          <div class="col-md-1 serial-col"><span class="serial-index">1</span></div>
           <div class="col-md-4">
             <input type="text" name="description[]" class="form-control item-description" list="inventoryList" placeholder="Description" required>
             <datalist id="inventoryList">
@@ -90,14 +100,14 @@
             </datalist>
             <input type="hidden" name="item_id[]" value="">
           </div>
-          <div class="col-md-3 dc-col" style="display:none;">
+          <div class="col-md-2 dc-col" style="display:none;">
             <input type="text" name="dc_no[]" class="form-control dc-input" placeholder="DC No" disabled>
           </div>
           <div class="col-md-2">
-            <input type="number" name="quantity[]" class="form-control" placeholder="Qty" required>
+            <input type="number" name="quantity[]" class="form-control" placeholder="Qty" step="1" inputmode="numeric" required>
           </div>
           <div class="col-md-2">
-            <input type="number" name="rate[]" class="form-control" placeholder="Unit Price" required>
+            <input type="number" name="rate[]" class="form-control rate-input" placeholder="Unit Price" step="0.01" inputmode="decimal" required>
           </div>
           <div class="col-md-1 text-end">
             <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
@@ -161,19 +171,21 @@
 </div>
 
 <script>
+  function renumberRows(){
+    document.querySelectorAll('#items .item-row').forEach((row, idx) => {
+      const idxEl = row.querySelector('.serial-index');
+      if (idxEl) idxEl.textContent = String(idx + 1);
+    });
+  }
+
   document.getElementById("addItem").addEventListener("click", () => {
     const itemRow = document.querySelector(".item-row").cloneNode(true);
     itemRow.querySelectorAll("input").forEach(input => input.value = "");
-    // Show/hide dc-col and enable/disable dc-input based on toggleDC
     const toggleChecked = document.getElementById("toggleDC").checked;
-    itemRow.querySelectorAll(".dc-col").forEach(col => {
-      col.style.display = toggleChecked ? '' : 'none';
-    });
-    itemRow.querySelectorAll(".dc-input").forEach(inp => {
-      inp.disabled = !toggleChecked;
-      if (!toggleChecked) inp.value = '';
-    });
+    itemRow.querySelectorAll(".dc-col").forEach(col => { col.style.display = toggleChecked ? '' : 'none'; });
+    itemRow.querySelectorAll(".dc-input").forEach(inp => { inp.disabled = !toggleChecked; if (!toggleChecked) inp.value = ''; });
     document.getElementById("items").appendChild(itemRow);
+    renumberRows();
   });
 
   document.getElementById("items").addEventListener("click", e => {
@@ -181,6 +193,7 @@
       const row = e.target.closest(".item-row");
       if (document.querySelectorAll(".item-row").length > 1) {
         row.remove();
+        renumberRows();
       }
     }
   });
@@ -327,5 +340,15 @@ clearBtn.addEventListener("click", () => {
   // Initial evaluation
   updateCreateButton();
 })();
+</script>
+<script>
+  document.querySelector('form').addEventListener('submit', function(){
+    document.querySelectorAll('.rate-input').forEach(inp => {
+      if (!inp.value) return;
+      let v = inp.value.replace(/[₹\s]/g,'').replace(/,/g,'');
+      if (!v.includes('.') && inp.value.includes(',')) v = v.replace(',', '.');
+      inp.value = v;
+    });
+  });
 </script>
 {% endblock %}
