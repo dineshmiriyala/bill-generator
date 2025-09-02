@@ -46,7 +46,7 @@
               <div class="fw-semibold">Company</div>
               <div class="text-muted small">Customer</div>
             </th>
-            <th>Total</th>
+            <th>Total (INR)</th>
             <th>View</th>
           </tr>
         </thead>
@@ -61,7 +61,7 @@
                 <div class="text-muted small">{{ bill.customer_name }}</div>
               {% endif %}
             </td>
-            <td>₹{{ bill.total }}</td>
+            <td>{{ bill.total }}</td>
             <td><a href="{{ url_for('view_bill_locked', invoicenumber=bill.invoice_no) }}">View Bill</a></td>
           </tr>
           {% endfor %}

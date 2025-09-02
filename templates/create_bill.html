@@ -22,9 +22,10 @@
           <tr>
             <th>Name</th>
             <th>Company</th>
-            <th>Phone</th>
+            <th>ID</th>
             <th>GST</th>
             <th>Address</th>
+            <th></th>
             <th></th>
           </tr>
         </thead>
@@ -32,12 +33,41 @@
           <tr>
             <td>{{ customer.name }}</td>
             <td>{{ customer.company }}</td>
-            <td>{{ customer.phone }}</td>
-            <td>{{ customer.gst }}</td>
-            <td>{{ customer.address }}</td>
+            <td>
+              <span id="phoneValue" class="d-block">{{ customer.phone }}</span>
+            </td>
+            <td>
+              <span id="gstValue" class="d-block">{{ customer.gst }}</span>
+            </td>
+            <td><span id="addressValue" class="d-block">{{ customer.address }}</span></td>
             <td>
               {% if not edit_mode %}<a href="{{ url_for('select_customer') }}" class="btn btn-sm btn-success">Change</a>{% endif %}
             </td>
+            <td></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td></td>
+            <td class="text-center align-top">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="excludePhone" name="exclude_phone" {% if exclude_phone == True or exclude_phone == 'true' or exclude_phone == 'on' %}checked{% endif %}>
+                <label class="form-check-label small" for="excludePhone">Exclude ID</label>
+              </div>
+            </td>
+            <td class="text-center align-top">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="excludeGST" name="exclude_gst" {% if exclude_gst == True or exclude_gst == 'true' or exclude_gst == 'on' %}checked{% endif %}>
+                <label class="form-check-label small" for="excludeGST">Exclude GST</label>
+              </div>
+            </td>
+            <td class="text-center align-top">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="excludeAddress" name="exclude_addr" {% if exclude_addr == True or exclude_addr == 'true' or exclude_addr == 'on' %}checked{% endif %}>
+                <label class="form-check-label small" for="excludeAddress">Exclude Address</label>
+              </div>
+            </td>
+            <td></td>
+            <td></td>
           </tr>
         </tbody>
       </table>
@@ -59,6 +89,7 @@
         <div class="col-md-2 dc-col" style="{% if not dcno %}display:none;{% endif %}">DC No</div>
         <div class="col-md-2">Qty</div>
         <div class="col-md-2">Unit Price</div>
+        <div class="col-md-2">Total</div>
         <div class="col-md-1 text-end"></div>
       </div>
       {% if success or edit_mode %}
@@ -83,8 +114,11 @@
             <div class="col-md-2">
               <input type="number" name="rate[]" class="form-control rate-input" placeholder="Unit Price" step="0.01" inputmode="decimal" value="{{ rate }}" required>
             </div>
-            <div class="col-md-1 text-end">
-              <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
+            <div class="col-md-2">
+              <input type="number" name="total[]" class="form-control total-input" placeholder="Total" step="0.01" inputmode="decimal" value="">
+            </div>
+            <div class="col-md-1 d-flex justify-content-end align-items-end">
+              <button type="button" class="btn btn-danger remove-item">Remove</button>
             </div>
           </div>
         {% endfor %}
@@ -109,8 +143,11 @@
           <div class="col-md-2">
             <input type="number" name="rate[]" class="form-control rate-input" placeholder="Unit Price" step="0.01" inputmode="decimal" required>
           </div>
-          <div class="col-md-1 text-end">
-            <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
+          <div class="col-md-2">
+            <input type="number" name="total[]" class="form-control total-input" placeholder="Total" step="0.01" inputmode="decimal" value="">
+          </div>
+          <div class="col-md-1 d-flex justify-content-end align-items-end">
+            <button type="button" class="btn btn-danger remove-item">Remove</button>
           </div>
         </div>
       {% endif %}
@@ -120,9 +157,9 @@
       <button type="button" id="addItem" class="btn btn-secondary">Add Item</button>
     </div>
 
-    <div class="mb-4">
-      <label>Total: ₹</label>
-      <span id="totalAmount">
+    <div class="mb-4 text-end pe-3">
+      <label class="form-label fw-semibold">New Total (INR):</label>
+      <span id="totalAmount" class="fw-bold fs-5">
         {% if success and grand_total %}
           {{ grand_total }}
         {% else %}
@@ -139,6 +176,9 @@
     {% else %}
       <button type="submit" class="btn btn-primary">Generate Bill</button>
       <button type="button" id="clearForm" class="btn btn-outline-danger ms-2">Clear Form</button>
+      {% if success and not edit_mode %}
+      <a href="{{ url_for('latest_bill_preview') }}" target="_blank" class="btn btn-success ms-2" id="printBillBtn">Print Generated Bill</a>
+      {% endif %}
     {% endif %}
 
     {% if edit_mode %}
@@ -200,6 +240,44 @@
 </script>
 
 <script>
+  function updateLabelState() {
+    const phoneCheckbox = document.getElementById("excludePhone");
+    const gstCheckbox = document.getElementById("excludeGST");
+    const addressCheckbox = document.getElementById("excludeAddress");
+    const phoneValue = document.getElementById("phoneValue");
+    const gstValue = document.getElementById("gstValue");
+    const addressValue = document.getElementById("addressValue");
+
+    if (phoneCheckbox && phoneValue) {
+      if (!phoneValue.dataset.original) phoneValue.dataset.original = phoneValue.textContent;
+      phoneValue.textContent = phoneCheckbox.checked ? '' : phoneValue.dataset.original;
+    }
+
+    if (gstCheckbox && gstValue) {
+      if (!gstValue.dataset.original) gstValue.dataset.original = gstValue.textContent;
+      gstValue.textContent = gstCheckbox.checked ? '' : gstValue.dataset.original;
+    }
+
+    if (addressCheckbox && addressValue) {
+      if (!addressValue.dataset.original) addressValue.dataset.original = addressValue.textContent;
+      addressValue.textContent = addressCheckbox.checked ? '' : addressValue.dataset.original;
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const phoneCheckbox = document.getElementById("excludePhone");
+    const gstCheckbox = document.getElementById("excludeGST");
+    const addressCheckbox = document.getElementById("excludeAddress");
+
+    if (phoneCheckbox) phoneCheckbox.addEventListener("change", updateLabelState);
+    if (gstCheckbox) gstCheckbox.addEventListener("change", updateLabelState);
+    if (addressCheckbox) addressCheckbox.addEventListener("change", updateLabelState);
+
+    updateLabelState();  // initialize on load
+  });
+</script>
+
+<script>
 document.addEventListener("DOMContentLoaded", function () {
   const inventoryData = {
     {% for item in inventory %}
@@ -225,14 +303,23 @@ document.addEventListener("DOMContentLoaded", function () {
 
 <script>
 function calculateTotal() {
-  let total = 0;
+  let grandTotal = 0;
+
   document.querySelectorAll(".item-row").forEach(row => {
-    const qty = parseFloat(row.querySelector('[name="quantity[]"]').value) || 0;
-    const rate = parseFloat(row.querySelector('[name="rate[]"]').value) || 0;
-    const subtotal = qty * rate;
-    total += subtotal;
+    const qtyInput = row.querySelector('[name="quantity[]"]');
+    const rateInput = row.querySelector('[name="rate[]"]');
+    const totalInput = row.querySelector('[name="total[]"]');
+
+    const qty = parseFloat(qtyInput.value) || 0;
+    const rate = parseFloat(rateInput.value) || 0;
+
+    const total = qty * rate;
+    totalInput.value = total.toFixed(2);
+
+    grandTotal += total;
   });
-  document.getElementById("totalAmount").textContent = total.toFixed(2);
+
+  document.getElementById("totalAmount").textContent = grandTotal.toFixed(2);
 }
 
 document.getElementById("items").addEventListener("input", calculateTotal);
@@ -246,6 +333,8 @@ clearBtn.addEventListener("click", () => {
   });
   document.querySelectorAll(".dc-input").forEach(inp => inp.value = "");
   document.getElementById("totalAmount").textContent = "0.00";
+  const printBtn = document.getElementById("printBillBtn");
+  if (printBtn) printBtn.remove();
 });
 }
 </script>

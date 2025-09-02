@@ -1,0 +1,67 @@
+
+
+{% extends "base.html" %}
+{% block content %}
+<h2>Recover Deleted Records</h2>
+
+<h3>Deleted Customers</h3>
+{% if deleted_customers %}
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>ID/Phone</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for cust in deleted_customers %}
+        <tr>
+            <td>{{ cust.phone }}</td>
+            <td>{{ cust.name }}</td>
+            <td>{{ cust.email }}</td>
+            <td>
+                <a href="{{ url_for('recover_customer', id=cust.id) }}" class="btn btn-success btn-sm">Recover</a>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No deleted customers.</p>
+{% endif %}
+
+<h3>Deleted Invoices</h3>
+{% if deleted_invoices %}
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Customer ID/Phone</th>
+            <th>InvoiceID</th>
+            <th>Company</th>
+            <th>Date</th>
+            <th>Amount</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for inv in deleted_invoices %}
+        <tr>
+            <td>{{ inv.customer.phone }}</td>
+            <td>{{ inv.invoiceId }}</td>
+            <td>{{ inv.customer.company if inv.customer else 'N/A' }}</td>
+            <td>{{ inv.createdAt }}</td>
+            <td>{{ inv.totalAmount }}</td>
+            <td>
+                <a href="{{ url_for('recover_invoice', id=inv.id) }}" class="btn btn-success btn-sm">Recover</a>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No deleted invoices.</p>
+{% endif %}
+
+{% endblock %}

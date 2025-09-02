@@ -32,6 +32,10 @@ class invoice(db.Model):
     items = db.relationship("invoiceItem", backref="invoice", lazy=True)
     isDeleted = db.Column(db.Boolean, nullable=False, default=False, index=True)
     deletedAt = db.Column(db.DateTime, nullable = True, index=True)
+    exclude_phone = db.Column(db.Boolean, default=False)
+    exclude_gst = db.Column(db.Boolean, default=False)
+    exclude_addr = db.Column(db.Boolean, default=False)
+
 
     @classmethod
     def alive(cls):

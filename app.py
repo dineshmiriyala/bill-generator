@@ -139,6 +139,73 @@ def _parse_date(date_str):
     except Exception:
         return None
 
+
+@app.route('/recover')
+def recover_page():
+    deleted_customers = customer.query.filter_by(isDeleted=True).all()
+    deleted_invoices = invoice.query.filter_by(isDeleted=True).all()
+    return render_template(
+        'recover.html',
+        deleted_customers=deleted_customers,
+        deleted_invoices=deleted_invoices
+    )
+
+
+@app.route('/recover_customer/<int:id>')
+def recover_customer(id):
+    cust = customer.query.get_or_404(id)
+    cust.isDeleted = False
+    db.session.commit()
+    flash('Customer recovered successfully.', 'success')
+    return redirect(url_for('recover_page'))
+
+@app.route('/edit_user/<int:customer_id>', methods=['GET', 'POST'])
+def edit_user(customer_id):
+    cust = customer.query.filter_by(id=customer_id, isDeleted=False).first_or_404()
+
+    if request.method == 'GET':
+        return render_template('edit_user.html', customer=cust)
+
+    # POST logic: update values
+    name = request.form.get('name', '').strip()
+    phone = request.form.get('phone', '').strip()
+    address = request.form.get('address', '').strip()
+    gst = request.form.get('gst', '').strip()
+    email = request.form.get('email', '').strip()
+    businessType = request.form.get('businessType', '').strip()
+    company = request.form.get('company', '').strip()
+
+    if not name or not phone:
+        flash('Name and Phone are required fields.', 'warning')
+        return redirect(request.referrer or url_for('about_user', customer_id=customer_id))
+
+    cust.name = name
+    cust.phone = phone
+    cust.address = address
+    cust.gst = gst
+    cust.email = email
+    cust.businessType = businessType
+    cust.company = company
+
+    try:
+        db.session.commit()
+        flash('Customer updated successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating customer: {e}', 'danger')
+
+    next_url = request.form.get('next') or url_for('about_user', customer_id=customer_id)
+    return redirect(next_url)
+
+@app.route('/recover_invoice/<int:id>')
+def recover_invoice(id):
+    inv = invoice.query.get_or_404(id)
+    inv.isDeleted = False
+    db.session.commit()
+    flash('Invoice recovered successfully.', 'success')
+    return redirect(url_for('recover_page'))
+
+
 @app.route("/about_user")
 def about_user():
     """Owner/Business profile + optional customer snapshot, with better search.
@@ -176,7 +243,7 @@ def about_user():
         total_billed = db.session.query(
             func.coalesce(func.sum(invoice.totalAmount), 0)
         ).scalar() or 0
-    prof["totalBilled"] = f"₹{float(total_billed):,.2f}"
+    prof["totalBilled"] = f"INR: {float(total_billed):,.2f}"
 
     # ---- Improved customer selection logic ----
     cust = None
@@ -246,7 +313,7 @@ def about_user():
             'invoiceCount': invs_q.count(),
             'firstInvoiceDate': first_inv_c.createdAt.strftime('%d %b %Y') if getattr(first_inv_c, 'createdAt', None) else None,
             'lastInvoiceDate':  last_inv_c.createdAt.strftime('%d %b %Y')  if getattr(last_inv_c,  'createdAt', None) else None,
-            'totalBilled': f"₹{float(total_val):,.2f}",
+            'totalBilled': f"INR: {float(total_val):,.2f}",
         }
 
     return render_template(
@@ -815,7 +882,6 @@ def start_bill():
     # --- GET: prefill if customer_id is supplied; otherwise show selector ---
     if request.method == 'GET':
         cid = request.args.get('customer_id', type=int)
-        # GET
         if cid:
             try:
                 cust = (customer.query
@@ -852,6 +918,12 @@ def start_bill():
     rates        = request.form.getlist('rate[]')
     dc_numbers   = request.form.getlist('dc_no[]')  # may be [] if toggle off
 
+    # Get exclusion flags
+    exclude_phone = bool(request.form.get('exclude_phone'))
+    exclude_gst = bool(request.form.get('exclude_gst'))
+    exclude_addr = bool(request.form.get('exclude_addr'))
+
+
     total = 0.0
     item_rows = []
     for i in range(len(descriptions)):
@@ -873,12 +945,15 @@ def start_bill():
         createdAt=datetime.now(timezone.utc),
         totalAmount=round(total, 2),
         pdfPath="",     # set after inv_name built
-        invoiceId=""    # temporary
+        invoiceId="",   # temporary
+        exclude_phone=exclude_phone,
+        exclude_gst=exclude_gst,
+        exclude_addr=exclude_addr
     )
     db.session.add(new_invoice)
     db.session.commit()
 
-    # Generate invoice Id + pdf path (even if you’re printing, you keep id)
+    # Generate invoice Id + pdf path
     inv_name = f"SLP-{datetime.now().strftime('%d%m%y')}-{str(new_invoice.id).zfill(5)}"
     pdf_filename = f"{inv_name}.pdf"
     pdf_path = os.path.join("static/pdfs", pdf_filename)
@@ -887,7 +962,7 @@ def start_bill():
     new_invoice.pdfPath = pdf_path
     db.session.commit()
 
-    # Add line items (re-using existing or creating placeholder items)
+    # Add line items
     for desc, qty, rate, line_total, dc_val in item_rows:
         matched_item = item.query.filter_by(name=desc).first()
         if matched_item:
@@ -923,9 +998,12 @@ def start_bill():
         descriptions=[r[0] for r in item_rows],
         quantities=[r[1] for r in item_rows],
         rates=[r[2] for r in item_rows],
-        dc_numbers=[r[4] for r in item_rows],  # keep same order/length
+        dc_numbers=[r[4] for r in item_rows],
         dcno=dc_present,
-        total=total
+        total=total,
+        exclude_addr=exclude_addr,
+        exclude_gst=exclude_gst,
+        exclude_phone=exclude_phone
     )
 
 
@@ -1024,8 +1102,17 @@ def view_bills():
 def view_bill_locked(invoicenumber):
     # load invoice and related data
     current_invoice = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
-    current_customer = customer.query.get(current_invoice.customerId)
+    cur_cust = customer.query.get(current_invoice.customerId)
     line_items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
+
+    current_customer = {
+        "name": cur_cust.name,
+        "company": cur_cust.company,
+        "phone": "Excluded in the bill" if current_invoice.exclude_phone else cur_cust.phone,
+        "gst": "Excluded in the bill" if current_invoice.exclude_gst else cur_cust.gst,
+        "address": "Excluded in the bill" if current_invoice.exclude_addr else cur_cust.address,
+        "email": cur_cust.email
+    }
 
     # build row wise lists for the template
     descriptions, quantities, rates, dc_numbers = [], [], [], []
@@ -1116,12 +1203,23 @@ def amount_to_words(amount) -> str:
 
 @app.route('/bill_preview/<invoicenumber>')
 def bill_preview(invoicenumber):
-    current_invoice = invoice.query.filter_by(invoiceId = invoicenumber, isDeleted=False).first_or_404()
+    current_invoice = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
     if not current_invoice:
         return f"No invoice found for {invoicenumber}"
 
-    current_customer = customer.query.get(current_invoice.customerId)
-    items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
+    cur_cust = customer.query.get(current_invoice.customerId)
+
+    current_customer = {
+        "name": cur_cust.name,
+        "company": cur_cust.company,
+        "phone": None if current_invoice.exclude_phone else cur_cust.phone,
+        "gst": None if current_invoice.exclude_gst else cur_cust.gst,
+        "address": None if current_invoice.exclude_addr else cur_cust.address,
+        "email": cur_cust.email
+    }
+    items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
+
+    # Prepare item data
     item_data = []
     for i in items:
         item_name = item.query.get(i.itemId).name if i.itemId else "Unknown"
@@ -1135,15 +1233,23 @@ def bill_preview(invoicenumber):
             i.line_total
         )
         item_data.append(entry)
+
+    # DC numbers
     dc_numbers = [i.dcNo or '' for i in items]
     dcno = any(bool((x or '').strip()) for x in dc_numbers)
-    return render_template('bill_preview.html',
-                           invoice=current_invoice,
-                           customer=current_customer,
-                           items=item_data, dcno=dcno,
-                           dc_numbers=dc_numbers,
-                           total_in_words = amount_to_words(current_invoice.totalAmount))
 
+
+
+
+    return render_template(
+        'bill_preview.html',
+        invoice=current_invoice,
+        customer=current_customer,
+        items=item_data,
+        dcno=dcno,
+        dc_numbers=dc_numbers,
+        total_in_words=amount_to_words(current_invoice.totalAmount)
+    )
 
 @app.route('/edit-bill/<invoicenumber>')
 def edit_bill(invoicenumber):
@@ -1171,6 +1277,10 @@ def edit_bill(invoicenumber):
     except Exception:
         prev_created_at = str(current_invoice.createdAt)
 
+    exclude_phone = current_invoice.exclude_phone
+    exclude_gst = current_invoice.exclude_gst
+    exclude_addr = current_invoice.exclude_addr
+
     # Render the same template as create_bill.html but pre-filled
     return render_template(
         'create_bill.html',
@@ -1186,7 +1296,10 @@ def edit_bill(invoicenumber):
         invoice_no=current_invoice.invoiceId,
         edit_mode=True,  # flag to distinguish editing vs new bill
         prev_invoice_no=prev_invoice_no,
-        prev_created_at=prev_created_at
+        prev_created_at=prev_created_at,
+        exclude_phone=exclude_phone,
+        exclude_gst=exclude_gst,
+        exclude_addr=exclude_addr
     )
 
 
@@ -1295,7 +1408,18 @@ def latest_bill_preview():
     if not current_invoice:
         return "No invoice found"
 
-    current_customer = customer.query.get(current_invoice.customerId)
+    cur_cust = customer.query.get(current_invoice.customerId)
+
+    current_customer = {
+        "name": cur_cust.name,
+        "company": cur_cust.company,
+        "phone": None if current_invoice.exclude_phone else cur_cust.phone,
+        "gst": None if current_invoice.exclude_gst else cur_cust.gst,
+        "address": None if current_invoice.exclude_addr else cur_cust.address,
+        "email": cur_cust.email
+    }
+
+
     items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
     item_data = []
 
@@ -1311,6 +1435,7 @@ def latest_bill_preview():
             i.line_total
         )
         item_data.append(entry)
+
     dc_numbers = [i.dcNo or '' for i in items]
     dcno = any(bool((x or '').strip()) for x in dc_numbers)
     return render_template('bill_preview.html',
