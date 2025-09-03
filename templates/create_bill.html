@@ -319,16 +319,88 @@ function calculateTotal() {
     const qty = parseFloat(qtyInput.value) || 0;
     const rate = parseFloat(rateInput.value) || 0;
 
-    const total = qty * rate;
-    totalInput.value = total.toFixed(2);
+    // Track last edited field
+    const lastEdited = row.dataset.lastEdited;
 
-    grandTotal += total;
+    if (lastEdited === 'total') {
+      const totalVal = parseFloat(totalInput.value) || 0;
+      if (qty > 0) {
+        rateInput.value = (totalVal / qty).toFixed(2);
+      }
+      grandTotal += totalVal;
+    } else if (lastEdited === 'rate') {
+      // User last changed rate, so recalc total
+      const total = qty * rate;
+      totalInput.value = total.toFixed(2);
+      grandTotal += total;
+    } else if (lastEdited === 'quantity') {
+      // User last changed quantity, so recalc total
+      const total = qty * rate;
+      totalInput.value = total.toFixed(2);
+      grandTotal += total;
+    } else {
+      // Default behavior (no manual edit yet)
+      const total = qty * rate;
+      totalInput.value = total.toFixed(2);
+      grandTotal += total;
+    }
   });
 
   document.getElementById("totalAmount").textContent = grandTotal.toFixed(2);
 }
 
 document.getElementById("items").addEventListener("input", calculateTotal);
+
+// Set up listeners for manual edit tracking and last edited field
+function setupTotalManualListeners(context) {
+  (context || document).querySelectorAll('.item-row').forEach(row => {
+    // Total input listener
+    row.querySelectorAll('.total-input').forEach(totalInput => {
+      if (!totalInput.dataset.listenerAdded) {
+        totalInput.addEventListener('input', () => {
+          totalInput.dataset.manual = "true";
+          totalInput.closest('.item-row').dataset.lastEdited = 'total';
+          calculateTotal();
+        });
+        totalInput.dataset.listenerAdded = "true";
+      }
+    });
+    // Rate input listener
+    row.querySelectorAll('[name="rate[]"]').forEach(rateInput => {
+      if (!rateInput.dataset.listenerAdded) {
+        rateInput.addEventListener('input', () => {
+          rateInput.closest('.item-row').dataset.lastEdited = 'rate';
+          calculateTotal();
+        });
+        rateInput.dataset.listenerAdded = "true";
+      }
+    });
+    // Quantity input listener
+    row.querySelectorAll('[name="quantity[]"]').forEach(qtyInput => {
+      if (!qtyInput.dataset.listenerAdded) {
+        qtyInput.addEventListener('input', () => {
+          qtyInput.closest('.item-row').dataset.lastEdited = 'quantity';
+          calculateTotal();
+        });
+        qtyInput.dataset.listenerAdded = "true";
+      }
+    });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  setupTotalManualListeners();
+});
+
+// Also call when adding new rows
+const origAddItemHandler = document.getElementById("addItem").onclick;
+document.getElementById("addItem").addEventListener("click", function(e){
+  // Wait for row to be added
+  setTimeout(function() {
+    setupTotalManualListeners();
+    calculateTotal();
+  }, 1);
+});
 </script>
 <script>
 const clearBtn = document.getElementById("clearForm"); if (clearBtn) {
@@ -368,6 +440,7 @@ clearBtn.addEventListener("click", () => {
     const isSuccess = "{{ success }}".toLowerCase() === "true";
     const isEdit = {{ 'true' if edit_mode else 'false' }};
     if (isSuccess || isEdit) {
+      setupTotalManualListeners();
       calculateTotal();
     }
   });
