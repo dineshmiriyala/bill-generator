@@ -22,7 +22,7 @@
           <tr>
             <th>Item Name</th>
             <th>SKU</th>
-            <th>Unit Price</th>
+            <th>Unit Price (INR)</th>
             <th>Available Quantity</th>
             <th>Tax %</th>
           </tr>
@@ -32,7 +32,7 @@
           <tr>
             <td>{{ item.name }}</td>
             <td>{{ item.sku }}</td>
-            <td>₹{{ '%.2f'|format(item.unitPrice or 0) }}</td>
+            <td>{{ '%.2f'|format(item.unitPrice or 0) }}</td>
             <td>{{ item.quantity }}</td>
             <td>{{ item.taxPercentage }}%</td>
           </tr>

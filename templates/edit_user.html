@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container d-flex flex-column justify-content-center align-items-center text-center py-4">
+  <h2 class="mb-4">Edit Customer</h2>
+
+  {% if success %}
+    <div class="alert alert-success text-center w-100 mx-auto" role="alert" style="max-width: 500px;">
+      {{ success_message or 'Customer updated successfully!' }}
+    </div>
+  {% endif %}
+
+  <form method="POST" action="/edit_user/{{ customer.id }}" class="w-100" style="max-width: 400px;">
+    <input type="hidden" name="next" value="{{ request.args.get('next', request.referrer) }}">
+    <div class="form-floating mb-3">
+      <input type="text" class="form-control shadow-sm" id="company" name="company" placeholder="Company Name" value="{{ customer.company or '' }}">
+      <label for="company">Company Name</label>
+    </div>
+
+    <div class="form-floating mb-3">
+      <input type="text" class="form-control shadow-sm" id="name" name="name" placeholder="Customer Name" value="{{ customer.name or '' }}" required>
+      <label for="name">Customer Name</label>
+    </div>
+
+    <div class="mb-3">
+      <div class="row g-2 align-items-center">
+        <div class="col">
+          <div class="form-floating">
+            <input type="tel" class="form-control shadow-sm" id="phone" name="phone" placeholder="Phone Number" value="{{ customer.phone or '' }}" required>
+            <label for="phone">Phone Number</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-floating mb-3">
+      <input type="email" class="form-control shadow-sm" id="email" name="email" placeholder="Email Address" value="{{ customer.email or '' }}">
+      <label for="email">Email Address (optional)</label>
+    </div>
+
+    <div class="form-floating mb-3">
+      <input type="text" class="form-control shadow-sm" id="gst" name="gst" placeholder="GST Number" value="{{ customer.gst or '' }}">
+      <label for="gst">GST Number (optional)</label>
+    </div>
+
+    <div class="form-floating mb-3">
+      <input type="text" class="form-control shadow-sm" id="businessType" name="businessType" placeholder="Business Type" value="{{ customer.businessType or '' }}">
+      <label for="businessType">Business Type (optional)</label>
+    </div>
+
+    <div class="form-floating mb-4">
+      <textarea class="form-control shadow-sm" placeholder="Address" id="address" name="address" style="height: 100px;">{{ customer.address or '' }}</textarea>
+      <label for="address">Address (optional)</label>
+    </div>
+
+    <button type="submit" class="custom-btn w-100">Update Customer</button>
+  </form>
+</div>
+{% endblock %}

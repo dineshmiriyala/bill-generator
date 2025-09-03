@@ -104,7 +104,30 @@ Then go to `http://127.0.0.1:5000` in your browser.
 
 ---
 
-## 🛣 Roadmap: Version 2.0
+## ✅ Version 2.0 – Latest Updates
+
+### 🔧 Bug Fixes
+- "Bill generated successfully" button now stays visible until manually dismissed
+- Font sizes increased in the generated PDF for improved readability
+- Fixed "Edit User" form to match the style and functionality of "Add Customer"
+- Only admins can now access bill and customer edit/delete functions
+- Font rendering in preview and PDF made consistent (more Mac-like appearance)
+
+### ✨ New Features
+- Total field in Create Bill is now editable
+- Editing the Total auto-updates Unit Price
+- Smart field tracking: whichever field (Qty / Rate / Total) was edited last is used to compute others
+- Role-based access control with a login redirect for restricted actions
+- Toggle to include/exclude phone number from final invoice PDF
+- Admins have an Edit button for each customer in the UI
+- Added support for deleting and recovering customers and invoices.
+- Added support to edit customer after creation.
+- Many quality of life upgrades.
+- added a new about me page which can display info about customer. 
+
+---
+
+## 🛣 Roadmap: Version 3.0
 
 - 🔐 User Authentication & Roles
   - Add login system with role-based access (admin, staff)
@@ -133,6 +156,34 @@ Then go to `http://127.0.0.1:5000` in your browser.
 ![Customer Search](Images/CustomerSearch.png)
 #### Sample Invoice
 ![Invoice Preview](Images/Invoice.png)
+
+---
+
+## 🚀 How to Use
+
+### 🪟 For Windows Users
+
+- Navigate to the `desktop-build` branch.
+- Inside the `dist/` folder, you’ll find the `.exe` file (e.g., `BillGenerator.exe`).
+- Just run the `.exe` — it includes all dependencies and launches the app in your default browser.
+- No Python or installation required.
+
+> ⚠️ Make sure your system allows running `.exe` files from unknown developers if Windows Defender warns you.
+
+---
+
+### 🍎 For Mac Users
+
+- Clone the repository and set up a virtual environment:
+  ```bash
+  python3 -m venv env
+  source env/bin/activate
+  pip install -r requirements.txt
+  python desktop_launcher.py
+  ```
+- This will launch the app in your default browser.
+
+> Note: macOS doesn’t support `.exe` files. Use the Python launcher script instead.
 
 ---
 

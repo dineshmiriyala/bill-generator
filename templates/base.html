@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <title>Bill Generator</title>
     <!-- Bootstrap 5 CSS CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.min.css') }}">
 </head>
 <body class="d-flex flex-column min-vh-100">
 
@@ -14,21 +14,34 @@
 {% if not hide_navbar %}
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
   <div class="container d-flex justify-content-between align-items-center">
+    <button class="btn btn-outline-light btn-sm me-2" onclick="goBack()">← Back</button>
     <a class="navbar-brand" href="/">Sri Lakshmi Offset Printers</a>
     <div class="dropdown ms-3">
       <button class="btn btn-secondary dropdown-toggle" type="button" id="staticDropdownButton" data-bs-toggle="dropdown" aria-expanded="false">
         Quick Links
       </button>
       <ul class="dropdown-menu" aria-labelledby="staticDropdownButton">
-        <li><a class="dropdown-item" href="/view_customers">View Customers</a></li>
-        <li><a class="dropdown-item" href="/select_customer">Create Bill</a></li>
         <li><a class="dropdown-item" href="/view_bills">View Bills</a></li>
+        <li><a class="dropdown-item" href="/select_customer">Create Bill</a></li>
+        <li><a class="dropdown-item" href="/view_customers">View Customers</a></li>
         <li><a class="dropdown-item" href="/view_inventory">Inventory</a></li>
         <li><a class="dropdown-item" href="/statements">Statements</a></li>
       </ul>
     </div>
   </div>
 </nav>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="container mt-3">
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'warning' if category == 'warn' else category }} alert-dismissible fade show shadow-sm" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
 {% endif %}
 
 <main class="flex-fill">
@@ -44,7 +57,30 @@
 </footer>
 
 <!-- Bootstrap 5 JS Bundle -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+<script>
+  function goBack() {
+    if (history.length > 1) {
+      history.back();
+    } else {
+      window.location.href = '/';
+    }
+  }
+</script>
 
 </body>
+<script>
+  document.addEventListener('DOMContentLoaded', function(){
+    const alerts = document.querySelectorAll('.alert');
+    if (alerts.length > 0) {
+      setTimeout(() => {
+        alerts.forEach(el => {
+          try {
+            bootstrap.Alert.getOrCreateInstance(el).close();
+          } catch(e){}
+        });
+      }, 4000);
+    }
+  });
+</script>
 </html>

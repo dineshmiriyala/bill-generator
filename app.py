@@ -1,4 +1,4 @@
-from flask import Flask, render_template, render_template_string, request, Response, jsonify, redirect, url_for
+from flask import Flask, render_template, render_template_string, request, Response, jsonify, redirect, url_for, flash
 from datetime import datetime, timedelta, timezone
 from flask_migrate import Migrate
 from db.models import *
@@ -8,10 +8,16 @@ import csv, io
 from urllib.parse import urlparse
 from collections import defaultdict
 import uuid
-from sqlalchemy import func
+from sqlalchemy import func, or_
+from sqlalchemy import inspect
+from flask import session
+import os
+from pathlib import Path
 
 def _format_customer_id(n: int) -> str:
     return f"ID-{n:06d}"
+
+
 
 
 # ---- Owner / Business profile (edit these to your real values) ----
@@ -41,16 +47,101 @@ USER_PROFILE = {
         "PhonePe/GPay": "9848992207",
     },
 }
+# --- top of app.py: imports & app/db config ---
+import os, sys, shutil
+from pathlib import Path
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from migration import migrate_db
 
-
-basedir = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'db', 'app.db')}"
+basedir = Path(__file__).parent.resolve()
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret')
+
+
+
+def _desktop_data_dir(app_name: str) -> Path:
+    if os.name == "nt":
+        return Path(os.getenv("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / app_name
+    elif sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / app_name
+    else:
+        return Path.home() / ".local" / "share" / app_name
+
+
+# Determine DB path before calling migrate_db
+if os.getenv("BG_DESKTOP") == "1":
+    db_file = _desktop_data_dir("SLO BILL") / "app.db"
+else:
+    db_file = basedir / "db" / "app.db"
+
+migrate_db(db_file.as_posix())  # <- Pass resolved DB path
+
+APP_NAME   = "SLO BILL"
+is_desktop = os.getenv("BG_DESKTOP") == "1"
+
+if is_desktop:
+    data_dir = _desktop_data_dir(APP_NAME)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    db_file = data_dir / "app.db"
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file.as_posix()}"
+else:
+    db_file = basedir / "db" / "app.db"
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file.as_posix()}"
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# ✅ Reuse the ONE db from your models module
+from db.models import db, customer, invoice, invoiceItem, item  # import your models & shared db
+
+# Attach to this Flask app
 db.init_app(app)
 migrate = Migrate(app, db)
+
+# add at top with other imports
+from sqlalchemy import inspect
+
+def _ensure_db_initialized():
+    """
+    Ensure database schema exists.
+    - If DB file missing: create schema (or copy seed if present + desktop).
+    - If DB file exists but has no tables: create schema.
+    """
+    seed_db = basedir / "db" / "app.db"  # optional seed; ok if missing
+
+    with app.app_context():
+        # create file if missing (and optionally copy seed on desktop)
+        if not db_file.exists():
+            try:
+                if seed_db.exists() and is_desktop:
+                    shutil.copy2(seed_db, db_file)
+                    print("[info] Copied seed DB to desktop data dir.")
+                else:
+                    # touch file so engine can open it cleanly
+                    db_file.parent.mkdir(parents=True, exist_ok=True)
+                    db_file.touch(exist_ok=True)
+                    print("[info] Created empty DB file.")
+            except Exception as e:
+                print(f"[warn] could not prepare DB file: {e}")
+
+        # check whether tables exist
+        insp = inspect(db.engine)
+        tables = set(insp.get_table_names())
+
+        required = {"customer", "invoice", "invoice_item", "item"}
+        # adjust names if your table names differ
+
+        if not required.issubset(tables):
+            print("[info] Creating/migrating schema via create_all()…")
+            db.create_all()
+
+# ✅ Call this AFTER importing models, so metadata is populated
+with app.app_context():
+    _ensure_db_initialized()
+# --- routes continue below as usual ---
 
 # Helpers for statement engine
 def _parse_date(date_str):
@@ -61,11 +152,81 @@ def _parse_date(date_str):
         return datetime.strptime(date_str, '%Y-%m-%d').date()
     except Exception:
         return None
+
+
+@app.route('/recover')
+def recover_page():
+    deleted_customers = customer.query.filter_by(isDeleted=True).all()
+    deleted_invoices = invoice.query.filter_by(isDeleted=True).all()
+    return render_template(
+        'recover.html',
+        deleted_customers=deleted_customers,
+        deleted_invoices=deleted_invoices
+    )
+
+
+@app.route('/recover_customer/<int:id>')
+def recover_customer(id):
+    cust = customer.query.get_or_404(id)
+    cust.isDeleted = False
+    db.session.commit()
+    flash('Customer recovered successfully.', 'success')
+    return redirect(url_for('recover_page'))
+
+@app.route('/edit_user/<int:customer_id>', methods=['GET', 'POST'])
+def edit_user(customer_id):
+    cust = customer.query.filter_by(id=customer_id, isDeleted=False).first_or_404()
+
+    if request.method == 'GET':
+        return render_template('edit_user.html', customer=cust)
+
+    # POST logic: update values
+    name = request.form.get('name', '').strip()
+    phone = request.form.get('phone', '').strip()
+    address = request.form.get('address', '').strip()
+    gst = request.form.get('gst', '').strip()
+    email = request.form.get('email', '').strip()
+    businessType = request.form.get('businessType', '').strip()
+    company = request.form.get('company', '').strip()
+
+    if not name or not phone:
+        flash('Name and Phone are required fields.', 'warning')
+        return redirect(request.referrer or url_for('about_user', customer_id=customer_id))
+
+    cust.name = name
+    cust.phone = phone
+    cust.address = address
+    cust.gst = gst
+    cust.email = email
+    cust.businessType = businessType
+    cust.company = company
+
+    try:
+        db.session.commit()
+        flash('Customer updated successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating customer: {e}', 'danger')
+
+    next_url = request.form.get('next') or url_for('about_user', customer_id=customer_id)
+    return redirect(next_url)
+
+@app.route('/recover_invoice/<int:id>')
+def recover_invoice(id):
+    inv = invoice.query.get_or_404(id)
+    inv.isDeleted = False
+    db.session.commit()
+    flash('Invoice recovered successfully.', 'success')
+    return redirect(url_for('recover_page'))
+
+
 @app.route("/about_user")
 def about_user():
-    """Owner/Business profile page with live stats + customer snapshot.
-    Use optional query params ?customer_id=<int> or ?phone=<substr> to choose a customer.
-    Falls back to most recently added customer when none provided.
+    """Owner/Business profile + optional customer snapshot, with better search.
+       Query:
+         - q: free text (company/name/phone)
+         - customer_id: exact id
+         - phone: substring (fallback)
     """
     prof = dict(USER_PROFILE)
 
@@ -96,26 +257,56 @@ def about_user():
         total_billed = db.session.query(
             func.coalesce(func.sum(invoice.totalAmount), 0)
         ).scalar() or 0
-    prof["totalBilled"] = f"₹{float(total_billed):,.2f}"
+    prof["totalBilled"] = f"INR: {float(total_billed):,.2f}"
 
-    # ---- Choose customer: by id, by phone substring, else latest ----
+    # ---- Improved customer selection logic ----
     cust = None
-    cid = (request.args.get('customer_id') or '').strip()
-    cphone = (request.args.get('phone') or '').strip()
+    matches = []  # optional list of matches to render in template
 
-    if cid:
-        try:
-            cust = customer.query.get(int(cid))
-        except Exception:
-            cust = None
-    if not cust and cphone:
-        like = f"%{cphone}%"
+    # Priority 1: ?customer_id=...
+    cid = (request.args.get('customer_id') or '').strip()
+    if cid.isdigit():
         cust = (customer.query
-                .filter(customer.phone.ilike(like))
+                .filter(customer.isDeleted == False, customer.id == int(cid))
+                .first())
+
+    # Priority 2: ?q=...  (search company/name/phone)
+    if not cust:
+        qtext = (request.args.get('q') or '').strip()
+        if qtext:
+            like = f"%{qtext}%"
+            base = customer.query.filter(customer.isDeleted == False)
+            matches = (base.filter(
+                        or_(customer.company.ilike(like),
+                            customer.name.ilike(like),
+                            customer.phone.ilike(like)))
+                       .order_by(customer.createdAt.desc(), customer.id.desc())
+                       .limit(25)
+                       .all())
+            if len(matches) == 1:
+                cust = matches[0]
+            elif len(matches) > 0:
+                # pick newest as the snapshot, but also return matches for UI
+                cust = matches[0]
+            else:
+                flash("No customer matched your search.", "warning")
+
+    # Priority 3: ?phone=... (legacy fallback)
+    if not cust:
+        cphone = (request.args.get('phone') or '').strip()
+        if cphone:
+            like = f"%{cphone}%"
+            cust = (customer.query
+                    .filter(customer.isDeleted == False, customer.phone.ilike(like))
+                    .order_by(customer.id.desc())
+                    .first())
+
+    # Priority 4: latest customer
+    if not cust:
+        cust = (customer.query
+                .filter(customer.isDeleted == False)
                 .order_by(customer.id.desc())
                 .first())
-    if not cust:
-        cust = customer.query.order_by(customer.id.desc()).first()
 
     latest_cust = cust
     cust_stats, cust_invs = {}, []
@@ -126,7 +317,6 @@ def about_user():
                   .order_by(invoice.createdAt.desc()))
         cust_invs = invs_q.limit(10).all()
 
-        # Stats for this customer
         first_inv_c = invs_q.order_by(invoice.createdAt.asc()).first()
         last_inv_c  = cust_invs[0] if cust_invs else None
         total_val = db.session.query(func.coalesce(func.sum(invoice.totalAmount), 0)).filter(
@@ -137,7 +327,7 @@ def about_user():
             'invoiceCount': invs_q.count(),
             'firstInvoiceDate': first_inv_c.createdAt.strftime('%d %b %Y') if getattr(first_inv_c, 'createdAt', None) else None,
             'lastInvoiceDate':  last_inv_c.createdAt.strftime('%d %b %Y')  if getattr(last_inv_c,  'createdAt', None) else None,
-            'totalBilled': f"₹{float(total_val):,.2f}",
+            'totalBilled': f"INR: {float(total_val):,.2f}",
         }
 
     return render_template(
@@ -145,7 +335,9 @@ def about_user():
         user=prof,
         latest_customer=latest_cust,
         cust_stats=cust_stats,
-        cust_invs=cust_invs
+        cust_invs=cust_invs,
+        matches=matches,                  # <-- pass matches (optional)
+        q=(request.args.get('q') or '').strip()
     )
 
 
@@ -163,6 +355,11 @@ def datetimeformat(value, format='%d-%m-%Y'):
         return value
 
 
+@app.route('/_flash_test')
+def _flash_test():
+    flash('Flash works!', 'success')
+    return redirect(url_for('view_customers'))
+
 # Home Route
 @app.route('/')
 def home():
@@ -172,69 +369,148 @@ def home():
 @app.route('/create_customers', methods=['GET', 'POST'])
 def add_customers():
     if request.method == 'POST':
-        action = (request.form.get('action') or 'save').lower()
-        use_auto = bool(request.form.get('use_auto_id'))               # <-- NEW
-        phone = (request.form.get('phone') or '').strip()
-        name = (request.form.get('name') or '').strip()
-        company = (request.form.get('company') or '').strip()
-        email = (request.form.get('email') or '').strip()
-        gst = (request.form.get('gst') or '').strip()
-        address = (request.form.get('address') or '').strip()
+        use_auto = bool(request.form.get('use_auto_id'))
+        phone    = (request.form.get('phone') or '').strip()
+        name     = (request.form.get('name') or '').strip()
+        company  = (request.form.get('company') or '').strip()
+        email    = (request.form.get('email') or '').strip()
+        gst      = (request.form.get('gst') or '').strip()
+        address  = (request.form.get('address') or '').strip()
         businessType = (request.form.get('businessType') or '').strip()
 
-        # Basic validation: Name is required; Phone is required only when not using auto-ID
+        # --- Basic validation ---
         if not name or (not use_auto and not phone):
-            return render_template('add_customer.html', success=False, duplicate=False,
-                                   error='Name is required. Phone is required unless you use computer-generated ID.')
+            return render_template(
+                'add_customer.html',
+                success=False,
+                duplicate=False,
+                error='Name is required. Phone is required unless you use computer-generated ID.',
+                # sticky values
+                name=name, company=company, phone=phone, email=email,
+                gst=gst, address=address, businessType=businessType,
+                use_auto_id=use_auto
+            )
 
-        # If user supplied a real phone (not auto), do the usual duplicate check
+        # --- Duplicate checks (exclude soft-deleted if you have that flag) ---
+        not_deleted = getattr(customer, 'isDeleted', False) == False
+
+        # 1) Phone duplicate (only when not using auto-id)
         if not use_auto and phone:
-            existing = customer.query.filter_by(phone=phone).first()
-            if action == 'create_and_bill':
-                if existing:
-                    sel = existing
-                else:
-                    sel = customer(
-                        name=name, company=company, phone=phone, email=email,
-                        gst=gst, address=address, businessType=businessType
-                    )
-                    db.session.add(sel)
-                    db.session.commit()
-                return render_template('create_bill.html', customer=sel, inventory=item.query.all())
+            existing_phone = (customer.query
+                              .filter(func.lower(customer.phone) == phone.lower(), not_deleted)
+                              .first())
+            if existing_phone:
+                return render_template(
+                    'add_customer.html',
+                    duplicate=True,
+                    error='A customer with this phone already exists.',
+                    name=name, company=company, phone=phone, email=email,
+                    gst=gst, address=address, businessType=businessType,
+                    use_auto_id=use_auto
+                )
 
-            if existing:
-                return render_template('add_customer.html', duplicate=True)
+        # 2) Company+Name duplicate (case-insensitive)
+        if company and name:
+            existing_pair = (customer.query
+                             .filter(func.lower(customer.company) == company.lower(),
+                                     func.lower(customer.name) == name.lower(),
+                                     not_deleted)
+                             .first())
+            if existing_pair:
+                return render_template(
+                    'add_customer.html',
+                    duplicate=True,
+                    error='A customer with the same Company + Name already exists.',
+                    name=name, company=company, phone=phone, email=email,
+                    gst=gst, address=address, businessType=businessType,
+                    use_auto_id=use_auto
+                )
 
-            new_customer = customer(
+        # --- Create customer ---
+        if not use_auto and phone:
+            # Real phone path
+            c = customer(
                 name=name, company=company, phone=phone, email=email,
                 gst=gst, address=address, businessType=businessType
             )
-            db.session.add(new_customer)
+            db.session.add(c)
             db.session.commit()
-            return render_template('add_customer.html', success=True)
+            return redirect(url_for('about_user', customer_id=c.id))
 
-        # ---- Auto-ID path (no real phone or checkbox checked) ----
-        # phone is NOT NULL + UNIQUE in DB, so we insert with a unique temporary value,
-        # flush to get .id, then set phone = ID-XXXXXX and commit.
+        # Auto-ID path (no real phone or toggle checked)
         temp_phone = f"ID-TEMP-{uuid.uuid4().hex[:8]}"
-
-        new_customer = customer(
+        c = customer(
             name=name, company=company, phone=temp_phone, email=email,
             gst=gst, address=address, businessType=businessType
         )
-        db.session.add(new_customer)
-        db.session.flush()  # assigns new_customer.id without committing
-
-        new_customer.phone = _format_customer_id(new_customer.id)
+        db.session.add(c)
+        db.session.flush()                 # get c.id
+        c.phone = _format_customer_id(c.id)  # e.g., ID-000123
         db.session.commit()
 
-        if action == 'create_and_bill':
-            return render_template('create_bill.html', customer=new_customer, inventory=item.query.all())
+        return redirect(url_for('about_user', customer_id=c.id))
 
-        return render_template('add_customer.html', success=True)
-
+    # GET -> render blank form
     return render_template('add_customer.html')
 
+@app.route('/delete_customer/<int:cid>', methods=['GET', 'POST'])
+def delete_customer(cid):
+    # Load customer
+    c = db.session.get(customer, cid)
+    if not c:
+        flash("Customer not found", 'warning')
+        return redirect(url_for('view_customers'))
+
+    # If already deleted, bail gracefully
+    if hasattr(c, 'isDeleted') and c.isDeleted:
+        flash('Customer already deleted.', 'info')
+        return redirect(url_for('view_customers'))
+
+    # Live invoices (exclude soft-deleted)
+    inv_q = invoice.query.filter(
+        invoice.customerId == cid,
+        getattr(invoice, 'isDeleted', False) == False
+    )
+    inv_count = inv_q.count()
+    total_billed = db.session.query(
+        func.coalesce(func.sum(invoice.totalAmount), 0.0)
+    ).filter(
+        invoice.customerId == cid,
+        getattr(invoice, 'isDeleted', False) == False
+    ).scalar() or 0.0
+
+    # If POST with confirm flag -> cascade soft-delete customer + invoices
+    if request.method == 'POST' and request.form.get('confirm') == '1':
+        if hasattr(c, 'isDeleted'):
+            c.isDeleted = True
+        # Soft delete all invoices for this customer
+        invs = invoice.query.filter_by(customerId=cid).all()
+        for inv in invs:
+            if hasattr(inv, 'isDeleted'):
+                inv.isDeleted = True
+                inv.deletedAt = datetime.now(timezone.utc)
+        db.session.commit()
+        flash('Customer and related invoices deleted successfully.', 'success')
+        return redirect(url_for('view_customers'))
+
+    # GET: If invoices exist but not confirmed yet -> show confirm page
+    if request.method == 'GET' and inv_count > 0:
+        return render_template(
+            'confirm_delete_customer.html',
+            customer=c,
+            inv_count=inv_count,
+            total_billed=total_billed
+        )
+
+    # No invoices -> delete immediately (GET or POST)
+    if hasattr(c, 'isDeleted'):
+        c.isDeleted = True
+        db.session.commit()
+        flash('Customer deleted.', 'success')
+    else:
+        flash('Delete not available in this build.', 'warning')
+
+    return redirect(url_for('view_customers'))
 
 @app.route('/add_inventory', methods=['GET', 'POST'])
 def add_inventory():
@@ -289,28 +565,28 @@ def select_customer():
     if request.method == 'POST':
         # User clicked Select on a customer row; the form sends phone
         phone = request.form.get('customer')
-        sel = customer.query.filter_by(phone=phone).first_or_404()
+        sel = (customer.query
+               .filter(customer.isDeleted == False, customer.phone == phone)
+               .first_or_404())
         return render_template('create_bill.html', customer=sel, inventory=item.query.all())
 
     # GET: either search or show recent
     q = (request.args.get('q') or '').strip()
+    base = customer.query.filter(customer.isDeleted == False)
     if q:
         like = f"%{q}%"
-        customers = (customer.query
-                     .filter((customer.phone.ilike(like)) |
-                             (customer.name.ilike(like))  |
-                             (customer.company.ilike(like)))
-                     .order_by(customer.id.desc())
-                     .limit(100)
-                     .all())
+        customers = (base.filter((customer.phone.ilike(like)) |
+                                 (customer.name.ilike(like))  |
+                                 (customer.company.ilike(like)))
+                          .order_by(customer.id.desc())
+                          .limit(100)
+                          .all())
     else:
-        customers = (customer.query
-                     .order_by(customer.id.desc())
-                     .limit(25)
-                     .all())
+        customers = (base.order_by(customer.id.desc())
+                          .limit(25)
+                          .all())
 
     return render_template('select_customer.html', customers=customers)
-
 
 @app.route('/view_inventory')
 def view_inventory():
@@ -394,7 +670,7 @@ def statements():
                  invoice.createdAt <= end_dt))
 
     if phone:
-        q = q.join(customer, invoice.customerId == customer.id).filter(customer.phone == phone)
+        q = q.join(customer, invoice.customerId == customer.id).filter(customer.isDeleted == False, customer.phone == phone)
 
     invs = q.order_by(invoice.createdAt.desc()).all()
 
@@ -495,12 +771,16 @@ def api_statements_summary():
     start_dt = datetime.combine(start_date, datetime.min.time())
     end_dt = datetime.combine(end_date, datetime.max.time())
 
-    q = invoice.query.options(joinedload(invoice.customer)).filter(
-        invoice.createdAt >= start_dt,
-        invoice.createdAt <= end_dt
-    )
+    q = (invoice.query
+         .options(joinedload(invoice.customer))
+         .join(customer, invoice.customerId == customer.id)
+         .filter(invoice.isDeleted == False,
+                 customer.isDeleted == False,
+                 invoice.createdAt >= start_dt,
+                 invoice.createdAt <= end_dt))
+
     if phone:
-        q = q.join(customer, invoice.customerId == customer.id).filter(customer.phone == phone)
+        q = q.filter(customer.phone == phone)
     invs = q.order_by(invoice.createdAt.asc()).all()
 
     totals = {
@@ -563,12 +843,17 @@ def api_statements_invoices():
     start_dt = datetime.combine(start_date, datetime.min.time())
     end_dt = datetime.combine(end_date, datetime.max.time())
 
-    q = invoice.query.options(joinedload(invoice.customer)).filter(
-        invoice.createdAt >= start_dt,
-        invoice.createdAt <= end_dt
-    )
+    q = (invoice.query
+         .options(joinedload(invoice.customer))
+         .join(customer, invoice.customerId == customer.id)
+         .filter(invoice.isDeleted == False,
+                 customer.isDeleted == False,
+                 invoice.createdAt >= start_dt,
+                 invoice.createdAt <= end_dt))
+
     if phone:
-        q = q.join(customer, invoice.customerId == customer.id).filter(customer.phone == phone)
+        q = q.filter(customer.phone == phone)
+
 
     total = q.count()
     invs = q.order_by(invoice.createdAt.asc()).offset((page - 1) * per_page).limit(per_page).all()
@@ -606,123 +891,150 @@ def statements_blank():
         scope = 'custom',
     )
 
-@app.route('/create-bill', methods = ['GET', 'POST'])
+@app.route('/create-bill', methods=['GET', 'POST'])
 def start_bill():
+    # --- GET: prefill if customer_id is supplied; otherwise show selector ---
+    if request.method == 'GET':
+        cid = request.args.get('customer_id', type=int)
+        if cid:
+            try:
+                cust = (customer.query
+                        .filter(customer.isDeleted == False, customer.id == cid)
+                        .first())
+            except Exception:
+                cust = None
+            if not cust:
+                flash('Customer not found', 'warning')
+                return redirect(url_for('about_user'))
+            return render_template('create_bill.html', customer=cust,
+                                   inventory=item.query.order_by(item.name.asc()).all())
+        # GET: no customer_id, just render blank/new bill
+        return render_template('create_bill.html')
 
-    if request.method == 'POST':
-        if 'description[]' in request.form:
-            selected_phone = request.form.get('customer_phone')
-            selected_customer = customer.query.filter_by(phone=selected_phone).first()
+    # POST logic
+    # POST (A) select customer
+    if 'description[]' not in request.form:
+        selected_phone = request.form.get("customer") or request.form.get("customer_phone")
+        sel = (customer.query
+               .filter(customer.isDeleted == False, customer.phone == selected_phone)
+               .first())
+        if not sel:
+            flash('Please pick a valid customer', 'warning')
+            return render_template('select_customer.html')
+        return render_template('create_bill.html', customer=sel, inventory=item.query.all())
 
-            descriptions = request.form.getlist('description[]')
-            quantities = request.form.getlist('quantity[]')
-            rates = request.form.getlist('rate[]')
-            dc_numbers = request.form.getlist('dc_no[]')  # present only if toggle is on
+    # (B) Final bill submission with line items
+    selected_phone = request.form.get('customer_phone')
+    selected_customer = customer.query.filter_by(phone=selected_phone).first()
+    if not selected_customer:
+        flash('Customer not found. Please reselect the customer.', 'warning')
+        return render_template('select_customer.html')
 
-            total = 0
-            item_rows = []
-            for i in range(len(descriptions)):
-                desc = descriptions[i]
-                qty = int(quantities[i]) if i < len(quantities) and quantities[i] else 0
-                rate = float(rates[i]) if i < len(rates) and rates[i] else 0.0
-                dc_val = (dc_numbers[i].strip() if i < len(dc_numbers) and dc_numbers[i] else '')
-                line_total = qty * rate
-                total += line_total
-                item_rows.append([desc, qty, rate, line_total, dc_val])
+    descriptions = request.form.getlist('description[]')
+    quantities   = request.form.getlist('quantity[]')
+    rates        = request.form.getlist('rate[]')
+    dc_numbers   = request.form.getlist('dc_no[]')  # may be [] if toggle off
 
-            #creating invoice entry
-            new_invoice = invoice(
-                customerId = selected_customer.id,
-                createdAt = datetime.now(timezone.utc),
-                totalAmount = round(total, 2),
-                pdfPath = "", # to be filled after filename is known
-                invoiceId = "" # temporary placeholder
-            )
+    # Get exclusion flags
+    exclude_phone = bool(request.form.get('exclude_phone'))
+    exclude_gst = bool(request.form.get('exclude_gst'))
+    exclude_addr = bool(request.form.get('exclude_addr'))
 
-            db.session.add(new_invoice)
-            db.session.commit()
+    total = 0.0
+    item_rows = []
+    for i in range(len(descriptions)):
+        desc = (descriptions[i] or '').strip()
+        if not desc:
+            continue
+        qty  = int(quantities[i]) if i < len(quantities) and quantities[i] else 0
+        rate = float(rates[i])    if i < len(rates)      and rates[i]      else 0.0
+        dc_val = ''
+        if dc_numbers and i < len(dc_numbers) and dc_numbers[i]:
+            dc_val = dc_numbers[i].strip()
+        line_total = qty * rate
+        total += line_total
+        item_rows.append([desc, qty, rate, line_total, dc_val])
 
-            #generating PDF id and PDF name
-            inv_name = f"SLP-{datetime.now().strftime('%d%m%y')}-{str(new_invoice.id).zfill(5)}"
-            pdf_filename = f"{inv_name}.pdf"
-            pdf_path = os.path.join("static/pdfs", pdf_filename)
+    # Create invoice
+    new_invoice = invoice(
+        customerId=selected_customer.id,
+        createdAt=datetime.now(timezone.utc),
+        totalAmount=round(total, 2),
+        pdfPath="",     # set after inv_name built
+        invoiceId="",   # temporary
+        exclude_phone=exclude_phone,
+        exclude_gst=exclude_gst,
+        exclude_addr=exclude_addr
+    )
+    db.session.add(new_invoice)
+    db.session.commit()
 
-            new_invoice.invoiceId = inv_name
-            new_invoice.pdfPath = pdf_path
-            db.session.commit()
+    # Generate invoice Id + pdf path
+    inv_name = f"SLP-{datetime.now().strftime('%d%m%y')}-{str(new_invoice.id).zfill(5)}"
+    pdf_filename = f"{inv_name}.pdf"
+    pdf_path = os.path.join("static/pdfs", pdf_filename)
 
-            # add invoice Items
-            for desc, qty, rate, line_total, dc_val in item_rows:
-                matched_item = item.query.filter_by(name=desc).first()
-                if matched_item:
-                    item_id = matched_item.id
-                else:
-                    new_item = item(
-                        name=desc,  # place holder for future
-                        unitPrice=rate,
-                        quantity=0,
-                        taxPercentage=0
-                    )
-                    db.session.add(new_item)
-                    db.session.commit()
-                    item_id = new_item.id
+    new_invoice.invoiceId = inv_name
+    new_invoice.pdfPath = pdf_path
+    db.session.commit()
 
-                db.session.add(invoiceItem(
-                    invoiceId=new_invoice.id,
-                    itemId=item_id,
-                    quantity=qty,
-                    rate=rate,
-                    discount=0,
-                    taxPercentage=0,
-                    line_total=line_total,
-                    dcNo=(dc_val if dc_val else None)
-                ))
-
-            db.session.commit()
-
-            return render_template(
-                'create_bill.html',
-                customer=selected_customer,
-                inventory=item.query.all(),
-                success=True,
-                filename=pdf_filename,
-                descriptions=descriptions,
-                quantities=quantities,
-                rates=rates,
-                dc_numbers=dc_numbers,
-                dcno=any(x.strip() for x in dc_numbers),
-                total=total
-            )
-
+    # Add line items
+    for desc, qty, rate, line_total, dc_val in item_rows:
+        matched_item = item.query.filter_by(name=desc).first()
+        if matched_item:
+            item_id = matched_item.id
         else:
-            selected_phone = request.form.get("customer")
-            selected_customer = customer.query.filter_by(phone = selected_phone).first()
-            return render_template('create_bill.html', customer = selected_customer, inventory=item.query.all())
+            new_item = item(name=desc, unitPrice=rate, quantity=0, taxPercentage=0)
+            db.session.add(new_item)
+            db.session.commit()
+            item_id = new_item.id
 
-    return render_template('select_customer.html')
+        db.session.add(invoiceItem(
+            invoiceId=new_invoice.id,
+            itemId=item_id,
+            quantity=qty,
+            rate=rate,
+            discount=0,
+            taxPercentage=0,
+            line_total=line_total,
+            dcNo=(dc_val if dc_val else None)
+        ))
 
+    db.session.commit()
+
+    # Did user include any DC values?
+    # dc_present = any((x or '').strip() for x in (dc_numbers or []))
+
+    # After successful creation, flash and redirect to locked preview page
+    session['persistent_notice'] = f"Invoice {new_invoice.invoiceId} updated successfully!"
+    return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId))
 
 
 @app.route('/view_customers', methods=['GET', 'POST'])
 def view_customers():
-    # If user clicked "Create Bill" on a row, the form posts the customer's phone
     if request.method == 'POST':
         phone = request.form.get('customer')
-        sel = customer.query.filter_by(phone=phone).first_or_404()
+        sel = (customer.query
+               .filter(customer.isDeleted == False, customer.phone == phone)
+               .first_or_404())
         return render_template('create_bill.html', customer=sel, inventory=item.query.all())
 
-    # GET: current behavior (optional search)
-    query = (request.args.get('q') or '').lower()
-    customers = (customer.query.
-                 order_by(customer.createdAt.is_(None)).all())
+    query = (request.args.get('q') or '').strip().lower()
+    q = (customer.query
+         .filter(customer.isDeleted == False)
+         .order_by(customer.createdAt.desc(), customer.id.desc()))
+    customers = q.all()
 
     if query:
         customers = [
             c for c in customers
-            if query in (c.name or '').lower() or query in (c.phone or '') or query in (c.company or '').lower()
+            if query in (c.company or '').lower()
+               or query in (c.name or '').lower()
+               or query in (c.phone or '')
         ]
 
     return render_template('view_customers.html', customers=customers)
+
 
 @app.route('/view_bills')
 def view_bills():
@@ -731,8 +1043,11 @@ def view_bills():
     start_date = request.args.get('start_date')
     end_date   = request.args.get('end_date')
 
-    q = (invoice.query.options(joinedload(invoice.customer))
-         .filter(invoice.isDeleted == False))
+    q = (invoice.query
+         .options(joinedload(invoice.customer))
+         .join(customer, invoice.customerId == customer.id)
+         .filter(invoice.isDeleted == False,
+                 customer.isDeleted == False))
 
     # sorting controls
     sort_key = (request.args.get('sort') or 'date').lower()
@@ -790,8 +1105,17 @@ def view_bills():
 def view_bill_locked(invoicenumber):
     # load invoice and related data
     current_invoice = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
-    current_customer = customer.query.get(current_invoice.customerId)
+    cur_cust = customer.query.get(current_invoice.customerId)
     line_items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
+
+    current_customer = {
+        "name": cur_cust.name,
+        "company": cur_cust.company,
+        "phone": "Excluded in the bill" if current_invoice.exclude_phone else cur_cust.phone,
+        "gst": "Excluded in the bill" if current_invoice.exclude_gst else cur_cust.gst,
+        "address": "Excluded in the bill" if current_invoice.exclude_addr else cur_cust.address,
+        "email": cur_cust.email
+    }
 
     # build row wise lists for the template
     descriptions, quantities, rates, dc_numbers = [], [], [], []
@@ -882,12 +1206,23 @@ def amount_to_words(amount) -> str:
 
 @app.route('/bill_preview/<invoicenumber>')
 def bill_preview(invoicenumber):
-    current_invoice = invoice.query.filter_by(invoiceId = invoicenumber, isDeleted=False).first_or_404()
+    current_invoice = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
     if not current_invoice:
         return f"No invoice found for {invoicenumber}"
 
-    current_customer = customer.query.get(current_invoice.customerId)
-    items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
+    cur_cust = customer.query.get(current_invoice.customerId)
+
+    current_customer = {
+        "name": cur_cust.name,
+        "company": cur_cust.company,
+        "phone": None if current_invoice.exclude_phone else cur_cust.phone,
+        "gst": None if current_invoice.exclude_gst else cur_cust.gst,
+        "address": None if current_invoice.exclude_addr else cur_cust.address,
+        "email": cur_cust.email
+    }
+    items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
+
+    # Prepare item data
     item_data = []
     for i in items:
         item_name = item.query.get(i.itemId).name if i.itemId else "Unknown"
@@ -901,17 +1236,25 @@ def bill_preview(invoicenumber):
             i.line_total
         )
         item_data.append(entry)
+
+    # DC numbers
     dc_numbers = [i.dcNo or '' for i in items]
     dcno = any(bool((x or '').strip()) for x in dc_numbers)
-    return render_template('bill_preview.html',
-                           invoice=current_invoice,
-                           customer=current_customer,
-                           items=item_data, dcno=dcno,
-                           dc_numbers=dc_numbers,
-                           total_in_words = amount_to_words(current_invoice.totalAmount))
 
 
-@app.route('/edit-bill/<invoicenumber>')
+
+
+    return render_template(
+        'bill_preview.html',
+        invoice=current_invoice,
+        customer=current_customer,
+        items=item_data,
+        dcno=dcno,
+        dc_numbers=dc_numbers,
+        total_in_words=amount_to_words(current_invoice.totalAmount)
+    )
+
+@app.route('/edit-bill/<invoicenumber>', methods=['GET', 'POST'])
 def edit_bill(invoicenumber):
     # fetch invoice and related data
     current_invoice = invoice.query.filter_by(invoiceId=invoicenumber).first_or_404()
@@ -937,6 +1280,19 @@ def edit_bill(invoicenumber):
     except Exception:
         prev_created_at = str(current_invoice.createdAt)
 
+    exclude_phone = current_invoice.exclude_phone
+    exclude_gst = current_invoice.exclude_gst
+    exclude_addr = current_invoice.exclude_addr
+
+    # If POST: update invoice and redirect to view_bill_locked
+    if request.method == 'POST':
+        # Update customer-level metadata before saving invoice
+        current_invoice.exclude_phone = request.form.get('exclude_phone') in ('on', 'true', '1')
+        current_invoice.exclude_gst = request.form.get('exclude_gst') in ('on', 'true', '1')
+        current_invoice.exclude_addr = request.form.get('exclude_addr') in ('on', 'true', '1')
+        db.session.commit()
+        return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId))
+
     # Render the same template as create_bill.html but pre-filled
     return render_template(
         'create_bill.html',
@@ -952,7 +1308,10 @@ def edit_bill(invoicenumber):
         invoice_no=current_invoice.invoiceId,
         edit_mode=True,  # flag to distinguish editing vs new bill
         prev_invoice_no=prev_invoice_no,
-        prev_created_at=prev_created_at
+        prev_created_at=prev_created_at,
+        exclude_phone=exclude_phone,
+        exclude_gst=exclude_gst,
+        exclude_addr=exclude_addr
     )
 
 
@@ -1028,38 +1387,40 @@ def update_bill(invoicenumber):
 
     # 5) Update invoice total (and updatedAt if you have it)
     current_invoice.totalAmount = round(total, 2)
-    # If you added this column:
-    # from datetime import datetime
-    # current_invoice.updatedAt = datetime.utcnow()
+
+    # 5.5) Update customer-level metadata before saving invoice
+    current_invoice.exclude_phone = request.form.get('exclude_phone') in ('on', 'true', '1')
+    current_invoice.exclude_gst = request.form.get('exclude_gst') in ('on', 'true', '1')
+    current_invoice.exclude_addr = request.form.get('exclude_addr') in ('on', 'true', '1')
 
     db.session.commit()
 
-    # 6) Re-render edit page with success banner and correct flags
-    dcno = any(bool((x or '').strip()) for x in dc_numbers)
+    # 6) Redirect to locked preview after update
+    session['persistent_notice'] = f"Old invoice {current_invoice.invoiceId} updated successfully!"
 
-    return render_template(
-        'create_bill.html',
-        customer=current_customer,
-        inventory=item.query.all(),
-        success=True,                 # triggers "Bill updated successfully!"
-        descriptions=[r[0] for r in rows],
-        quantities=[r[1] for r in rows],
-        rates=[r[2] for r in rows],
-        dc_numbers=[(r[3] or '') for r in rows],
-        dcno=dcno,
-        total=round(total, 2),
-        invoice_no=current_invoice.invoiceId,
-        edit_mode=True
-    )
+    return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId))
 
 @app.route('/bill_preview/latest')
 def latest_bill_preview():
 
-    current_invoice = invoice.query.order_by(invoice.id.desc()).first()
+    current_invoice = (invoice.query.
+                       filter(invoice.isDeleted == False)
+                       .order_by(invoice.id.desc()).first())
     if not current_invoice:
         return "No invoice found"
 
-    current_customer = customer.query.get(current_invoice.customerId)
+    cur_cust = customer.query.get(current_invoice.customerId)
+
+    current_customer = {
+        "name": cur_cust.name,
+        "company": cur_cust.company,
+        "phone": None if current_invoice.exclude_phone else cur_cust.phone,
+        "gst": None if current_invoice.exclude_gst else cur_cust.gst,
+        "address": None if current_invoice.exclude_addr else cur_cust.address,
+        "email": cur_cust.email
+    }
+
+
     items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
     item_data = []
 
@@ -1075,6 +1436,7 @@ def latest_bill_preview():
             i.line_total
         )
         item_data.append(entry)
+
     dc_numbers = [i.dcNo or '' for i in items]
     dcno = any(bool((x or '').strip()) for x in dc_numbers)
     return render_template('bill_preview.html',

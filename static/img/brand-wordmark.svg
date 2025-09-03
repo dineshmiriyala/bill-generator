@@ -1,2 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="41.293 245.227 343.749 36.561" xmlns:bx="https://boxy-svg.com" width="343.749px" height="36.561px"><defs><bx:export><bx:file format="svg"/></bx:export></defs><text style="fill: rgb(26, 42, 108); font-family: &quot;Brush Script MT&quot;; font-size: 30px; white-space: pre;" x="41.293" y="271.599">Sri Lakshmi Offset Printers</text><text style="fill: rgb(26, 42, 108); font-family: &quot;Tiro Devanagari Sanskrit&quot;; font-size: 12.1491px; font-weight: 700; line-height: 19.4385px; white-space: pre;" transform="matrix(0.826136, 0, 0, 0.823108, 62.87339, 50.664833)" x="327.951" y="266.434">ESTD: 1973</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="39.302 249.564 351.381 30.897" xmlns:bx="https://boxy-svg.com" width="343.749px" height="36.561px">
+  <defs>
+    <bx:export>
+      <bx:file format="svg"/>
+    </bx:export>
+  </defs>
+  <text style="font-family: &quot;Brush Script MT&quot;; font-size: 30px; white-space: pre;" x="41.293" y="271.599">Sri Lakshmi Offset Printers</text>
+  <text style="font-family: &quot;Tiro Devanagari Sanskrit&quot;; font-size: 12.1491px; font-weight: 700; line-height: 19.438499px; white-space: pre;" transform="matrix(0.826136, 0, 0, 0.823108, 62.87339, 50.664833)" x="327.951" y="266.434">ESTD: 1973</text>
+</svg>

@@ -14,7 +14,13 @@ class customer(db.Model):
     address = db.Column(db.Text)
     businessType = db.Column(db.String(50))
     invoices = db.relationship("invoice", backref="customer", lazy= True)
-    createdAt = db.Column(db.DateTime, default=datetime.utcnow())
+    createdAt = db.Column(db.DateTime, default=datetime.utcnow)
+    isDeleted = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    deletedAt = db.Column(db.DateTime, nullable=True, index=True)
+
+    @classmethod
+    def alive(cls):
+        return cls.query.filter_by(isDeleted=False)
 
 class invoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -26,6 +32,10 @@ class invoice(db.Model):
     items = db.relationship("invoiceItem", backref="invoice", lazy=True)
     isDeleted = db.Column(db.Boolean, nullable=False, default=False, index=True)
     deletedAt = db.Column(db.DateTime, nullable = True, index=True)
+    exclude_phone = db.Column(db.Boolean, default=False)
+    exclude_gst = db.Column(db.Boolean, default=False)
+    exclude_addr = db.Column(db.Boolean, default=False)
+
 
     @classmethod
     def alive(cls):

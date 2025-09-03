@@ -51,13 +51,21 @@
                 About
               </a>
             </td>
-            <td>
+            <td class="text-nowrap">
               <form method="POST" action="{{ url_for('view_customers') }}" class="d-inline">
                 <input type="hidden" name="customer" value="{{ c.phone }}">
-                <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-3 shadow-sm" style="white-space: nowrap;">
+                <button type="submit" class="btn btn-sm btn-outline-success rounded-pill px-3 shadow-sm">
                   Create&nbsp;Bill
                 </button>
               </form>
+              <a class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm ms-2"
+                 href="{{ url_for('edit_user', customer_id=c.id) }}">
+                Edit
+              </a>
+              <a class="btn btn-sm btn-outline-danger rounded-pill px-3 shadow-sm ms-2"
+                 href="{{ url_for('delete_customer', cid=c.id) }}">
+                Delete
+              </a>
             </td>
           </tr>
           {% endfor %}
