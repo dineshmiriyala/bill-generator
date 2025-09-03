@@ -3,15 +3,15 @@
 <div class="container py-4">
   <h2 class="mb-4 text-center">Create Bill</h2>
 
-  {% if edit_mode %}
-  <div class="alert alert-info d-flex justify-content-between align-items-center" role="alert">
+{% if edit_mode %}
+  <div id="editModeBanner" class="bg-info bg-opacity-10 border border-info rounded p-3 d-flex justify-content-between align-items-center mb-3">
     <div>
       <strong>Editing Invoice:</strong> <span class="badge bg-secondary">{{ prev_invoice_no or invoice_no }}</span>
       <span class="ms-3 text-muted">Created at: {{ prev_created_at }}</span>
     </div>
     <a href="{{ url_for('bill_preview', invoicenumber=invoice_no) }}" target="_blank" class="btn btn-sm btn-outline-primary">Open current PDF</a>
   </div>
-  {% endif %}
+{% endif %}
 
   <form method="POST" action="{% if edit_mode %}{{ url_for('update_bill', invoicenumber=invoice_no) }}{% else %}/create-bill{% endif %}">
     {% if edit_mode %}<input type="hidden" name="invoice_no" value="{{ invoice_no }}">{% endif %}
@@ -50,19 +50,25 @@
             <td></td>
             <td class="text-center align-top">
               <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="excludePhone" name="exclude_phone" {% if exclude_phone == True or exclude_phone == 'true' or exclude_phone == 'on' %}checked{% endif %}>
+                <input class="form-check-input" type="checkbox" id="excludePhone" name="exclude_phone"
+                  data-initial="{{ 'true' if exclude_phone else 'false' }}"
+                  {% if exclude_phone in [True, 'true', 'on', '1'] %}checked{% endif %}>
                 <label class="form-check-label small" for="excludePhone">Exclude ID</label>
               </div>
             </td>
             <td class="text-center align-top">
               <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="excludeGST" name="exclude_gst" {% if exclude_gst == True or exclude_gst == 'true' or exclude_gst == 'on' %}checked{% endif %}>
+                <input class="form-check-input" type="checkbox" id="excludeGST" name="exclude_gst"
+                  data-initial="{{ 'true' if exclude_gst else 'false' }}"
+                  {% if exclude_gst in [True, 'true', 'on', '1'] %}checked{% endif %}>
                 <label class="form-check-label small" for="excludeGST">Exclude GST</label>
               </div>
             </td>
             <td class="text-center align-top">
               <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="excludeAddress" name="exclude_addr" {% if exclude_addr == True or exclude_addr == 'true' or exclude_addr == 'on' %}checked{% endif %}>
+                <input class="form-check-input" type="checkbox" id="excludeAddress" name="exclude_addr"
+                  data-initial="{{ 'true' if exclude_addr else 'false' }}"
+                  {% if exclude_addr in [True, 'true', 'on', '1'] %}checked{% endif %}>
                 <label class="form-check-label small" for="excludeAddress">Exclude Address</label>
               </div>
             </td>
@@ -367,6 +373,7 @@ clearBtn.addEventListener("click", () => {
   });
 </script>
 <script>
+// Edit mode change detection (now includes exclude checkboxes)
 (function(){
   // Build an initial snapshot of the form when the page loads (edit mode only)
   const isEdit = {{ 'true' if edit_mode else 'false' }};
@@ -388,7 +395,10 @@ clearBtn.addEventListener("click", () => {
   function snapshot() {
     return {
       dcEnabled: document.getElementById('toggleDC')?.checked || false,
-      rows: readRows()
+      rows: readRows(),
+      excludePhone: document.getElementById('excludePhone')?.checked || false,
+      excludeGST: document.getElementById('excludeGST')?.checked || false,
+      excludeAddress: document.getElementById('excludeAddress')?.checked || false
     };
   }
 
@@ -398,10 +408,17 @@ clearBtn.addEventListener("click", () => {
     try { return JSON.stringify(a) !== JSON.stringify(b); } catch(e){ return true; }
   }
 
+  function hasExcludeChanged(current) {
+    return current.excludePhone !== initial.excludePhone ||
+           current.excludeGST !== initial.excludeGST ||
+           current.excludeAddress !== initial.excludeAddress;
+  }
+
   function updateCreateButton(){
     const btn = document.getElementById('createNewBillBtn');
     if (!btn) return;
-    const changed = differ(initial, snapshot());
+    const current = snapshot();
+    const changed = differ(initial, current) || hasExcludeChanged(current);
     if (changed) {
       btn.classList.remove('d-none');
       btn.disabled = false;
@@ -425,6 +442,16 @@ clearBtn.addEventListener("click", () => {
   }
   const dcToggleEl = document.getElementById('toggleDC');
   if (dcToggleEl) dcToggleEl.addEventListener('change', updateCreateButton);
+
+  // Watch exclude checkboxes
+  const watchExcludeChanges = () => {
+    ['excludePhone', 'excludeGST', 'excludeAddress'].forEach(id => {
+      const cb = document.getElementById(id);
+      if (!cb) return;
+      cb.addEventListener('change', updateCreateButton);
+    });
+  };
+  watchExcludeChanges();
 
   // Initial evaluation
   updateCreateButton();

@@ -10,6 +10,7 @@ from collections import defaultdict
 import uuid
 from sqlalchemy import func, or_
 from sqlalchemy import inspect
+from flask import session
 import os
 from pathlib import Path
 
@@ -52,10 +53,14 @@ from pathlib import Path
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from migration import migrate_db
+
 
 app = Flask(__name__)
 basedir = Path(__file__).parent.resolve()
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret')
+
+
 
 def _desktop_data_dir(app_name: str) -> Path:
     if os.name == "nt":
@@ -64,6 +69,15 @@ def _desktop_data_dir(app_name: str) -> Path:
         return Path.home() / "Library" / "Application Support" / app_name
     else:
         return Path.home() / ".local" / "share" / app_name
+
+
+# Determine DB path before calling migrate_db
+if os.getenv("BG_DESKTOP") == "1":
+    db_file = _desktop_data_dir("SLO BILL") / "app.db"
+else:
+    db_file = basedir / "db" / "app.db"
+
+migrate_db(db_file.as_posix())  # <- Pass resolved DB path
 
 APP_NAME   = "SLO BILL"
 is_desktop = os.getenv("BG_DESKTOP") == "1"
@@ -894,7 +908,10 @@ def start_bill():
                 return redirect(url_for('about_user'))
             return render_template('create_bill.html', customer=cust,
                                    inventory=item.query.order_by(item.name.asc()).all())
+        # GET: no customer_id, just render blank/new bill
+        return render_template('create_bill.html')
 
+    # POST logic
     # POST (A) select customer
     if 'description[]' not in request.form:
         selected_phone = request.form.get("customer") or request.form.get("customer_phone")
@@ -922,7 +939,6 @@ def start_bill():
     exclude_phone = bool(request.form.get('exclude_phone'))
     exclude_gst = bool(request.form.get('exclude_gst'))
     exclude_addr = bool(request.form.get('exclude_addr'))
-
 
     total = 0.0
     item_rows = []
@@ -987,24 +1003,11 @@ def start_bill():
     db.session.commit()
 
     # Did user include any DC values?
-    dc_present = any((x or '').strip() for x in (dc_numbers or []))
+    # dc_present = any((x or '').strip() for x in (dc_numbers or []))
 
-    return render_template(
-        'create_bill.html',
-        customer=selected_customer,
-        inventory=item.query.all(),
-        success=True,
-        filename=pdf_filename,
-        descriptions=[r[0] for r in item_rows],
-        quantities=[r[1] for r in item_rows],
-        rates=[r[2] for r in item_rows],
-        dc_numbers=[r[4] for r in item_rows],
-        dcno=dc_present,
-        total=total,
-        exclude_addr=exclude_addr,
-        exclude_gst=exclude_gst,
-        exclude_phone=exclude_phone
-    )
+    # After successful creation, flash and redirect to locked preview page
+    session['persistent_notice'] = f"Invoice {new_invoice.invoiceId} updated successfully!"
+    return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId))
 
 
 @app.route('/view_customers', methods=['GET', 'POST'])
@@ -1251,7 +1254,7 @@ def bill_preview(invoicenumber):
         total_in_words=amount_to_words(current_invoice.totalAmount)
     )
 
-@app.route('/edit-bill/<invoicenumber>')
+@app.route('/edit-bill/<invoicenumber>', methods=['GET', 'POST'])
 def edit_bill(invoicenumber):
     # fetch invoice and related data
     current_invoice = invoice.query.filter_by(invoiceId=invoicenumber).first_or_404()
@@ -1280,6 +1283,15 @@ def edit_bill(invoicenumber):
     exclude_phone = current_invoice.exclude_phone
     exclude_gst = current_invoice.exclude_gst
     exclude_addr = current_invoice.exclude_addr
+
+    # If POST: update invoice and redirect to view_bill_locked
+    if request.method == 'POST':
+        # Update customer-level metadata before saving invoice
+        current_invoice.exclude_phone = request.form.get('exclude_phone') in ('on', 'true', '1')
+        current_invoice.exclude_gst = request.form.get('exclude_gst') in ('on', 'true', '1')
+        current_invoice.exclude_addr = request.form.get('exclude_addr') in ('on', 'true', '1')
+        db.session.commit()
+        return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId))
 
     # Render the same template as create_bill.html but pre-filled
     return render_template(
@@ -1375,29 +1387,18 @@ def update_bill(invoicenumber):
 
     # 5) Update invoice total (and updatedAt if you have it)
     current_invoice.totalAmount = round(total, 2)
-    # If you added this column:
-    # from datetime import datetime
-    # current_invoice.updatedAt = datetime.utcnow()
+
+    # 5.5) Update customer-level metadata before saving invoice
+    current_invoice.exclude_phone = request.form.get('exclude_phone') in ('on', 'true', '1')
+    current_invoice.exclude_gst = request.form.get('exclude_gst') in ('on', 'true', '1')
+    current_invoice.exclude_addr = request.form.get('exclude_addr') in ('on', 'true', '1')
 
     db.session.commit()
 
-    # 6) Re-render edit page with success banner and correct flags
-    dcno = any(bool((x or '').strip()) for x in dc_numbers)
+    # 6) Redirect to locked preview after update
+    session['persistent_notice'] = f"Old invoice {current_invoice.invoiceId} updated successfully!"
 
-    return render_template(
-        'create_bill.html',
-        customer=current_customer,
-        inventory=item.query.all(),
-        success=True,                 # triggers "Bill updated successfully!"
-        descriptions=[r[0] for r in rows],
-        quantities=[r[1] for r in rows],
-        rates=[r[2] for r in rows],
-        dc_numbers=[(r[3] or '') for r in rows],
-        dcno=dcno,
-        total=round(total, 2),
-        invoice_no=current_invoice.invoiceId,
-        edit_mode=True
-    )
+    return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId))
 
 @app.route('/bill_preview/latest')
 def latest_bill_preview():
