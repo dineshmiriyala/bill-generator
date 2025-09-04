@@ -21,10 +21,6 @@
           <label class="form-label form-label-sm">Search (Company / Name / Phone)</label>
           <input type="text" class="form-control form-control-sm" name="q" placeholder="e.g. Acme / Suresh / 9848" value="{{ request.args.get('q','') }}">
         </div>
-        <div class="col-sm-3">
-          <label class="form-label form-label-sm">Customer ID (optional)</label>
-          <input type="number" class="form-control form-control-sm" name="customer_id" placeholder="e.g. 42" value="{{ request.args.get('customer_id','') }}">
-        </div>
         <div class="col-sm-2 d-flex gap-2">
           <button class="btn btn-sm btn-primary mt-3" type="submit">Search</button>
           <a href="{{ url_for('about_user') }}" class="btn btn-sm btn-outline-secondary mt-3">Clear</a>
@@ -121,19 +117,18 @@
   <div class="card shadow-sm mb-3">
     <div class="card-body">
       <div class="d-flex align-items-center justify-content-between mb-3">
-        <h5 class="mb-0">Latest Customer {% if request.args.get('q') or request.args.get('customer_id') %}<span class="badge text-bg-light border ms-2">Filtered</span>{% endif %}</h5>
+        <h5 class="mb-0">Latest Customer {% if request.args.get('q') %}<span class="badge text-bg-light border ms-2">Filtered</span>{% endif %}</h5>
         <a class="btn btn-success btn-sm" href="{{ url_for('start_bill', customer_id=latest_customer.id) }}">Generate Bill</a>
       </div>
-      {% if request.args.get('q') or request.args.get('customer_id') %}
+      {% if request.args.get('q') %}
       <div class="mb-2">
         {% if request.args.get('q') %}<span class="badge rounded-pill text-bg-light border me-1">Query: <strong>{{ request.args.get('q') }}</strong></span>{% endif %}
-        {% if request.args.get('customer_id') %}<span class="badge rounded-pill text-bg-light border me-1">Customer ID: <strong>{{ request.args.get('customer_id') }}</strong></span>{% endif %}
       </div>
       {% endif %}
       <div class="row g-4">
         <div class="col-md-6">
           <div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Company</div><div><strong>{{ latest_customer.company or '-' }}</strong></div></div>
-          {% if latest_customer.name %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Contact</div><div>{{ latest_customer.name }}</div></div>{% endif %}
+          {% if latest_customer.name %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Name</div><div>{{ latest_customer.name }}</div></div>{% endif %}
           {% if latest_customer.businessType %}<div class="d-flex mb-2"><div class="me-3 text-muted" style="width:160px">Type</div><div>{{ latest_customer.businessType }}</div></div>{% endif %}
         </div>
         <div class="col-md-6">

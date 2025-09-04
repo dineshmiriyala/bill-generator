@@ -1,4 +1,4 @@
-# 🧾 Bill Generator v1.0
+# Bill Generator v1.0
 
 ## Overview
 
@@ -40,7 +40,71 @@ Bill Generator is a lightweight, local-first invoice generation tool designed to
   - Timezone-aware timestamps and readable date formatting
 
 ---
+---
 
+## Version 2.1 
+
+### Bug Fixes
+- "Bill generated successfully" button now stays visible until manually dismissed
+- Font sizes increased in the generated PDF for improved readability
+- Fixed "Edit User" form to match the style and functionality of "Add Customer"
+- Only admins can now access bill and customer edit/delete functions
+- Font rendering in preview and PDF made consistent (more Mac-like appearance)
+
+### New Features
+- Total field in Create Bill is now editable
+- Editing the Total auto-updates Unit Price
+- Smart field tracking: whichever field (Qty / Rate / Total) was edited last is used to compute others
+- Role-based access control with a login redirect for restricted actions
+- Toggle to include/exclude phone number from final invoice PDF
+- Admins have an Edit button for each customer in the UI
+- Added support for deleting and recovering customers and invoices.
+- Added support to edit customer after creation.
+- Many quality of life upgrades.
+- added a new about me page which can display info about customer. 
+
+## Version 2.1.1 - Latest Update
+- Fixed a bug where total filed can't be edited in create bill page.
+- Fixed dependency on Customer name and added option to use the company name as customer name while creating a new customer.
+
+---
+
+## Roadmap: Version 3.0
+
+- Should add support for Delivery challan
+  - Basically multiple non-payment invoices can be clubbed into a single invoice with DC numbers populate.
+  - Road map includes: 1. Adding new model, making changes to already existing frontend pages to accommodate DC bills.
+- User Authentication & Roles
+  - Add login system with role-based access (admin, staff)
+- Export & Sharing
+  - Email or WhatsApp bills to customers directly
+
+## Roadmap: Version 4.0
+- Analytics & Reporting
+  - Generate insights from invoices, customer history, inventory
+- Inventory Enhancements
+  - Add item categories, units, and stock tracking
+- PDF Optimization
+  - Better formatting, logo support, watermark, and PDF download without extra dependencies
+- Hosting Options
+  - Deploy on local network with shared access
+- Testing & CI
+  - Add test suite and basic CI/CD workflow for deployments
+
+---
+
+## Screenshots
+
+#### Homepage
+![Home Page](Images/HomePage.png)
+#### Bill Creation
+![Create Bill](Images/CreateBill.png)
+#### Customer Search
+![Customer Search](Images/CustomerSearch.png)
+#### Sample Invoice
+![Invoice Preview](Images/Invoice.png)
+
+---
 ## Tech Stack
 
 - **Backend:** Python, Flask, SQLAlchemy
@@ -54,28 +118,47 @@ Bill Generator is a lightweight, local-first invoice generation tool designed to
 ## Folder Structure
 
 ```
-├── app.py                  # Main Flask application
+├── app.py
+├── desktop_launcher.py
+├── migration.py
+├── pdf.py
+├── requirements.txt
+├── README.md
+├── LICENSE
+├── .gitignore
 ├── db/
-│   ├── models.py           # SQLAlchemy ORM models
-│   └── app.db              # SQLite database file
+│   └── models.py
+├── Images/
+├── instance/
+├── migrations/
+│   ├── alembic.ini
+│   ├── env.py
+│   ├── README
+│   ├── script.py.mako
+│   └── versions/
 ├── static/
 │   ├── css/
-│   │   └── style.css       # Custom styles
-│   └── pdfs/               # Stored PDF invoices (if needed)
+│   ├── fonts/
+│   ├── img/
+│   ├── js/
+│   └── pdfs/
 ├── templates/
-│   ├── base.html
-│   ├── home.html
+│   ├── about_user.html
 │   ├── add_customer.html
 │   ├── add_inventory.html
-│   ├── view_customers.html
-│   ├── view_inventory.html
-│   ├── select_customer.html
+│   ├── base.html
+│   ├── bill_preview.html
+│   ├── confirm_delete_customer.html
 │   ├── create_bill.html
+│   ├── edit_user.html
+│   ├── home.html
+│   ├── recover.html
+│   ├── select_customer.html
+│   ├── statement.html
+│   ├── view_bill_locked.html
 │   ├── view_bills.html
-│   └── bill_preview.html
-├── pdf.py                  # ReportLab PDF support (optional/fallback)
-├── requirements.txt
-└── README.md
+│   ├── view_customers.html
+│   └── view_inventory.html
 ```
 
 ---
@@ -102,77 +185,25 @@ python app.py
 
 Then go to `http://127.0.0.1:5000` in your browser.
 
----
 
-## ✅ Version 2.0 – Latest Updates
 
-### 🔧 Bug Fixes
-- "Bill generated successfully" button now stays visible until manually dismissed
-- Font sizes increased in the generated PDF for improved readability
-- Fixed "Edit User" form to match the style and functionality of "Add Customer"
-- Only admins can now access bill and customer edit/delete functions
-- Font rendering in preview and PDF made consistent (more Mac-like appearance)
+## How to Use
 
-### ✨ New Features
-- Total field in Create Bill is now editable
-- Editing the Total auto-updates Unit Price
-- Smart field tracking: whichever field (Qty / Rate / Total) was edited last is used to compute others
-- Role-based access control with a login redirect for restricted actions
-- Toggle to include/exclude phone number from final invoice PDF
-- Admins have an Edit button for each customer in the UI
-- Added support for deleting and recovering customers and invoices.
-- Added support to edit customer after creation.
-- Many quality of life upgrades.
-- added a new about me page which can display info about customer. 
-
----
-
-## 🛣 Roadmap: Version 3.0
-
-- 🔐 User Authentication & Roles
-  - Add login system with role-based access (admin, staff)
-- 📤 Export & Sharing
-  - Email or WhatsApp bills to customers directly
-- 📊 Analytics & Reporting
-  - Generate insights from invoices, customer history, inventory
-- 📦 Inventory Enhancements
-  - Add item categories, units, and stock tracking
-- 📁 PDF Optimization
-  - Better formatting, logo support, watermark, and PDF download without extra dependencies
-- 🌐 Hosting Options
-  - Deploy on local network with shared access
-- 🧪 Testing & CI
-  - Add test suite and basic CI/CD workflow for deployments
-
----
-
-## 🖼 Screenshots
-
-#### Homepage
-![Home Page](Images/HomePage.png)
-#### Bill Creation
-![Create Bill](Images/CreateBill.png)
-#### Customer Search
-![Customer Search](Images/CustomerSearch.png)
-#### Sample Invoice
-![Invoice Preview](Images/Invoice.png)
-
----
-
-## 🚀 How to Use
-
-### 🪟 For Windows Users
+### For Windows Users
 
 - Navigate to the `desktop-build` branch.
 - Inside the `dist/` folder, you’ll find the `.exe` file (e.g., `BillGenerator.exe`).
 - Just run the `.exe` — it includes all dependencies and launches the app in your default browser.
+
+[→ Click here to download the latest Bill Generator EXE](https://github.com/dineshmiriyala/bill-generator/blob/desktop-build/dist/BillGenerator.exe)
+
 - No Python or installation required.
 
 > ⚠️ Make sure your system allows running `.exe` files from unknown developers if Windows Defender warns you.
 
 ---
 
-### 🍎 For Mac Users
+### For Mac Users
 
 - Clone the repository and set up a virtual environment:
   ```bash

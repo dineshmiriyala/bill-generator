@@ -31,8 +31,10 @@
         </thead>
         <tbody>
           <tr>
-            <td>{{ customer.name }}</td>
-            <td>{{ customer.company }}</td>
+            <td class="text-muted fst-italic small">{{ customer.name }}</td>
+            <td>
+              {{ customer.company }}
+            </td>
             <td>
               <span id="phoneValue" class="d-block">{{ customer.phone }}</span>
             </td>
@@ -74,6 +76,10 @@
             </td>
             <td></td>
             <td></td>
+          </tr>
+          <tr>
+            <td></td>
+            <td class="text-muted small fst-italic" colspan="5">Note: Only Company Name will appear in the final bill</td>
           </tr>
         </tbody>
       </table>
