@@ -1595,6 +1595,42 @@ def backup_now():
         mimetype="application/octet-stream"
     )
 
+@app.route('/test-pre-preview')
+def test_pre_preview():
+    # Dummy invoice
+    sample_invoice = type("Invoice", (), {})()
+    sample_invoice.invoiceId = "TEST123"
+    sample_invoice.createdAt = datetime.utcnow()
+    sample_invoice.totalAmount = 12345.67
+
+    # Dummy customer
+    sample_customer = {
+        "company": "Acme Corp",
+        "address": "123 Main Street, Hyderabad",
+        "gst": "37ABCDE1234F1Z5",
+        "phone": "9876543210",
+        "email": "info@acme.com"
+    }
+
+    # Dummy items
+    sample_items = [
+        ("Item A", "HSN001", 2, 100.00, 0, 18, 236.00),
+        ("Item B", "HSN002", 5, 50.00, 5, 12, 266.00),
+        ("Item C", "HSN003", 1, 500.00, 0, 18, 590.00),
+    ]
+    dcno = False
+    dc_numbers = []
+
+    return render_template(
+        "pre-preview-bill.html",
+        invoice=sample_invoice,
+        customer=sample_customer,
+        items=sample_items,
+        dcno=dcno,
+        dc_numbers=dc_numbers,
+        total_in_words="Twelve Thousand Three Hundred Forty Five Rupees and Sixty Seven Paise"
+    )
+
 app.jinja_env.globals.update(zip=zip)
 
 if __name__ == '__main__':

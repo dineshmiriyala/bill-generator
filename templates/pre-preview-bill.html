@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ invoice.invoiceId }} - Invoice</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --hdr-fs: 12px;
+        --cust-fs: 14px;
+        --seller-fs: 14px;
+        --table-fs: 12px;
+        --totals-fs: 14px;
+        --payment-fs: 12px;
+        --footer-fs: 12px;
+      }
+      .bill-header, .bill-header * { font-size: var(--hdr-fs) !important; }
+      .brand-logo {
+        height: calc(var(--hdr-fs) * 4) !important;
+        max-height: 120px;
+      }
+      .customer-block, .customer-block * { font-size: var(--cust-fs) !important; }
+      .seller-block, .seller-block * { font-size: var(--seller-fs) !important; }
+      .line-items, .line-items * { font-size: var(--table-fs) !important; }
+      .totals, .totals * { font-size: var(--totals-fs) !important; }
+      .payment-info, .payment-info * { font-size: var(--payment-fs) !important; }
+      .services, .services *, .a4-preview .text-center small { font-size: var(--footer-fs) !important; }
+      @media print { #font-size-controls { display:none!important; } }
+      body {
+        font-family: 'Poppins', sans-serif;
+        background: #f8f9fa;
+      }
+      @media print {
+        body { line-height: 1.35; }
+        .bill-header, .bill-header * { font-size: var(--hdr-fs) !important; }
+        .customer-block, .customer-block * { font-size: var(--cust-fs) !important; }
+        .seller-block, .seller-block * { font-size: var(--seller-fs) !important; }
+        .line-items, .line-items * { font-size: var(--table-fs) !important; }
+        .totals, .totals * { font-size: var(--totals-fs) !important; }
+        /* Keep logo and signature tidy for print */
+        /* .brand-logo { height: 42px !important; } */
+        .signature-img { max-width: 130px !important; }
+        /* Ultra-thin table borders (print/PDF) */
+        table.table { table-layout: auto !important; width: 100% !important; }
+        .table { border-color: #b5b5b5 !important; }
+        .table-bordered > :not(caption) > * { border-width: 0.4px !important; }
+        .table-bordered td, .table-bordered th { border-width: 0.4px !important; }
+        .services small { font-size: 0.55rem !important; font-weight: 400 !important; line-height: 0.75rem !important; }
+      }
+      .bill-heading {
+        text-align: center;
+        margin-top:4px;
+        font-size: var(--hdr-fs) !important;
+        font-weight:bold;
+        color:#000;
+      }
+      .highlight-info { color:#1a2a6c; }
+      .masthead { text-align: left; }
+      .a4-preview {
+        width: 210mm;
+        min-height: 297mm;
+        background: white;
+        margin: auto;
+        padding: 20mm;
+        box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        border: 1px solid #ccc;
+      }
+      .apple-panel {
+        background: #f5f5f7;
+        color: #111;
+        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      }
+      #font-size-controls {
+        background: transparent !important;
+        color: #111;
+      }
+      #font-size-controls label {
+        color: #333;
+        font-size: 0.8rem;
+      }
+      #font-size-controls .form-control, #font-size-controls .form-range {
+        background: #fff;
+        color: #111;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+      }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-lg-9">
+      <div class="a4-preview">
+
+        <div class="masthead mb-2 bill-header">
+          <h1 class="visually-hidden">Sri Lakshmi Offset Printers — ESTD: 1973</h1>
+          <img class="brand-logo" src="{{ url_for('static', filename='img/brand-wordmark.svg') }}" alt="Sri Lakshmi Offset Printers — ESTD: 1973">
+          <h2 class="bill-heading">Bill of Supply</h2>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-sm-6 seller-block">
+                <h5>From:</h5>
+                <p class="fs-5">
+                    <strong class="fs-4">Sri Lakshmi Offset Printers</strong><br>
+                    PAMARRU, Krishna Dist - 521157<br>
+                    GST: 37AVEPM5991R3ZG<br>
+                    Cell: 9848992207<br>
+                    email: haripress@gmail.com<br>
+                </p>
+                <small class="text-muted" style="font-size: 0.6rem;">Composition Taxable Person. Not eligible to collect Tax on supplies.</small>
+            </div>
+            <div class="col-sm-6 text-end customer-block">
+                <h5>To:</h5>
+                <p class="text-dark fs-5">
+                    {% if customer.company %}<strong class="fs-4">{{ customer.company }}</strong><br>{% endif %}
+                    {% if customer.address %}{{ customer["address"] }}<br>{% endif %}
+                    {% if customer.gst %}GST: {{ customer["gst"] }}<br>{% endif %}
+                    {% if customer.phone %}ID_No: {{ customer["phone"] }}{% endif %}
+                </p>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-sm-6">
+                <p class="text-dark"><strong>Invoice No:</strong> {{ invoice.invoiceId }}</p>
+                <p class="text-dark"><strong>Date:</strong> {{ invoice.createdAt.strftime('%d-%m-%Y') }}</p>
+            </div>
+        </div>
+
+        <div class="line-items">
+          <table class="table table-bordered">
+            {% if dcno %}
+            <colgroup>
+              <col style="width:6%">
+              <col style="width:58%">
+              <col style="width:16%">
+              <col style="width:10%">
+              <col style="width:10%">
+            </colgroup>
+            {% else %}
+            <colgroup>
+              <col style="width:6%">
+              <col style="width:64%">
+              <col style="width:15%">
+              <col style="width:15%">
+            </colgroup>
+            {% endif %}
+              <thead class="table-light text-center">
+                  <tr>
+                      <th>Serial No</th>
+                      <th>Description</th>
+                      {% if dcno %}<th>Delivery Challan No</th>{% endif %}
+                      <th>Quantity</th>
+                      <th>Amount</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  {% for item in items %}
+                  <tr>
+                      <td class="text-center">{{ loop.index }}</td>
+                      <td class="text-start">{{ item[0] }}</td>
+                      {% if dcno %}
+                      <td class="text-center">{{ dc_numbers[loop.index0] if dc_numbers is defined and dc_numbers|length > loop.index0 else '' }}</td>
+                      {% endif %}
+                      <td class="text-center">{{ item[2] }}</td>
+                      <td class="text-center"><span class="money" data-amount="{{ item[6] }}"></span></td>
+                  </tr>
+                  {% endfor %}
+              </tbody>
+          </table>
+        </div>
+
+        <div class="totals text-end">
+            <h5>Total: ₹ <strong><span class="money" data-amount="{{ invoice.totalAmount or 0 }}"></span></strong></h5>
+            {% if total_in_words %}
+            <div class="text-muted" style="font-size: 0.95rem;">Amount in words: <em>{{ total_in_words }}</em></div>
+            {% endif %}
+        </div>
+
+        <div class="mt-3 text-end">
+          <small class="text-muted" style="font-size: 0.7rem;">Computer generated receipt – signature not required</small>
+        </div>
+
+        <div class="row mt-5">
+          <div class="col-12 payment-info border rounded p-3 bg-light-subtle">
+            <h6 class="mb-2">Payment Information</h6>
+            <div>
+              Account Name: <strong>Sri Lakshmi Offset Printers</strong><br>
+              Bank: <strong>State Bank of India, Pamarru</strong><br>
+              Account Number: <strong>38588014977</strong><br>
+              IFSC: <strong>SBIN0002776</strong><br>
+              PhonePe/GPay: <strong>9848992207</strong>
+            </div>
+          </div>
+        </div>
+
+        <hr class="my-3" style="border:0;border-top:2px solid #c8c8c8;" />
+        <div class="services text-center mt-2">
+          <small class="text-muted" style="font-size: 0.55rem; line-height: 0.85rem;">
+            Services: Multi‑colour Offset Printing • Digital Printing • Brochures • Stickers • Invitations • Pamphlets • All Printing Works
+          </small>
+        </div>
+
+        <div class="text-center mt-3">
+          <small class="text-muted" style="font-size: 0.75rem;">
+            Thank you for your business! For inquiries or bulk orders, reach us at <strong>9848992207</strong> or <strong>haripress@gmail.com</strong>.
+          </small>
+        </div>
+
+      </div>
+    </div>
+    <div class="col-lg-3 d-print-none">
+      <div class="apple-panel">
+      <div id="font-size-controls" class="border rounded p-3 mb-3 bg-light-subtle">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <strong>Adjust layout</strong>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="resetSizesBtn">Reset</button>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small" for="headerFontSize">Header</label>
+          <div class="input-group">
+            <input type="range" class="form-range" min="8" max="18" value="12" id="headerFontSize">
+            <input type="number" class="form-control form-control-sm" style="width:70px;" min="8" max="18" value="12" id="headerFontSizeNumber">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small" for="customerFontSize">Customer</label>
+          <div class="input-group">
+            <input type="range" class="form-range" min="12" max="30" value="14" id="customerFontSize">
+            <input type="number" class="form-control form-control-sm" style="width:70px;" min="12" max="30" value="14" id="customerFontSizeNumber">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small" for="sellerFontSize">Seller</label>
+          <div class="input-group">
+            <input type="range" class="form-range" min="12" max="30" value="14" id="sellerFontSize">
+            <input type="number" class="form-control form-control-sm" style="width:70px;" min="12" max="30" value="14" id="sellerFontSizeNumber">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small" for="tableFontSize">Table</label>
+          <div class="input-group">
+            <input type="range" class="form-range" min="10" max="24" value="12" id="tableFontSize">
+            <input type="number" class="form-control form-control-sm" style="width:70px;" min="10" max="24" value="12" id="tableFontSizeNumber">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small" for="totalsFontSize">Totals</label>
+          <div class="input-group">
+            <input type="range" class="form-range" min="12" max="30" value="14" id="totalsFontSize">
+            <input type="number" class="form-control form-control-sm" style="width:70px;" min="12" max="30" value="14" id="totalsFontSizeNumber">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small" for="paymentFontSize">Payment Info</label>
+          <div class="input-group">
+            <input type="range" class="form-range" min="10" max="24" value="12" id="paymentFontSize">
+            <input type="number" class="form-control form-control-sm" style="width:70px;" min="10" max="24" value="12" id="paymentFontSizeNumber">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small" for="footerFontSize">Footer</label>
+          <div class="input-group">
+            <input type="range" class="form-range" min="10" max="24" value="12" id="footerFontSize">
+            <input type="number" class="form-control form-control-sm" style="width:70px;" min="10" max="24" value="12" id="footerFontSizeNumber">
+          </div>
+        </div>
+      </div>
+      <div class="text-end">
+        <button onclick="window.print()" class="btn btn-primary">Print / Save as PDF</button>
+        <p class="mt-2 text-muted" style="font-size: 0.9rem;">Tip: Uncheck “Headers and footers” in print dialog for a clean copy.</p>
+      </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    function formatINR(n){
+      const num = Number(n||0);
+      return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    document.querySelectorAll('.money').forEach(el => {
+      const v = el.getAttribute('data-amount');
+      el.textContent = formatINR(v);
+    });
+  })();
+
+  document.addEventListener('DOMContentLoaded', function(){
+    function setVars(){
+      document.documentElement.style.setProperty('--hdr-fs', headerRange.value + 'px');
+      document.documentElement.style.setProperty('--cust-fs', customerRange.value + 'px');
+      document.documentElement.style.setProperty('--seller-fs', sellerRange.value + 'px');
+      document.documentElement.style.setProperty('--table-fs', tableRange.value + 'px');
+      document.documentElement.style.setProperty('--totals-fs', totalsRange.value + 'px');
+      document.documentElement.style.setProperty('--payment-fs', paymentRange.value + 'px');
+      document.documentElement.style.setProperty('--footer-fs', footerRange.value + 'px');
+    }
+    const headerRange=document.getElementById('headerFontSize');
+    const headerNumber=document.getElementById('headerFontSizeNumber');
+    const customerRange=document.getElementById('customerFontSize');
+    const customerNumber=document.getElementById('customerFontSizeNumber');
+    const sellerRange=document.getElementById('sellerFontSize');
+    const sellerNumber=document.getElementById('sellerFontSizeNumber');
+    const tableRange=document.getElementById('tableFontSize');
+    const tableNumber=document.getElementById('tableFontSizeNumber');
+    const totalsRange=document.getElementById('totalsFontSize');
+    const totalsNumber=document.getElementById('totalsFontSizeNumber');
+    const paymentRange=document.getElementById('paymentFontSize');
+    const paymentNumber=document.getElementById('paymentFontSizeNumber');
+    const footerRange=document.getElementById('footerFontSize');
+    const footerNumber=document.getElementById('footerFontSizeNumber');
+
+    function bindSliderAndNumber(slider, number){
+      if(!slider || !number) return;
+      slider.addEventListener('input', ()=>{
+        number.value = slider.value;
+        setVars();
+      });
+      number.addEventListener('input', ()=>{
+        slider.value = number.value;
+        setVars();
+      });
+    }
+
+    [headerRange,customerRange,sellerRange,tableRange,totalsRange,paymentRange,footerRange].forEach(r=>{
+      if(r) r.addEventListener('input', setVars);
+    });
+
+    bindSliderAndNumber(headerRange, headerNumber);
+    bindSliderAndNumber(customerRange, customerNumber);
+    bindSliderAndNumber(sellerRange, sellerNumber);
+    bindSliderAndNumber(tableRange, tableNumber);
+    bindSliderAndNumber(totalsRange, totalsNumber);
+    bindSliderAndNumber(paymentRange, paymentNumber);
+    bindSliderAndNumber(footerRange, footerNumber);
+
+    document.getElementById('resetSizesBtn').addEventListener('click', function(){
+      headerRange.value=12; headerNumber.value=12;
+      customerRange.value=14; customerNumber.value=14;
+      sellerRange.value=14; sellerNumber.value=14;
+      tableRange.value=12; tableNumber.value=12;
+      totalsRange.value=14; totalsNumber.value=14;
+      paymentRange.value=12; paymentNumber.value=12;
+      footerRange.value=12; footerNumber.value=12;
+      setVars();
+    });
+    setVars();
+  });
+</script>
+
+</body>
+</html>
