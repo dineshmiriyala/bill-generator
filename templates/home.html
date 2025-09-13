@@ -47,7 +47,7 @@
 
       <!-- Accounts Main Button -->
       <button class="custom-btn mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#accountsOptions" aria-expanded="false" aria-controls="accountsOptions">
-        Accounts & Details
+        My Account
       </button>
       <!-- Collapsible Sub-Options -->
       <div class="collapse mb-4" id="accountsOptions" data-bs-parent="#accordionExample">
@@ -55,10 +55,36 @@
               <a href="/statements" class="custom-btn small-btn">Get Statements</a>
               <a href="/recover" class="custom-btn small-btn">Recover</a>
               <a href="/about_user?section=about" class="custom-btn small-btn">About</a>
+              <a href="/backup" class="custom-btn small-btn">Backup</a>
           </div>
       </div>
 
     </div>
   </div>
 </div>
+
+{% if session.persistent_notice %}
+<div class="modal fade" id="persistentNoticeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Notice</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {{ session.persistent_notice|safe }}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var noticeModal = new bootstrap.Modal(document.getElementById('persistentNoticeModal'));
+    noticeModal.show();
+  });
+</script>
+{% endif %}
 {% endblock %}

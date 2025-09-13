@@ -82,4 +82,20 @@ class user(db.Model):
     is_active = db.Column(db.Boolean, default = True)
     is_admin = db.Column(db.Boolean, default = False)
 
+class lastBackup(db.Model):
+    __tablename__ = "last_backup"
+
+    id = db.Column(db.Integer, primary_key=True)
+    occurred_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index = True)
+    note = db.Column(db.String(255))
+
+    # audit fields
+    created_at = db.Column(db.DateTime, nullable = False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
+
 db.Index('ix_invoiceItem_invoice_item', invoiceItem.invoiceId, invoiceItem.itemId)

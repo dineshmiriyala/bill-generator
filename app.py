@@ -1,4 +1,5 @@
 from flask import Flask, render_template, render_template_string, request, Response, jsonify, redirect, url_for, flash
+from flask_mail import Mail, Message
 from datetime import datetime, timedelta, timezone
 from flask_migrate import Migrate
 from db.models import *
@@ -13,6 +14,14 @@ from sqlalchemy import inspect
 from flask import session
 import os
 from pathlib import Path
+import os, sys, shutil
+from pathlib import Path
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from migration import migrate_db
+from flask import send_file
+import io
 
 
 def _format_customer_id(n: int) -> str:
@@ -47,16 +56,22 @@ USER_PROFILE = {
     },
 }
 # --- top of app.py: imports & app/db config ---
-import os, sys, shutil
-from pathlib import Path
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from migration import migrate_db
+
 
 app = Flask(__name__)
 basedir = Path(__file__).parent.resolve()
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret')
+
+# --- Flask-Mail configuration ---
+app.config.update(
+    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
+    MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
+    MAIL_USE_TLS=True,
+    MAIL_USERNAME=os.getenv("MAIL_USER"),
+    MAIL_PASSWORD=os.getenv("MAIL_PASS"),
+    MAIL_DEFAULT_SENDER=os.getenv("MAIL_USER")
+)
+mail = Mail(app)
 
 
 def _desktop_data_dir(app_name: str) -> Path:
@@ -368,6 +383,24 @@ def _flash_test():
 # Home Route
 @app.route('/')
 def home():
+    # Check for last backup
+    session.pop('persistent_notice', None)
+    last_record = lastBackup.query.order_by(lastBackup.occurred_at.desc()).first()
+
+    if not last_record or not last_record.occurred_at:
+        # No backups exist
+        session['persistent_notice'] = (
+            "⚠️ No backup has been done yet."
+            "<a href='" + url_for('backup_page') + "' class='btn btn-sm btn-warning ms-2'>Create your first backup</a>"
+        )
+    else:
+        days_since = (datetime.now() - last_record.occurred_at).days
+        if days_since > 30:
+            session['persistent_notice'] = (
+                "⚠️ Last backup is over 30 days old. Click here:"
+                "<a href='" + url_for('backup_page') + "' class='btn btn-sm btn-danger ms-2'>Backup now</a>"
+            )
+
     return render_template('home.html')
 
 
@@ -785,7 +818,7 @@ def api_statements_summary():
         month = int(request.args.get('month') or today.month)
         start_date = datetime(year, month, 1).date()
         end_date = datetime(year, 12, 31).date() if month == 12 else (
-                    datetime(year, month + 1, 1).date() - timedelta(days=1))
+                datetime(year, month + 1, 1).date() - timedelta(days=1))
     else:
         start_date = _parse_date(request.args.get('start'))
         end_date = _parse_date(request.args.get('end'))
@@ -859,7 +892,7 @@ def api_statements_invoices():
         month = int(request.args.get('month') or today.month)
         start_date = datetime(year, month, 1).date()
         end_date = datetime(year, 12, 31).date() if month == 12 else (
-                    datetime(year, month + 1, 1).date() - timedelta(days=1))
+                datetime(year, month + 1, 1).date() - timedelta(days=1))
     else:
         start_date = _parse_date(request.args.get('start'))
         end_date = _parse_date(request.args.get('end'))
@@ -1490,47 +1523,77 @@ def latest_bill_preview():
                            total_in_words=amount_to_words(current_invoice.totalAmount))
 
 
-"""@app.route('/downlaod-pdf/<int:invoice_id>')
-def downlaod_pdf(invoice_id):
-    current_invoice = invoice.query.get_or_404(invoice_id)
-    current_customer = customer.query.get(current_invoice.customerId)
-    items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
-    item_data = []
+# --- Backup Feature ---
+@app.route('/backup', methods=['GET', 'POST'])
+def backup_page():
+    """
+    Backup management page showing last backup time and allowing restore via upload.
+    """
+    days_ago = None
+    last_record = lastBackup.query.order_by(lastBackup.occurred_at.desc()).first()
 
-    for i in items:
-        item_name = item.query.get(i.itemId).name if i.itemId else "Unknown"
-        entry = (
-            item_name,
-            "N/A",
-            i.quantity,
-            i.rate,
-            i.discount,
-            i.taxPercentage,
-            i.line_total
-        )
-        item_data.append(entry)
-    dc_numbers = [i.dcNo or '' for i in items]
-    dcno = any(bool((x or '').strip()) for x in dc_numbers)
-    html_content = render_template(
-        'bill_preview.html',
-        invoice=current_invoice,
-        customer=current_customer,
-        items=item_data,
-        dcno=dcno,
-        dc_numbers=dc_numbers
+    if request.method == 'POST' and 'backupFile' in request.files:
+        f = request.files['backupFile']
+        if f and f.filename.endswith('.db'):
+            # Save uploaded file temporarily
+            uploaded_path = basedir / "uploaded_backup.db"
+            f.save(uploaded_path)
+
+            # Overwrite live DB with uploaded backup
+            shutil.copy2(uploaded_path, db_file)
+
+            # Log restore as a backup event
+            new_entry = lastBackup(note="Backup restored")
+            db.session.add(new_entry)
+            db.session.commit()
+
+            flash("Backup restored successfully!", "success")
+            return redirect(url_for('backup_page'))
+        else:
+            flash("Invalid file. Please upload a .db backup.", "danger")
+
+    if last_record:
+        days_ago = (datetime.now() - last_record.occurred_at).days
+
+    logs = lastBackup.query.order_by(lastBackup.occurred_at.desc()).limit(5).all()
+
+    for log in logs:
+        if log.occurred_at:
+            log.days_ago = (datetime.utcnow() - log.occurred_at).days
+        else:
+            log.days_ago = None
+
+    return render_template(
+        'backup.html',
+        last_backup_date=last_record.occurred_at.strftime("%Y-%m-%d %H:%M") if last_record else "Never",
+        days_ago=days_ago if days_ago is not None else "N/A",
+        backup_logs=logs
     )
 
-    filename = f"{current_invoice.invoiceId}.pdf"
-    filepath = os.path.join(app.root_path, 'static/pdf', filename)
-    HTML(string = html_content, base_url = request.base.url).write_pdf(filepath)
 
-    return f"PDF Generated Successfully! <a href = '/static/pdfs/{filename}' target = '_blank'>View PDF</a>"
-@app.route('/generate-pdf')
-def generate_pdf(invoice_id, customer, items, total):
-    generate_invoice_pdf()
+@app.route('/backup/now')
+def backup_now():
+    """
+    Create backup of the DB and serve it as a direct download to the user.
+    """
+    # Log this backup in DB
+    new_entry = lastBackup(note="Backup downloaded")
+    db.session.add(new_entry)
+    db.session.commit()
 
-    return f"PDF generated successfully! <a href = '/static/pdfs/generated_invoice.pdf' target='_blank'>View PDF</a>"
-"""
+    # Load DB into memory buffer
+    buf = io.BytesIO()
+    with open(db_file, 'rb') as f:
+        buf.write(f.read())
+    buf.seek(0)
+
+    # Direct download
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name=f"backup_{new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')}.db",
+        mimetype="application/octet-stream"
+    )
 
 app.jinja_env.globals.update(zip=zip)
 
