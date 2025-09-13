@@ -14,10 +14,9 @@ from flask import session
 import os
 from pathlib import Path
 
+
 def _format_customer_id(n: int) -> str:
     return f"ID-{n:06d}"
-
-
 
 
 # ---- Owner / Business profile (edit these to your real values) ----
@@ -28,7 +27,7 @@ USER_PROFILE = {
     "address": "Pamarru, Krishna Dist - 521157",
     "phone": "9848992207",
     "email": "haripress@gmail.com",
-    "gst": "37ABCDE1234F1Z5",
+    "gst": "37AVEPM5991R3ZG",
     "pan": None,
     "businessType": "Composition",
     "established": "1973",
@@ -55,11 +54,9 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from migration import migrate_db
 
-
 app = Flask(__name__)
 basedir = Path(__file__).parent.resolve()
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret')
-
 
 
 def _desktop_data_dir(app_name: str) -> Path:
@@ -79,7 +76,7 @@ else:
 
 migrate_db(db_file.as_posix())  # <- Pass resolved DB path
 
-APP_NAME   = "SLO BILL"
+APP_NAME = "SLO BILL"
 is_desktop = os.getenv("BG_DESKTOP") == "1"
 
 if is_desktop:
@@ -103,6 +100,7 @@ migrate = Migrate(app, db)
 
 # add at top with other imports
 from sqlalchemy import inspect
+
 
 def _ensure_db_initialized():
     """
@@ -138,9 +136,12 @@ def _ensure_db_initialized():
             print("[info] Creating/migrating schema via create_all()…")
             db.create_all()
 
+
 # ✅ Call this AFTER importing models, so metadata is populated
 with app.app_context():
     _ensure_db_initialized()
+
+
 # --- routes continue below as usual ---
 
 # Helpers for statement engine
@@ -172,6 +173,7 @@ def recover_customer(id):
     db.session.commit()
     flash('Customer recovered successfully.', 'success')
     return redirect(url_for('recover_page'))
+
 
 @app.route('/edit_user/<int:customer_id>', methods=['GET', 'POST'])
 def edit_user(customer_id):
@@ -211,6 +213,7 @@ def edit_user(customer_id):
     next_url = request.form.get('next') or url_for('about_user', customer_id=customer_id)
     return redirect(next_url)
 
+
 @app.route('/recover_invoice/<int:id>')
 def recover_invoice(id):
     inv = invoice.query.get_or_404(id)
@@ -237,16 +240,16 @@ def about_user():
         q_inv = db.session.query(invoice)
 
     # Basic stats
-    prof["invoiceCount"]  = q_inv.count()
+    prof["invoiceCount"] = q_inv.count()
     prof["customerCount"] = db.session.query(func.count(customer.id)).scalar() or 0
 
     # Activity (timestamps + invoice numbers)
     first_inv = q_inv.order_by(invoice.createdAt.asc()).first()
-    last_inv  = q_inv.order_by(invoice.createdAt.desc()).first()
-    prof["createdAt"]      = getattr(first_inv, "createdAt", None)
-    prof["updatedAt"]      = getattr(last_inv,  "createdAt", None)
+    last_inv = q_inv.order_by(invoice.createdAt.desc()).first()
+    prof["createdAt"] = getattr(first_inv, "createdAt", None)
+    prof["updatedAt"] = getattr(last_inv, "createdAt", None)
     prof["firstInvoiceNo"] = getattr(first_inv, "invoiceId", None)
-    prof["lastInvoiceNo"]  = getattr(last_inv,  "invoiceId", None)
+    prof["lastInvoiceNo"] = getattr(last_inv, "invoiceId", None)
 
     # Total billed
     try:
@@ -277,9 +280,9 @@ def about_user():
             like = f"%{qtext}%"
             base = customer.query.filter(customer.isDeleted == False)
             matches = (base.filter(
-                        or_(customer.company.ilike(like),
-                            customer.name.ilike(like),
-                            customer.phone.ilike(like)))
+                or_(customer.company.ilike(like),
+                    customer.name.ilike(like),
+                    customer.phone.ilike(like)))
                        .order_by(customer.createdAt.desc(), customer.id.desc())
                        .limit(25)
                        .all())
@@ -318,15 +321,17 @@ def about_user():
         cust_invs = invs_q.limit(10).all()
 
         first_inv_c = invs_q.order_by(invoice.createdAt.asc()).first()
-        last_inv_c  = cust_invs[0] if cust_invs else None
+        last_inv_c = cust_invs[0] if cust_invs else None
         total_val = db.session.query(func.coalesce(func.sum(invoice.totalAmount), 0)).filter(
             invoice.customerId == latest_cust.id,
             getattr(invoice, 'isDeleted', False) == False
         ).scalar() or 0
         cust_stats = {
             'invoiceCount': invs_q.count(),
-            'firstInvoiceDate': first_inv_c.createdAt.strftime('%d %b %Y') if getattr(first_inv_c, 'createdAt', None) else None,
-            'lastInvoiceDate':  last_inv_c.createdAt.strftime('%d %b %Y')  if getattr(last_inv_c,  'createdAt', None) else None,
+            'firstInvoiceDate': first_inv_c.createdAt.strftime('%d %b %Y') if getattr(first_inv_c, 'createdAt',
+                                                                                      None) else None,
+            'lastInvoiceDate': last_inv_c.createdAt.strftime('%d %b %Y') if getattr(last_inv_c, 'createdAt',
+                                                                                    None) else None,
             'totalBilled': f"INR: {float(total_val):,.2f}",
         }
 
@@ -336,10 +341,9 @@ def about_user():
         latest_customer=latest_cust,
         cust_stats=cust_stats,
         cust_invs=cust_invs,
-        matches=matches,                  # <-- pass matches (optional)
+        matches=matches,  # <-- pass matches (optional)
         q=(request.args.get('q') or '').strip()
     )
-
 
 
 # Custom Jinja filter to format dates as DD-MM-YYYY
@@ -360,22 +364,24 @@ def _flash_test():
     flash('Flash works!', 'success')
     return redirect(url_for('view_customers'))
 
+
 # Home Route
 @app.route('/')
 def home():
     return render_template('home.html')
 
-#customers page (temperory placeholder)
+
+# customers page (temperory placeholder)
 @app.route('/create_customers', methods=['GET', 'POST'])
 def add_customers():
     if request.method == 'POST':
         use_auto = bool(request.form.get('use_auto_id'))
-        phone    = (request.form.get('phone') or '').strip()
-        name     = (request.form.get('name') or '').strip()
-        company  = (request.form.get('company') or '').strip()
-        email    = (request.form.get('email') or '').strip()
-        gst      = (request.form.get('gst') or '').strip()
-        address  = (request.form.get('address') or '').strip()
+        phone = (request.form.get('phone') or '').strip()
+        name = (request.form.get('name') or '').strip()
+        company = (request.form.get('company') or '').strip()
+        email = (request.form.get('email') or '').strip()
+        gst = (request.form.get('gst') or '').strip()
+        address = (request.form.get('address') or '').strip()
         businessType = (request.form.get('businessType') or '').strip()
 
         # --- Basic validation ---
@@ -435,6 +441,8 @@ def add_customers():
             )
             db.session.add(c)
             db.session.commit()
+            # add alert
+            flash('New Customer Created successfully.', 'success')
             return redirect(url_for('about_user', customer_id=c.id))
 
         # Auto-ID path (no real phone or toggle checked)
@@ -444,14 +452,17 @@ def add_customers():
             gst=gst, address=address, businessType=businessType
         )
         db.session.add(c)
-        db.session.flush()                 # get c.id
+        db.session.flush()  # get c.id
         c.phone = _format_customer_id(c.id)  # e.g., ID-000123
         db.session.commit()
+        # add alert
+        flash('New Customer Created successfully.', 'success')
 
         return redirect(url_for('about_user', customer_id=c.id))
 
     # GET -> render blank form
     return render_template('add_customer.html')
+
 
 @app.route('/delete_customer/<int:cid>', methods=['GET', 'POST'])
 def delete_customer(cid):
@@ -490,7 +501,8 @@ def delete_customer(cid):
                 inv.isDeleted = True
                 inv.deletedAt = datetime.now(timezone.utc)
         db.session.commit()
-        flash('Customer and related invoices deleted successfully.', 'success')
+        # add alert,
+        flash('Customer and related invoices deleted successfully.', 'danger')
         return redirect(url_for('view_customers'))
 
     # GET: If invoices exist but not confirmed yet -> show confirm page
@@ -506,11 +518,12 @@ def delete_customer(cid):
     if hasattr(c, 'isDeleted'):
         c.isDeleted = True
         db.session.commit()
-        flash('Customer deleted.', 'success')
+        flash('Customer deleted.', 'danger')
     else:
         flash('Delete not available in this build.', 'warning')
 
     return redirect(url_for('view_customers'))
+
 
 @app.route('/add_inventory', methods=['GET', 'POST'])
 def add_inventory():
@@ -555,10 +568,13 @@ def add_inventory():
         )
         db.session.add(new_item)
         db.session.commit()
+        # add alert
+        flash('Item added successfully.', 'success')
 
         return render_template('add_inventory.html', success=True)
 
     return render_template('add_inventory.html')
+
 
 @app.route('/select_customer', methods=['GET', 'POST'])
 def select_customer():
@@ -576,17 +592,18 @@ def select_customer():
     if q:
         like = f"%{q}%"
         customers = (base.filter((customer.phone.ilike(like)) |
-                                 (customer.name.ilike(like))  |
+                                 (customer.name.ilike(like)) |
                                  (customer.company.ilike(like)))
-                          .order_by(customer.id.desc())
-                          .limit(100)
-                          .all())
+                     .order_by(customer.id.desc())
+                     .limit(100)
+                     .all())
     else:
         customers = (base.order_by(customer.id.desc())
-                          .limit(25)
-                          .all())
+                     .limit(25)
+                     .all())
 
     return render_template('select_customer.html', customers=customers)
+
 
 @app.route('/view_inventory')
 def view_inventory():
@@ -600,6 +617,8 @@ def view_inventory():
         ]
 
     return render_template('view_inventory.html', inventory=inventory)
+
+
 @app.route('/statements', methods=['GET'])
 def statements():
     """HTML/CSV Statement for month/year/custom with optional phone filter.
@@ -625,7 +644,7 @@ def statements():
         if scope == 'year':
             year = int(request.args.get('year') or today.year)
             start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
-            end_dt   = datetime(year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
+            end_dt = datetime(year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
         elif scope == 'month':
             year = int(request.args.get('year') or today.year)
             month = int(request.args.get('month') or today.month)
@@ -636,7 +655,7 @@ def statements():
                 end_dt = datetime(year, month + 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
         elif scope == 'custom':
             start = request.args.get('start')
-            end   = request.args.get('end')
+            end = request.args.get('end')
             if not (start and end):
                 # Render friendly page instead of 400
                 return render_template(
@@ -654,7 +673,8 @@ def statements():
                 )
             start_dt = datetime.strptime(start, '%Y-%m-%d').replace(tzinfo=timezone.utc)
             # inclusive end-of-day
-            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(seconds=1)
+            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(
+                seconds=1)
         else:
             # Unknown scope -> default to current year
             return redirect(url_for('statements', scope='year', year=today.year))
@@ -670,7 +690,8 @@ def statements():
                  invoice.createdAt <= end_dt))
 
     if phone:
-        q = q.join(customer, invoice.customerId == customer.id).filter(customer.isDeleted == False, customer.phone == phone)
+        q = q.join(customer, invoice.customerId == customer.id).filter(customer.isDeleted == False,
+                                                                       customer.phone == phone)
 
     invs = q.order_by(invoice.createdAt.desc()).all()
 
@@ -737,12 +758,14 @@ def statements():
         total_invoices=total_invoices,
         total_amount=round(total_amount, 2),
         per_customer=per_company,  # name kept for template compatibility
-        invs=invs,                 # keep if template references it elsewhere
-        inv_rows=inv_rows,         # <-- use this in the table
+        invs=invs,  # keep if template references it elsewhere
+        inv_rows=inv_rows,  # <-- use this in the table
         scope=scope,
         phone=phone,
         request=request,
     )
+
+
 @app.route('/api/statements', methods=['GET'])
 def api_statements_summary():
     """JSON summary for dashboards.
@@ -761,7 +784,8 @@ def api_statements_summary():
         year = int(request.args.get('year') or today.year)
         month = int(request.args.get('month') or today.month)
         start_date = datetime(year, month, 1).date()
-        end_date = datetime(year, 12, 31).date() if month == 12 else (datetime(year, month + 1, 1).date() - timedelta(days=1))
+        end_date = datetime(year, 12, 31).date() if month == 12 else (
+                    datetime(year, month + 1, 1).date() - timedelta(days=1))
     else:
         start_date = _parse_date(request.args.get('start'))
         end_date = _parse_date(request.args.get('end'))
@@ -812,6 +836,7 @@ def api_statements_summary():
         "per_month": {k: {"count": v["count"], "amount": round(v["amount"], 2)} for k, v in per_month.items()},
     })
 
+
 @app.route('/api/statements/invoices', methods=['GET'])
 def api_statements_invoices():
     """JSON: raw invoice rows with pagination (for tables/exports).
@@ -833,7 +858,8 @@ def api_statements_invoices():
         year = int(request.args.get('year') or today.year)
         month = int(request.args.get('month') or today.month)
         start_date = datetime(year, month, 1).date()
-        end_date = datetime(year, 12, 31).date() if month == 12 else (datetime(year, month + 1, 1).date() - timedelta(days=1))
+        end_date = datetime(year, 12, 31).date() if month == 12 else (
+                    datetime(year, month + 1, 1).date() - timedelta(days=1))
     else:
         start_date = _parse_date(request.args.get('start'))
         end_date = _parse_date(request.args.get('end'))
@@ -853,7 +879,6 @@ def api_statements_invoices():
 
     if phone:
         q = q.filter(customer.phone == phone)
-
 
     total = q.count()
     invs = q.order_by(invoice.createdAt.asc()).offset((page - 1) * per_page).limit(per_page).all()
@@ -877,19 +902,21 @@ def api_statements_invoices():
         "rows": rows
     })
 
+
 @app.route('/statements/blank', methods=['GET'])
 def statements_blank():
     return render_template(
         'statement.html',
-        start_date = None,
-        end_date = None,
-        total_invoices = 0,
-        total_amount = 0,
-        phone = None,
-        per_customer = {},
-        invs = [],
-        scope = 'custom',
+        start_date=None,
+        end_date=None,
+        total_invoices=0,
+        total_amount=0,
+        phone=None,
+        per_customer={},
+        invs=[],
+        scope='custom',
     )
+
 
 @app.route('/create-bill', methods=['GET', 'POST'])
 def start_bill():
@@ -931,9 +958,9 @@ def start_bill():
         return render_template('select_customer.html')
 
     descriptions = request.form.getlist('description[]')
-    quantities   = request.form.getlist('quantity[]')
-    rates        = request.form.getlist('rate[]')
-    dc_numbers   = request.form.getlist('dc_no[]')  # may be [] if toggle off
+    quantities = request.form.getlist('quantity[]')
+    rates = request.form.getlist('rate[]')
+    dc_numbers = request.form.getlist('dc_no[]')  # may be [] if toggle off
 
     # Get exclusion flags
     exclude_phone = bool(request.form.get('exclude_phone'))
@@ -946,8 +973,8 @@ def start_bill():
         desc = (descriptions[i] or '').strip()
         if not desc:
             continue
-        qty  = int(quantities[i]) if i < len(quantities) and quantities[i] else 0
-        rate = float(rates[i])    if i < len(rates)      and rates[i]      else 0.0
+        qty = int(quantities[i]) if i < len(quantities) and quantities[i] else 0
+        rate = float(rates[i]) if i < len(rates) and rates[i] else 0.0
         dc_val = ''
         if dc_numbers and i < len(dc_numbers) and dc_numbers[i]:
             dc_val = dc_numbers[i].strip()
@@ -960,14 +987,15 @@ def start_bill():
         customerId=selected_customer.id,
         createdAt=datetime.now(timezone.utc),
         totalAmount=round(total, 2),
-        pdfPath="",     # set after inv_name built
-        invoiceId="",   # temporary
+        pdfPath="",  # set after inv_name built
+        invoiceId="",  # temporary
         exclude_phone=exclude_phone,
         exclude_gst=exclude_gst,
         exclude_addr=exclude_addr
     )
     db.session.add(new_invoice)
     db.session.commit()
+    # Add Alert - Not needed
 
     # Generate invoice Id + pdf path
     inv_name = f"SLP-{datetime.now().strftime('%d%m%y')}-{str(new_invoice.id).zfill(5)}"
@@ -977,6 +1005,7 @@ def start_bill():
     new_invoice.invoiceId = inv_name
     new_invoice.pdfPath = pdf_path
     db.session.commit()
+    # add alerts - not needed as persistant on in place
 
     # Add line items
     for desc, qty, rate, line_total, dc_val in item_rows:
@@ -987,6 +1016,7 @@ def start_bill():
             new_item = item(name=desc, unitPrice=rate, quantity=0, taxPercentage=0)
             db.session.add(new_item)
             db.session.commit()
+            # add alert - not needed as persistent one in place
             item_id = new_item.id
 
         db.session.add(invoiceItem(
@@ -1001,12 +1031,13 @@ def start_bill():
         ))
 
     db.session.commit()
+    # add alerts - Not needed, persistent one is in place
 
     # Did user include any DC values?
     # dc_present = any((x or '').strip() for x in (dc_numbers or []))
 
     # After successful creation, flash and redirect to locked preview page
-    session['persistent_notice'] = f"Invoice {new_invoice.invoiceId} updated successfully!"
+    session['persistent_notice'] = f"Invoice {new_invoice.invoiceId} created successfully!"
     return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId))
 
 
@@ -1041,7 +1072,7 @@ def view_bills():
     query = (request.args.get('q') or '').lower()
     phone = request.args.get('phone')
     start_date = request.args.get('start_date')
-    end_date   = request.args.get('end_date')
+    end_date = request.args.get('end_date')
 
     q = (invoice.query
          .options(joinedload(invoice.customer))
@@ -1071,7 +1102,7 @@ def view_bills():
     try:
         if start_date and end_date:
             start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt   = datetime.strptime(end_date,   '%Y-%m-%d') + timedelta(days=1)  # inclusive
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)  # inclusive
             q = q.filter(invoice.createdAt >= start_dt, invoice.createdAt < end_dt)
     except Exception:
         pass
@@ -1096,17 +1127,18 @@ def view_bills():
         bills = [b for b in bills if b['phone'] == phone]
     elif query:
         bills = [b for b in bills if query in b['customer_name'].lower()
-                                   or query in b.get('phone', '')
-                                   or query in b['invoice_no']]
+                 or query in b.get('phone', '')
+                 or query in b['invoice_no']]
 
     return render_template('view_bills.html', bills=bills)
+
 
 @app.route('/view-bill/<invoicenumber>')
 def view_bill_locked(invoicenumber):
     # load invoice and related data
     current_invoice = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
     cur_cust = customer.query.get(current_invoice.customerId)
-    line_items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
+    line_items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
 
     current_customer = {
         "name": cur_cust.name,
@@ -1154,12 +1186,14 @@ ONES = [
 ]
 TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
 
+
 def _two_digits(n: int) -> str:
     if n == 0:
         return ""
     if n < 20:
         return ONES[n]
     return (TENS[n // 10] + (" " + ONES[n % 10] if (n % 10) != 0 else "")).strip()
+
 
 def _three_digits(n: int) -> str:
     # 0..999
@@ -1171,13 +1205,17 @@ def _three_digits(n: int) -> str:
         return s
     return _two_digits(n)
 
+
 def rupees_to_words(num: int) -> str:
     if num == 0:
         return "Zero"
     parts = []
-    crore = num // 10000000; num %= 10000000
-    lakh = num // 100000; num %= 100000
-    thousand = num // 1000; num %= 1000
+    crore = num // 10000000;
+    num %= 10000000
+    lakh = num // 100000;
+    num %= 100000
+    thousand = num // 1000;
+    num %= 1000
     rest = num  # 0..999
 
     # Use _three_digits for groups that can be up to 999
@@ -1192,6 +1230,7 @@ def rupees_to_words(num: int) -> str:
 
     return " ".join(parts)
 
+
 def amount_to_words(amount) -> str:
     try:
         amt = float(amount or 0)
@@ -1203,6 +1242,7 @@ def amount_to_words(amount) -> str:
     if paise:
         words += " and " + _two_digits(paise) + " Paise"
     return words + " Only"
+
 
 @app.route('/bill_preview/<invoicenumber>')
 def bill_preview(invoicenumber):
@@ -1241,9 +1281,6 @@ def bill_preview(invoicenumber):
     dc_numbers = [i.dcNo or '' for i in items]
     dcno = any(bool((x or '').strip()) for x in dc_numbers)
 
-
-
-
     return render_template(
         'bill_preview.html',
         invoice=current_invoice,
@@ -1253,6 +1290,7 @@ def bill_preview(invoicenumber):
         dc_numbers=dc_numbers,
         total_in_words=amount_to_words(current_invoice.totalAmount)
     )
+
 
 @app.route('/edit-bill/<invoicenumber>', methods=['GET', 'POST'])
 def edit_bill(invoicenumber):
@@ -1291,6 +1329,7 @@ def edit_bill(invoicenumber):
         current_invoice.exclude_gst = request.form.get('exclude_gst') in ('on', 'true', '1')
         current_invoice.exclude_addr = request.form.get('exclude_addr') in ('on', 'true', '1')
         db.session.commit()
+        # add alert - Not needed funcionally
         return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId))
 
     # Render the same template as create_bill.html but pre-filled
@@ -1315,12 +1354,14 @@ def edit_bill(invoicenumber):
     )
 
 
-@app.route('/delete-bill/<invoicenumber>', methods = ['POST'])
+@app.route('/delete-bill/<invoicenumber>', methods=['POST'])
 def delete_bill(invoicenumber):
     inv = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
     inv.isDeleted = True
     inv.deletedAt = datetime.now(timezone.utc)
     db.session.commit()
+    # add alert
+    flash('Bill has been deleted.', 'danger')
 
     next_url = request.form.get('next') or ''
     try:
@@ -1332,6 +1373,7 @@ def delete_bill(invoicenumber):
         pass
     return redirect(url_for('view_bills'))
 
+
 @app.route('/update-bill/<invoicenumber>', methods=['POST'])
 def update_bill(invoicenumber):
     # 1) Load the invoice being edited
@@ -1340,9 +1382,9 @@ def update_bill(invoicenumber):
 
     # 2) Read form inputs
     descriptions = request.form.getlist('description[]')
-    quantities   = request.form.getlist('quantity[]')
-    rates        = request.form.getlist('rate[]')
-    dc_numbers   = request.form.getlist('dc_no[]')  # may be empty if toggle off
+    quantities = request.form.getlist('quantity[]')
+    rates = request.form.getlist('rate[]')
+    dc_numbers = request.form.getlist('dc_no[]')  # may be empty if toggle off
 
     # 3) Normalize rows + recompute totals
     rows = []
@@ -1352,9 +1394,9 @@ def update_bill(invoicenumber):
         if not desc:
             continue  # skip empty rows
 
-        qty  = int(quantities[i]) if i < len(quantities) and quantities[i] else 0
-        rate = float(rates[i])    if i < len(rates)      and rates[i]      else 0.0
-        dc   = (dc_numbers[i].strip() if i < len(dc_numbers) and dc_numbers[i] else None)
+        qty = int(quantities[i]) if i < len(quantities) and quantities[i] else 0
+        rate = float(rates[i]) if i < len(rates) and rates[i] else 0.0
+        dc = (dc_numbers[i].strip() if i < len(dc_numbers) and dc_numbers[i] else None)
 
         line_total = qty * rate
         total += line_total
@@ -1394,15 +1436,16 @@ def update_bill(invoicenumber):
     current_invoice.exclude_addr = request.form.get('exclude_addr') in ('on', 'true', '1')
 
     db.session.commit()
+    # add alert - not needed persistent one in place
 
     # 6) Redirect to locked preview after update
     session['persistent_notice'] = f"Old invoice {current_invoice.invoiceId} updated successfully!"
 
     return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId))
 
+
 @app.route('/bill_preview/latest')
 def latest_bill_preview():
-
     current_invoice = (invoice.query.
                        filter(invoice.isDeleted == False)
                        .order_by(invoice.id.desc()).first())
@@ -1420,8 +1463,7 @@ def latest_bill_preview():
         "email": cur_cust.email
     }
 
-
-    items = invoiceItem.query.filter_by(invoiceId = current_invoice.id).all()
+    items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
     item_data = []
 
     for i in items:
@@ -1446,7 +1488,6 @@ def latest_bill_preview():
                            dcno=dcno,
                            dc_numbers=dc_numbers,
                            total_in_words=amount_to_words(current_invoice.totalAmount))
-
 
 
 """@app.route('/downlaod-pdf/<int:invoice_id>')
