@@ -1601,25 +1601,53 @@ def test_pre_preview():
     sample_invoice = type("Invoice", (), {})()
     sample_invoice.invoiceId = "TEST123"
     sample_invoice.createdAt = datetime.utcnow()
-    sample_invoice.totalAmount = 12345.67
+    sample_invoice.totalAmount = 98765.43
 
     # Dummy customer
     sample_customer = {
-        "company": "Acme Corp",
-        "address": "123 Main Street, Hyderabad",
+        "company": "Acme Corporation Pvt Ltd",
+        "address": "123 Main Street, Hyderabad, Telangana, 500001",
         "gst": "37ABCDE1234F1Z5",
         "phone": "9876543210",
-        "email": "info@acme.com"
+        "email": "contact@acmecorp.com"
     }
 
-    # Dummy items
+    # Dummy items (Description, HSN, Qty, Rate, Disc%, Tax%, Amount)
     sample_items = [
-        ("Item A", "HSN001", 2, 100.00, 0, 18, 236.00),
-        ("Item B", "HSN002", 5, 50.00, 5, 12, 266.00),
-        ("Item C", "HSN003", 1, 500.00, 0, 18, 590.00),
+        ("Offset Printing Flyers", "HSN4901", 1000, 2.50, 0, 12, 2800.00),
+        ("Business Cards", "HSN4911", 500, 1.00, 5, 18, 531.00),
+        ("Letterheads", "HSN4820", 200, 3.00, 0, 18, 708.00),
+        ("Stickers", "HSN3919", 300, 1.50, 10, 12, 445.50),
+        ("Pamphlets", "HSN4902", 800, 0.75, 0, 5, 630.00),
+        ("Offset Printing Flyers", "HSN4901", 1000, 2.50, 0, 12, 2800.00),
+        ("Business Cards", "HSN4911", 500, 1.00, 5, 18, 531.00),
+        ("Letterheads", "HSN4820", 200, 3.00, 0, 18, 708.00),
+        ("Stickers", "HSN3919", 300, 1.50, 10, 12, 445.50),
+        ("Pamphlets", "HSN4902", 800, 0.75, 0, 5, 630.00),
+        ("Offset Printing Flyers", "HSN4901", 1000, 2.50, 0, 12, 2800.00),
+        ("Business Cards", "HSN4911", 500, 1.00, 5, 18, 531.00),
+        ("Letterheads", "HSN4820", 200, 3.00, 0, 18, 708.00),
+        ("Stickers", "HSN3919", 300, 1.50, 10, 12, 445.50),
+        ("Pamphlets", "HSN4902", 800, 0.75, 0, 5, 630.00),
+        ("Offset Printing Flyers", "HSN4901", 1000, 2.50, 0, 12, 2800.00),
+        ("Business Cards", "HSN4911", 500, 1.00, 5, 18, 531.00),
+        ("Letterheads", "HSN4820", 200, 3.00, 0, 18, 708.00),
+        ("Stickers", "HSN3919", 300, 1.50, 10, 12, 445.50),
+        ("Pamphlets", "HSN4902", 800, 0.75, 0, 5, 630.00),
     ]
-    dcno = False
-    dc_numbers = []
+
+    sample_sizes = {
+        "header": 13,
+        "customer": 21,
+        "table": 17,
+        "totals": 21,
+        "payment": 17,
+        "footer": 17,
+    }
+
+    # Delivery challan numbers example (empty for now)
+    dcno = True
+    dc_numbers = ["DC001", "DC002", ""]
 
     return render_template(
         "pre-preview-bill.html",
@@ -1628,7 +1656,8 @@ def test_pre_preview():
         items=sample_items,
         dcno=dcno,
         dc_numbers=dc_numbers,
-        total_in_words="Twelve Thousand Three Hundred Forty Five Rupees and Sixty Seven Paise"
+        total_in_words="Ninety Eight Thousand Seven Hundred Sixty Five Rupees and Forty Three Paise",
+        sizes = sample_sizes
     )
 
 app.jinja_env.globals.update(zip=zip)
