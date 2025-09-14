@@ -1681,9 +1681,12 @@ def handle_layout(action=None, data=None):
 # --- Routes ---
 @app.route('/test-pre-preview', methods=['GET'])
 def test_pre_preview():
-    if session['persistent_notice']:
-        if 'backup' in session['persistent_notice']:
-            session['persistent_notice'] = None
+    try:
+        if session['persistent_notice']:
+            if 'backup' in session['persistent_notice']:
+                session['persistent_notice'] = None
+    except Exception:
+        pass
     ctx = handle_layout(action="view")
     return render_template("pre-preview-bill.html", **ctx)
 
