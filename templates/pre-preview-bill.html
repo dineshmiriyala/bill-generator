@@ -28,7 +28,7 @@
       }
       .customer-block, .customer-block * { font-size: var(--cust-fs) !important; }
       .seller-block, .seller-block * { font-size: var(--seller-fs) !important; }
-      .line-items, .line-items * { font-size: var(--table-fs) !important; }
+      .line-items, .line-items *, table, table * { font-size: var(--table-fs) !important; }
       .totals, .totals * { font-size: var(--totals-fs) !important; }
       .payment-info, .payment-info * { font-size: var(--payment-fs) !important; }
       .services, .services *, .a4-preview .text-center small { font-size: var(--footer-fs) !important; }
@@ -42,7 +42,7 @@
         .bill-header, .bill-header * { font-size: var(--hdr-fs) !important; }
         .customer-block, .customer-block * { font-size: var(--cust-fs) !important; }
         .seller-block, .seller-block * { font-size: var(--seller-fs) !important; }
-        .line-items, .line-items * { font-size: var(--table-fs) !important; }
+        .line-items, .line-items *, table, table * { font-size: var(--table-fs) !important; }
         .totals, .totals * { font-size: var(--totals-fs) !important; }
         /* Keep logo and signature tidy for print */
         /* .brand-logo { height: 42px !important; } */
@@ -133,7 +133,7 @@
 </head>
 <body>
 
-<div class="position-absolute top-0 start-0 m-3">
+<div class="sticky-top bg-light p-2" style="z-index:1050;">
   <button onclick="history.back()" class="btn btn-outline-secondary">← Go Back</button>
 </div>
 
@@ -145,7 +145,7 @@
       </div> <!-- End #invoice-wrapper -->
     </div>
     <div class="col-lg-3 d-print-none">
-      <div class="apple-panel">
+      <div class="apple-panel sticky-top" style="top:70px; z-index:1040;">
       <div id="font-size-controls" class="border rounded p-3 mb-3 bg-light-subtle">
 <!-- Hidden invoice template at bottom for pagination (not visible, used as template) -->
 <div id="page-content" style="display:none">
@@ -261,13 +261,14 @@
 </div>
         <div class="d-flex justify-content-between align-items-center mb-2">
           <strong>Adjust layout</strong>
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="resetSizesBtn">Reset</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="resetSizesBtn">Reset all</button>
         </div>
         <div class="mb-2">
           <label class="form-label small" for="headerFontSize">Header</label>
           <div class="input-group">
             <input type="range" class="form-range" min="8" max="18" value="{{ sizes.header }}" id="headerFontSize">
             <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.header }}px" id="headerFontSizeNumber" data-unit="px">
+            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="header" tabindex="-1">↺</button>
           </div>
         </div>
         <div class="mb-2">
@@ -275,6 +276,7 @@
           <div class="input-group">
             <input type="range" class="form-range" min="12" max="30" value="{{ sizes.customer }}" id="customerFontSize">
             <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.customer }}px" id="customerFontSizeNumber" data-unit="px">
+            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="customer" tabindex="-1">↺</button>
           </div>
         </div>
         <div class="mb-2">
@@ -282,6 +284,7 @@
           <div class="input-group">
             <input type="range" class="form-range" min="10" max="24" value="{{ sizes.table }}" id="tableFontSize">
             <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.table }}px" id="tableFontSizeNumber" data-unit="px">
+            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="table" tabindex="-1">↺</button>
           </div>
         </div>
         <div class="mb-2">
@@ -289,6 +292,7 @@
           <div class="input-group">
             <input type="range" class="form-range" min="12" max="30" value="{{ sizes.totals }}" id="totalsFontSize">
             <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.totals }}px" id="totalsFontSizeNumber" data-unit="px">
+            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="totals" tabindex="-1">↺</button>
           </div>
         </div>
         <div class="mb-2">
@@ -296,6 +300,7 @@
           <div class="input-group">
             <input type="range" class="form-range" min="10" max="24" value="{{ sizes.payment }}" id="paymentFontSize">
             <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.payment }}px" id="paymentFontSizeNumber" data-unit="px">
+            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="payment" tabindex="-1">↺</button>
           </div>
         </div>
         <div class="mb-2">
@@ -303,6 +308,7 @@
           <div class="input-group">
             <input type="range" class="form-range" min="10" max="24" value="{{ sizes.footer }}" id="footerFontSize">
             <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.footer }}px" id="footerFontSizeNumber" data-unit="px">
+            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="footer" tabindex="-1">↺</button>
           </div>
         </div>
       </div>
@@ -317,6 +323,7 @@
           <button id="refreshLayout" class="btn btn-info">Refresh Layout</button>
         </div>
         <p class="text-muted" style="font-size: 0.9rem;">Tip: Uncheck “Headers and footers” in print dialog for a clean copy.</p>
+      </div>
       </div>
     </div>
   </div>
@@ -335,6 +342,9 @@
   })();
 
   document.addEventListener('DOMContentLoaded', function(){
+    // --- Default values for sliders ---
+    const defaultSizes = { header:13, customer:21, table:17, totals:21, payment:17, footer:17 };
+
     function setVars(){
       document.documentElement.style.setProperty('--hdr-fs', headerRange.value + 'px');
       document.documentElement.style.setProperty('--cust-fs', customerRange.value + 'px');
@@ -385,15 +395,47 @@
     bindSliderAndNumber(paymentRange, paymentNumber);
     bindSliderAndNumber(footerRange, footerNumber);
 
+    // --- Global reset button ---
     document.getElementById('resetSizesBtn').addEventListener('click', function(){
-      headerRange.value=13; headerNumber.value="13px";
-      customerRange.value=21; customerNumber.value="21px";
-      tableRange.value=17; tableNumber.value="17px";
-      totalsRange.value=21; totalsNumber.value="21px";
-      paymentRange.value=17; paymentNumber.value="17px";
-      footerRange.value=17; footerNumber.value="17px";
+      // Loop through all keys in defaultSizes and reset both slider and number
+      const map = {
+        header: [headerRange, headerNumber],
+        customer: [customerRange, customerNumber],
+        table: [tableRange, tableNumber],
+        totals: [totalsRange, totalsNumber],
+        payment: [paymentRange, paymentNumber],
+        footer: [footerRange, footerNumber]
+      };
+      for (const key in defaultSizes) {
+        if (map[key]) {
+          map[key][0].value = defaultSizes[key];
+          map[key][1].value = defaultSizes[key] + "px";
+        }
+      }
       setVars();
     });
+
+    // --- Reset single slider button ---
+    document.querySelectorAll('.reset-single').forEach(btn => {
+      btn.addEventListener('click', function(){
+        const target = btn.getAttribute('data-target');
+        // Map data-target to slider and number
+        const map = {
+          header: [headerRange, headerNumber],
+          customer: [customerRange, customerNumber],
+          table: [tableRange, tableNumber],
+          totals: [totalsRange, totalsNumber],
+          payment: [paymentRange, paymentNumber],
+          footer: [footerRange, footerNumber]
+        };
+        if(map[target] && typeof defaultSizes[target] !== 'undefined') {
+          map[target][0].value = defaultSizes[target];
+          map[target][1].value = defaultSizes[target] + "px";
+          setVars();
+        }
+      });
+    });
+
     // On page load, set number fields with px
     headerNumber.value = headerRange.value + "px";
     customerNumber.value = customerRange.value + "px";
@@ -476,6 +518,8 @@
           }
         }
       });
+      // Ensure CSS variables are applied to cloned elements
+      setVars();
     }
     window.paginateInvoice = paginateInvoice;
 
