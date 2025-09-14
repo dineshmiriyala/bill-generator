@@ -89,12 +89,12 @@
         border: 1px solid #ccc;
       }
       .apple-panel {
-        background: #f5f5f7;
-        color: #111;
-        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+        background: #fff;
         border-radius: 12px;
-        padding: 1rem;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        padding: 1rem 1.25rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border: 1px solid #e0e0e0;
+        color: #333;
       }
       .page-break {
         display: block;
@@ -117,31 +117,13 @@
       @media print {
         .page-break-line { display: none !important; }
       }
-      #font-size-controls {
-        background: transparent !important;
-        color: #111;
-        font-size: 0.75rem;
-      }
-      #font-size-controls label {
+      #font-size-controls h6 {
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
         color: #333;
-        font-size: 0.8rem;
-      }
-      #font-size-controls .form-control, #font-size-controls .form-range {
-        background: #fff;
-        color: #111;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-      }
-      #font-size-controls .form-control-sm {
-        font-size: 0.7rem;
-        padding: 0.15rem 0.3rem;
-      }
-      #font-size-controls .btn-sm {
-        font-size: 0.7rem;
-        padding: 0.15rem 0.3rem;
-      }
-      #font-size-controls .form-range {
-        height: 1rem;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 6px;
+        margin-bottom: 12px;
       }
     </style>
 </head>
@@ -462,7 +444,7 @@
     document.querySelectorAll('.reset-single').forEach(btn => {
       btn.addEventListener('click', function(){
         const target = btn.getAttribute('data-target');
-        // Map data-target to slider and number
+        // Map data-target to slider and number, ensure header is mapped exactly
         const map = {
           header: [headerRange, headerNumber],
           customer: [customerRange, customerNumber],
@@ -472,7 +454,8 @@
           footer: [footerRange, footerNumber],
           invoice_info: [invoiceInfoRange, invoiceInfoNumber]
         };
-        if(map[target] && typeof defaultSizes[target] !== 'undefined') {
+        // Always use the backend-provided defaultSizes for reset value
+        if (map[target] && typeof defaultSizes[target] !== 'undefined') {
           map[target][0].value = defaultSizes[target];
           map[target][1].value = defaultSizes[target] + "px";
           setVars();

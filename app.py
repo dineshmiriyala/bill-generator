@@ -1315,6 +1315,9 @@ def bill_preview(invoicenumber):
     dc_numbers = [i.dcNo or '' for i in items]
     dcno = any(bool((x or '').strip()) for x in dc_numbers)
 
+    config = layoutConfig().get_or_create()
+    current_sizes = config.get_sizes()
+
     return render_template(
         'bill_preview.html',
         invoice=current_invoice,
@@ -1322,7 +1325,8 @@ def bill_preview(invoicenumber):
         items=item_data,
         dcno=dcno,
         dc_numbers=dc_numbers,
-        total_in_words=amount_to_words(current_invoice.totalAmount)
+        total_in_words=amount_to_words(current_invoice.totalAmount),
+        sizes=current_sizes
     )
 
 
@@ -1513,6 +1517,9 @@ def latest_bill_preview():
         )
         item_data.append(entry)
 
+    config = layoutConfig.get_or_create()
+    current_sizes = config.get_sizes()
+
     dc_numbers = [i.dcNo or '' for i in items]
     dcno = any(bool((x or '').strip()) for x in dc_numbers)
     return render_template('bill_preview.html',
@@ -1521,7 +1528,8 @@ def latest_bill_preview():
                            items=item_data,
                            dcno=dcno,
                            dc_numbers=dc_numbers,
-                           total_in_words=amount_to_words(current_invoice.totalAmount))
+                           total_in_words=amount_to_words(current_invoice.totalAmount),
+                           sizes=current_sizes),
 
 
 # --- Backup Feature ---
