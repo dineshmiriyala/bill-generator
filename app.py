@@ -22,6 +22,7 @@ from flask_migrate import Migrate
 from migration import migrate_db
 from flask import send_file
 import io
+import json
 
 
 def _format_customer_id(n: int) -> str:
@@ -1594,15 +1595,11 @@ def backup_now():
         download_name=f"backup_{new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')}.db",
         mimetype="application/octet-stream"
     )
-@app.route('/test-pre-preview', methods=['GET'])
-def test_pre_preview():
-    # --- Reset to defaults if requested ---
-    if "reset" in request.args:
-        session.pop("sample_rows", None)
-        session.pop("dc_enabled", None)
-        session.pop("sample_sizes", None)
 
-    # Dummy invoice
+
+
+# --- Common builder for sample invoice context ---
+def _build_sample_invoice_context():
     sample_invoice = type("Invoice", (), {})()
     sample_invoice.invoiceId = "TEST123"
     sample_invoice.createdAt = datetime.utcnow()
@@ -1616,60 +1613,83 @@ def test_pre_preview():
         "email": "contact@acmecorp.com"
     }
 
-    # --- Handle sample rows ---
     num_rows = session.get("sample_rows", 5)
-    if "rows" in request.args:
-        try:
-            num_rows = int(request.args["rows"])
-            session["sample_rows"] = num_rows
-        except ValueError:
-            num_rows = 5
-
-    # --- Generate sample rows dynamically ---
     sample_items = [
         (f"Sample Item {i+1}", f"HSN{i+1:04}", i+1, (i+1)*2, i % 5, (i*3) % 18, (i+1)*111.11)
         for i in range(num_rows)
     ]
 
-    # --- Handle DC toggle ---
     dcno = session.get("dc_enabled", False)
-    if "dc" in request.args:
-        dcno = request.args.get("dc").lower() == "true"
-        session["dc_enabled"] = dcno
     dc_numbers = [f"DC{str(i+1).zfill(3)}" for i in range(num_rows)] if dcno else []
 
-    # --- Handle sizes (sliders) ---
-    size_keys = ["header", "customer", "table", "totals", "payment", "footer", "invoice_info"]
-    current_sizes = session.get("sample_sizes", {
-        "header": 13,
-        "customer": 21,
-        "table": 17,
-        "totals": 21,
-        "payment": 17,
-        "footer": 17,
-        "invoice_info": 14,
-    })
+    config = layoutConfig().get_or_create()
+    current_sizes = config.get_sizes()
 
-    for k in size_keys:
-        if k in request.args:
-            try:
-                current_sizes[k] = int(request.args[k])
-            except ValueError:
-                pass
-    session["sample_sizes"] = current_sizes
 
-    # --- Render template ---
-    return render_template(
-        "pre-preview-bill.html",
-        invoice=sample_invoice,
-        customer=sample_customer,
-        items=sample_items,
-        dcno=dcno,
-        dc_numbers=dc_numbers,
-        total_in_words="Ninety Eight Thousand Seven Hundred Sixty Five Rupees and Forty Three Paise",
-        sizes=current_sizes,
-        rows=num_rows
-    )
+    return {
+        "invoice": sample_invoice,
+        "customer": sample_customer,
+        "items": sample_items,
+        "dcno": dcno,
+        "dc_numbers": dc_numbers,
+        "total_in_words": "Ninety Eight Thousand Seven Hundred Sixty Five Rupees and Forty Three Paise",
+        "sizes": current_sizes,
+        "rows": num_rows,
+        "persistent_notice": session.get("persistent_notice"),
+    }
+
+
+# --- Unified Layout Handler ---
+def handle_layout(action=None, data=None):
+
+    config = layoutConfig().get_or_create()
+    updated = False
+
+    if action == "update" and data:
+        current_sizes = config.get_sizes()
+        updated = False
+        for k in ["header", "customer", "table", "totals", "payment", "footer", "invoice_info"]:
+            if k in data:
+                try:
+                    new_size = int(data[k])
+                    if current_sizes.get(k) != new_size:
+                        current_sizes[k] = new_size
+                        updated = True
+                except Exception:
+                    pass
+        if updated:
+            config.set_sizes(current_sizes)
+            db.session.commit()
+            session['persistent_notice'] = "✅ Layout has been updated successfully!"
+
+    elif action == "reset":
+        config.reset_sizes()
+        db.session.commit()
+        session['persistent_notice'] = "✅ Layout has been reset to defaults!"
+
+    return _build_sample_invoice_context()
+
+
+# --- Routes ---
+@app.route('/test-pre-preview', methods=['GET'])
+def test_pre_preview():
+    if session['persistent_notice']:
+        if 'backup' in session['persistent_notice']:
+            session['persistent_notice'] = None
+    ctx = handle_layout(action="view")
+    return render_template("pre-preview-bill.html", **ctx)
+
+@app.route('/update-layout', methods=['POST'])
+def update_layout():
+    data = request.get_json(force=True) if request.is_json else request.form
+    ctx = handle_layout(action="update", data=data)
+    return render_template("pre-preview-bill.html", **ctx)
+
+@app.route('/reset-layout', methods=['POST'])
+def reset_layout():
+    ctx = handle_layout(action="reset")
+    return render_template("pre-preview-bill.html", **ctx)
+
 app.jinja_env.globals.update(zip=zip)
 
 if __name__ == '__main__':

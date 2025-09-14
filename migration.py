@@ -27,6 +27,20 @@ def migrate_db(db_path):
                 );
             """)
 
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='layout_config';")
+        layout_table_exists = cursor.fetchone()
+
+        if not layout_table_exists:
+            print("[Migration] Creating missing table: layout_config")
+            cursor.execute("""
+                CREATE TABLE layout_config (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sizes_json TEXT NOT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
         conn.commit()
         print("[Migration] DB schema is up-to-date.")
     except Exception as e:

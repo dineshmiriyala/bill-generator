@@ -13,14 +13,14 @@
         transition: transform 0.3s ease;
       }
       :root {
-        --hdr-fs: 12px;
-        --cust-fs: 14px;
-        --seller-fs: 14px;
-        --table-fs: 12px;
-        --totals-fs: 14px;
-        --payment-fs: 12px;
-        --footer-fs: 12px;
-        --invinfo-fs: 14px;
+        --hdr-fs: {{ sizes.header }}px;
+        --cust-fs: {{ sizes.customer }}px;
+        --seller-fs: {{ sizes.customer }}px;
+        --table-fs: {{ sizes.table }}px;
+        --totals-fs: {{ sizes.totals }}px;
+        --payment-fs: {{ sizes.payment }}px;
+        --footer-fs: {{ sizes.footer }}px;
+        --invinfo-fs: {{ sizes.invoice_info }}px;
       }
       .invoice-info, .invoice-info * { font-size: var(--invinfo-fs) !important; }
       .bill-header, .bill-header * { font-size: var(--hdr-fs) !important; }
@@ -162,26 +162,8 @@
       <div class="apple-panel sticky-top" style="top:70px; z-index:1040;">
         <div id="font-size-controls" class="border rounded p-3 mb-3 bg-light-subtle">
           <h6 class="mb-3 fw-bold">Adjust Layout</h6>
-          <div class="d-flex align-items-center justify-content-between mb-3">
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-              <label for="sampleRows" class="mb-0" style="color:#444; font-size:0.8rem;">No. of sample rows:</label>
-              <select id="sampleRows" class="form-select form-select-sm" style="width:auto; min-width:70px;">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="25">25</option>
-                <option value="30">30</option>
-              </select>
-              <div class="form-check form-switch ms-2 d-flex align-items-center">
-                <input class="form-check-input" type="checkbox" id="toggleDc">
-                <label class="form-check-label small ms-1" for="toggleDc">DC</label>
-              </div>
-            </div>
-            <button type="button" class="btn btn-sm ms-2" id="resetSizesBtn" style="background-color:#ffc107; color:#fff; font-weight:bold; white-space:nowrap;">Reset Layout</button>
+          <div class="d-flex justify-content-end mb-3">
+            <button type="button" class="btn btn-sm btn-danger fw-bold text-white" id="resetSizesBtn" style="white-space:nowrap;">Reset to Defaults</button>
           </div>
           <div class="mb-3">
             <label class="form-label small" for="headerFontSize">Header</label>
@@ -194,7 +176,7 @@
           <div class="mb-3">
             <label class="form-label small" for="customerFontSize">From &amp; To</label>
             <div class="input-group d-flex align-items-center gap-2">
-              <input type="range" class="form-range flex-grow-1" min="12" max="30" value="{{ sizes.customer }}" id="customerFontSize">
+              <input type="range" class="form-range flex-grow-1" min="12" max="20" value="{{ sizes.customer }}" id="customerFontSize">
               <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.customer }}px" id="customerFontSizeNumber" data-unit="px">
               <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="customer" tabindex="-1">↺</button>
             </div>
@@ -202,7 +184,7 @@
           <div class="mb-3">
             <label class="form-label small" for="invoiceInfoFontSize">Invoice Info</label>
             <div class="input-group d-flex align-items-center gap-2">
-              <input type="range" class="form-range flex-grow-1" min="10" max="24" value="{{ sizes.invoice_info }}" id="invoiceInfoFontSize">
+              <input type="range" class="form-range flex-grow-1" min="10" max="16" value="{{ sizes.invoice_info }}" id="invoiceInfoFontSize">
               <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.invoice_info }}px" id="invoiceInfoFontSizeNumber" data-unit="px">
               <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="invoice_info" tabindex="-1">↺</button>
             </div>
@@ -210,7 +192,7 @@
           <div class="mb-3">
             <label class="form-label small" for="tableFontSize">Items Table</label>
             <div class="input-group d-flex align-items-center gap-2">
-              <input type="range" class="form-range flex-grow-1" min="10" max="24" value="{{ sizes.table }}" id="tableFontSize">
+              <input type="range" class="form-range flex-grow-1" min="10" max="16" value="{{ sizes.table }}" id="tableFontSize">
               <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.table }}px" id="tableFontSizeNumber" data-unit="px">
               <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="table" tabindex="-1">↺</button>
             </div>
@@ -218,7 +200,7 @@
           <div class="mb-3">
             <label class="form-label small" for="totalsFontSize">Totals</label>
             <div class="input-group d-flex align-items-center gap-2">
-              <input type="range" class="form-range flex-grow-1" min="12" max="30" value="{{ sizes.totals }}" id="totalsFontSize">
+              <input type="range" class="form-range flex-grow-1" min="12" max="18" value="{{ sizes.totals }}" id="totalsFontSize">
               <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.totals }}px" id="totalsFontSizeNumber" data-unit="px">
               <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="totals" tabindex="-1">↺</button>
             </div>
@@ -226,7 +208,7 @@
           <div class="mb-3">
             <label class="form-label small" for="paymentFontSize">Payment Info</label>
             <div class="input-group d-flex align-items-center gap-2">
-              <input type="range" class="form-range flex-grow-1" min="10" max="24" value="{{ sizes.payment }}" id="paymentFontSize">
+              <input type="range" class="form-range flex-grow-1" min="10" max="16" value="{{ sizes.payment }}" id="paymentFontSize">
               <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.payment }}px" id="paymentFontSizeNumber" data-unit="px">
               <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="payment" tabindex="-1">↺</button>
             </div>
@@ -234,7 +216,7 @@
           <div class="mb-3">
             <label class="form-label small" for="footerFontSize">Footer</label>
             <div class="input-group d-flex align-items-center gap-2">
-              <input type="range" class="form-range flex-grow-1" min="10" max="24" value="{{ sizes.footer }}" id="footerFontSize">
+              <input type="range" class="form-range flex-grow-1" min="8" max="12" value="{{ sizes.footer }}" id="footerFontSize">
               <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.footer }}px" id="footerFontSizeNumber" data-unit="px">
               <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="footer" tabindex="-1">↺</button>
             </div>
@@ -243,8 +225,9 @@
             <div class="d-flex justify-content-end gap-2 mb-2">
               <button id="zoomIn" class="btn btn-outline-primary">+</button>
               <button id="zoomOut" class="btn btn-outline-primary">-</button>
-              <button id="saveLayout" class="btn btn-success">Save This Layout</button>
-              <a href="/" class="btn btn-secondary">Go Back to Home</a>
+              <button id="saveLayout" class="btn btn-success">Save</button>
+              <button id="cancelLayout" class="btn btn-outline-secondary">Cancel</button>
+              <a href="/" class="btn btn-secondary">Home</a>
             </div>
             <div class="d-flex justify-content-end gap-2 mb-2">
               <button id="refreshLayout" class="btn btn-info">Refresh Preview</button>
@@ -380,8 +363,8 @@
   })();
 
   document.addEventListener('DOMContentLoaded', function(){
-    // --- Default values for sliders ---
-    const defaultSizes = { header:13, customer:21, table:17, totals:21, payment:17, footer:17, invoice_info:14 };
+    // --- Default values for sliders (from backend) ---
+    const defaultSizes = {{ sizes|tojson }};
 
     const headerRange=document.getElementById('headerFontSize');
     const headerNumber=document.getElementById('headerFontSizeNumber');
@@ -497,10 +480,6 @@
       });
     });
 
-    // Set initial sample rows and DC toggle state from backend (Jinja)
-    document.getElementById("sampleRows").value = "{{ rows if rows is defined else 5 }}";
-    const dcToggle = document.getElementById("toggleDc");
-    dcToggle.checked = {{ 'true' if dcno else 'false' }};
     setVars();
 
     // --- Invoice pagination logic ---
@@ -597,48 +576,52 @@
         footer: footerRange.value,
         invoice_info: invoiceInfoRange.value
       };
-      fetch("/save-layout", {
+      fetch("/update-layout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
-      }).then(r => r.json()).then(data => {
-        alert("Layout saved successfully!");
-      }).catch(err => {
+      })
+      .then(r => {
+        if (r.ok) {
+          window.location.reload();
+        } else {
+          // Optionally log error
+          console.error("Error saving layout: response not OK");
+        }
+      })
+      .catch(err => {
+        // Optionally log error
         console.error("Error saving layout:", err);
-        alert("Failed to save layout.");
       });
     });
 
-    // Helper to gather all slider values and return as query string
-    function getSliderQueryParams(numRows, dcEnabled) {
-      const params = new URLSearchParams();
-      params.append('rows', numRows);
-      params.append('dc', dcEnabled);
-      params.append('header', headerRange.value);
-      params.append('customer', customerRange.value);
-      params.append('table', tableRange.value);
-      params.append('totals', totalsRange.value);
-      params.append('payment', paymentRange.value);
-      params.append('footer', footerRange.value);
-      params.append('invoice_info', invoiceInfoRange.value);
-      return params.toString();
-    }
-
-    // Sample rows select event
-    document.getElementById("sampleRows").addEventListener("change", function(){
-      const numRows = this.value;
-      const dcEnabled = document.getElementById("toggleDc").checked;
-      const query = getSliderQueryParams(numRows, dcEnabled);
-      window.location.href = `/test-pre-preview?${query}`;
+    // --- Reset Layout button event ---
+    document.getElementById("resetSizesBtn").addEventListener("click", function(e){
+      // Prevent duplicate event logic for local reset
+      if (e.detail === 42) return; // Magic number to skip for local reset
+      fetch("/reset-layout", {
+        method: "POST"
+      })
+      .then(r => {
+        if (r.ok) {
+          window.location.reload();
+        } else {
+          // Optionally log error
+          console.error("Failed to reset layout.");
+        }
+      })
+      .catch(err => {
+        // Optionally log error
+        console.error("Failed to reset layout.", err);
+      });
     });
 
-    // DC toggle switch event
-    dcToggle.addEventListener("change", function(){
-      const dcEnabled = this.checked;
-      const numRows = document.getElementById("sampleRows").value;
-      const query = getSliderQueryParams(numRows, dcEnabled);
-      window.location.href = `/test-pre-preview?${query}`;
+    // --- Cancel Layout button event ---
+    document.getElementById("cancelLayout").addEventListener("click", function() {
+      // Reload the page to restore existing sizes from backend without saving changes
+      window.location.reload();
     });
+
 
     // Call paginateInvoice on load
     paginateInvoice();
@@ -664,4 +647,39 @@
 </script>
 
 </body>
+
+
+<!-- Persistent Notice Modal (matches home page popup style) -->
+<div class="modal fade" id="persistentWarningModal" tabindex="-1" aria-labelledby="persistentNoticeLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#f8f9fa;">
+        <h5 class="modal-title" id="persistentNoticeLabel">Notice</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {{ persistent_notice }}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Show persistent warning modal if notice is non-empty
+    var persistentNotice = {{ persistent_notice|tojson }};
+    if (persistentNotice && persistentNotice.trim().length > 0) {
+      var modalEl = document.getElementById('persistentWarningModal');
+      var modal = new bootstrap.Modal(modalEl, {
+        backdrop: 'static',
+        keyboard: false
+      });
+      modal.show();
+    }
+  });
+</script>
 </html>
