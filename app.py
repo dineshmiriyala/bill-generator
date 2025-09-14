@@ -1594,16 +1594,20 @@ def backup_now():
         download_name=f"backup_{new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')}.db",
         mimetype="application/octet-stream"
     )
-
-@app.route('/test-pre-preview')
+@app.route('/test-pre-preview', methods=['GET'])
 def test_pre_preview():
+    # --- Reset to defaults if requested ---
+    if "reset" in request.args:
+        session.pop("sample_rows", None)
+        session.pop("dc_enabled", None)
+        session.pop("sample_sizes", None)
+
     # Dummy invoice
     sample_invoice = type("Invoice", (), {})()
     sample_invoice.invoiceId = "TEST123"
     sample_invoice.createdAt = datetime.utcnow()
     sample_invoice.totalAmount = 98765.43
 
-    # Dummy customer
     sample_customer = {
         "company": "Acme Corporation Pvt Ltd",
         "address": "123 Main Street, Hyderabad, Telangana, 500001",
@@ -1612,43 +1616,49 @@ def test_pre_preview():
         "email": "contact@acmecorp.com"
     }
 
-    # Dummy items (Description, HSN, Qty, Rate, Disc%, Tax%, Amount)
+    # --- Handle sample rows ---
+    num_rows = session.get("sample_rows", 5)
+    if "rows" in request.args:
+        try:
+            num_rows = int(request.args["rows"])
+            session["sample_rows"] = num_rows
+        except ValueError:
+            num_rows = 5
+
+    # --- Generate sample rows dynamically ---
     sample_items = [
-        ("Offset Printing Flyers", "HSN4901", 1000, 2.50, 0, 12, 2800.00),
-        ("Business Cards", "HSN4911", 500, 1.00, 5, 18, 531.00),
-        ("Letterheads", "HSN4820", 200, 3.00, 0, 18, 708.00),
-        ("Stickers", "HSN3919", 300, 1.50, 10, 12, 445.50),
-        ("Pamphlets", "HSN4902", 800, 0.75, 0, 5, 630.00),
-        ("Offset Printing Flyers", "HSN4901", 1000, 2.50, 0, 12, 2800.00),
-        ("Business Cards", "HSN4911", 500, 1.00, 5, 18, 531.00),
-        ("Letterheads", "HSN4820", 200, 3.00, 0, 18, 708.00),
-        ("Stickers", "HSN3919", 300, 1.50, 10, 12, 445.50),
-        ("Pamphlets", "HSN4902", 800, 0.75, 0, 5, 630.00),
-        ("Offset Printing Flyers", "HSN4901", 1000, 2.50, 0, 12, 2800.00),
-        ("Business Cards", "HSN4911", 500, 1.00, 5, 18, 531.00),
-        ("Letterheads", "HSN4820", 200, 3.00, 0, 18, 708.00),
-        ("Stickers", "HSN3919", 300, 1.50, 10, 12, 445.50),
-        ("Pamphlets", "HSN4902", 800, 0.75, 0, 5, 630.00),
-        ("Offset Printing Flyers", "HSN4901", 1000, 2.50, 0, 12, 2800.00),
-        ("Business Cards", "HSN4911", 500, 1.00, 5, 18, 531.00),
-        ("Letterheads", "HSN4820", 200, 3.00, 0, 18, 708.00),
-        ("Stickers", "HSN3919", 300, 1.50, 10, 12, 445.50),
-        ("Pamphlets", "HSN4902", 800, 0.75, 0, 5, 630.00),
+        (f"Sample Item {i+1}", f"HSN{i+1:04}", i+1, (i+1)*2, i % 5, (i*3) % 18, (i+1)*111.11)
+        for i in range(num_rows)
     ]
 
-    sample_sizes = {
+    # --- Handle DC toggle ---
+    dcno = session.get("dc_enabled", False)
+    if "dc" in request.args:
+        dcno = request.args.get("dc").lower() == "true"
+        session["dc_enabled"] = dcno
+    dc_numbers = [f"DC{str(i+1).zfill(3)}" for i in range(num_rows)] if dcno else []
+
+    # --- Handle sizes (sliders) ---
+    size_keys = ["header", "customer", "table", "totals", "payment", "footer", "invoice_info"]
+    current_sizes = session.get("sample_sizes", {
         "header": 13,
         "customer": 21,
         "table": 17,
         "totals": 21,
         "payment": 17,
         "footer": 17,
-    }
+        "invoice_info": 14,
+    })
 
-    # Delivery challan numbers example (empty for now)
-    dcno = True
-    dc_numbers = ["DC001", "DC002", ""]
+    for k in size_keys:
+        if k in request.args:
+            try:
+                current_sizes[k] = int(request.args[k])
+            except ValueError:
+                pass
+    session["sample_sizes"] = current_sizes
 
+    # --- Render template ---
     return render_template(
         "pre-preview-bill.html",
         invoice=sample_invoice,
@@ -1657,9 +1667,9 @@ def test_pre_preview():
         dcno=dcno,
         dc_numbers=dc_numbers,
         total_in_words="Ninety Eight Thousand Seven Hundred Sixty Five Rupees and Forty Three Paise",
-        sizes = sample_sizes
+        sizes=current_sizes,
+        rows=num_rows
     )
-
 app.jinja_env.globals.update(zip=zip)
 
 if __name__ == '__main__':

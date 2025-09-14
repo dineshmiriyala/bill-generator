@@ -20,7 +20,9 @@
         --totals-fs: 14px;
         --payment-fs: 12px;
         --footer-fs: 12px;
+        --invinfo-fs: 14px;
       }
+      .invoice-info, .invoice-info * { font-size: var(--invinfo-fs) !important; }
       .bill-header, .bill-header * { font-size: var(--hdr-fs) !important; }
       .brand-logo {
         height: calc(var(--hdr-fs) * 4) !important;
@@ -118,6 +120,7 @@
       #font-size-controls {
         background: transparent !important;
         color: #111;
+        font-size: 0.75rem;
       }
       #font-size-controls label {
         color: #333;
@@ -128,6 +131,17 @@
         color: #111;
         border: 1px solid #ccc;
         border-radius: 8px;
+      }
+      #font-size-controls .form-control-sm {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.3rem;
+      }
+      #font-size-controls .btn-sm {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.3rem;
+      }
+      #font-size-controls .form-range {
+        height: 1rem;
       }
     </style>
 </head>
@@ -146,9 +160,99 @@
     </div>
     <div class="col-lg-3 d-print-none">
       <div class="apple-panel sticky-top" style="top:70px; z-index:1040;">
-      <div id="font-size-controls" class="border rounded p-3 mb-3 bg-light-subtle">
-<!-- Hidden invoice template at bottom for pagination (not visible, used as template) -->
-<div id="page-content" style="display:none">
+        <div id="font-size-controls" class="border rounded p-3 mb-3 bg-light-subtle">
+          <h6 class="mb-3 fw-bold">Adjust Layout</h6>
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <label for="sampleRows" class="mb-0" style="color:#444; font-size:0.8rem;">No. of sample rows:</label>
+              <select id="sampleRows" class="form-select form-select-sm" style="width:auto; min-width:70px;">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="25">25</option>
+                <option value="30">30</option>
+              </select>
+              <div class="form-check form-switch ms-2 d-flex align-items-center">
+                <input class="form-check-input" type="checkbox" id="toggleDc">
+                <label class="form-check-label small ms-1" for="toggleDc">DC</label>
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm ms-2" id="resetSizesBtn" style="background-color:#ffc107; color:#fff; font-weight:bold; white-space:nowrap;">Reset Layout</button>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="headerFontSize">Header</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="8" max="18" value="{{ sizes.header }}" id="headerFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.header }}px" id="headerFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="header" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="customerFontSize">From &amp; To</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="12" max="30" value="{{ sizes.customer }}" id="customerFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.customer }}px" id="customerFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="customer" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="invoiceInfoFontSize">Invoice Info</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="10" max="24" value="{{ sizes.invoice_info }}" id="invoiceInfoFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.invoice_info }}px" id="invoiceInfoFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="invoice_info" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="tableFontSize">Items Table</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="10" max="24" value="{{ sizes.table }}" id="tableFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.table }}px" id="tableFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="table" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="totalsFontSize">Totals</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="12" max="30" value="{{ sizes.totals }}" id="totalsFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.totals }}px" id="totalsFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="totals" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="paymentFontSize">Payment Info</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="10" max="24" value="{{ sizes.payment }}" id="paymentFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.payment }}px" id="paymentFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="payment" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="footerFontSize">Footer</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="10" max="24" value="{{ sizes.footer }}" id="footerFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.footer }}px" id="footerFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="footer" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mt-3">
+            <div class="d-flex justify-content-end gap-2 mb-2">
+              <button id="zoomIn" class="btn btn-outline-primary">+</button>
+              <button id="zoomOut" class="btn btn-outline-primary">-</button>
+              <button id="saveLayout" class="btn btn-success">Save This Layout</button>
+              <a href="/" class="btn btn-secondary">Go Back to Home</a>
+            </div>
+            <div class="d-flex justify-content-end gap-2 mb-2">
+              <button id="refreshLayout" class="btn btn-info">Refresh Preview</button>
+            </div>
+          </div>
+        </div>
+        <!-- Hidden invoice template at bottom for pagination (not visible, used as template) -->
+        <div id="page-content" style="display:none">
   <div class="a4-preview">
     <div class="masthead mb-2 bill-header">
       <h1 class="visually-hidden">Sri Lakshmi Offset Printers — ESTD: 1973</h1>
@@ -177,7 +281,7 @@
         </p>
       </div>
     </div>
-    <div class="row mb-3">
+    <div class="row mb-3 invoice-info">
       <div class="col-sm-6">
         <p class="text-dark"><strong>Invoice No:</strong> {{ invoice.invoiceId }}</p>
         <p class="text-dark"><strong>Date:</strong> {{ invoice.createdAt.strftime('%d-%m-%Y') }}</p>
@@ -258,73 +362,7 @@
       </small>
     </div>
   </div>
-</div>
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <strong>Adjust layout</strong>
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="resetSizesBtn">Reset all</button>
         </div>
-        <div class="mb-2">
-          <label class="form-label small" for="headerFontSize">Header</label>
-          <div class="input-group">
-            <input type="range" class="form-range" min="8" max="18" value="{{ sizes.header }}" id="headerFontSize">
-            <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.header }}px" id="headerFontSizeNumber" data-unit="px">
-            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="header" tabindex="-1">↺</button>
-          </div>
-        </div>
-        <div class="mb-2">
-          <label class="form-label small" for="customerFontSize">From &amp; To</label>
-          <div class="input-group">
-            <input type="range" class="form-range" min="12" max="30" value="{{ sizes.customer }}" id="customerFontSize">
-            <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.customer }}px" id="customerFontSizeNumber" data-unit="px">
-            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="customer" tabindex="-1">↺</button>
-          </div>
-        </div>
-        <div class="mb-2">
-          <label class="form-label small" for="tableFontSize">Items Table</label>
-          <div class="input-group">
-            <input type="range" class="form-range" min="10" max="24" value="{{ sizes.table }}" id="tableFontSize">
-            <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.table }}px" id="tableFontSizeNumber" data-unit="px">
-            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="table" tabindex="-1">↺</button>
-          </div>
-        </div>
-        <div class="mb-2">
-          <label class="form-label small" for="totalsFontSize">Totals</label>
-          <div class="input-group">
-            <input type="range" class="form-range" min="12" max="30" value="{{ sizes.totals }}" id="totalsFontSize">
-            <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.totals }}px" id="totalsFontSizeNumber" data-unit="px">
-            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="totals" tabindex="-1">↺</button>
-          </div>
-        </div>
-        <div class="mb-2">
-          <label class="form-label small" for="paymentFontSize">Payment Info</label>
-          <div class="input-group">
-            <input type="range" class="form-range" min="10" max="24" value="{{ sizes.payment }}" id="paymentFontSize">
-            <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.payment }}px" id="paymentFontSizeNumber" data-unit="px">
-            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="payment" tabindex="-1">↺</button>
-          </div>
-        </div>
-        <div class="mb-2">
-          <label class="form-label small" for="footerFontSize">Footer</label>
-          <div class="input-group">
-            <input type="range" class="form-range" min="10" max="24" value="{{ sizes.footer }}" id="footerFontSize">
-            <input type="text" class="form-control form-control-sm" style="width:70px;" value="{{ sizes.footer }}px" id="footerFontSizeNumber" data-unit="px">
-            <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="footer" tabindex="-1">↺</button>
-          </div>
-        </div>
-      </div>
-      <div>
-        <div class="d-flex justify-content-end gap-2 mb-2">
-          <button id="zoomIn" class="btn btn-outline-primary">+</button>
-          <button id="zoomOut" class="btn btn-outline-primary">-</button>
-          <button onclick="window.print()" class="btn btn-primary">Continue to Print</button>
-          <a href="/" class="btn btn-secondary">Go Back to Home</a>
-        </div>
-        <div class="d-flex justify-content-end gap-2 mb-2">
-          <button id="refreshLayout" class="btn btn-info">Refresh Layout</button>
-        </div>
-        <p class="text-muted" style="font-size: 0.9rem;">Tip: Uncheck “Headers and footers” in print dialog for a clean copy.</p>
-      </div>
-      </div>
     </div>
   </div>
 </div>
@@ -343,17 +381,8 @@
 
   document.addEventListener('DOMContentLoaded', function(){
     // --- Default values for sliders ---
-    const defaultSizes = { header:13, customer:21, table:17, totals:21, payment:17, footer:17 };
+    const defaultSizes = { header:13, customer:21, table:17, totals:21, payment:17, footer:17, invoice_info:14 };
 
-    function setVars(){
-      document.documentElement.style.setProperty('--hdr-fs', headerRange.value + 'px');
-      document.documentElement.style.setProperty('--cust-fs', customerRange.value + 'px');
-      document.documentElement.style.setProperty('--seller-fs', customerRange.value + 'px');
-      document.documentElement.style.setProperty('--table-fs', tableRange.value + 'px');
-      document.documentElement.style.setProperty('--totals-fs', totalsRange.value + 'px');
-      document.documentElement.style.setProperty('--payment-fs', paymentRange.value + 'px');
-      document.documentElement.style.setProperty('--footer-fs', footerRange.value + 'px');
-    }
     const headerRange=document.getElementById('headerFontSize');
     const headerNumber=document.getElementById('headerFontSizeNumber');
     const customerRange=document.getElementById('customerFontSize');
@@ -366,6 +395,35 @@
     const paymentNumber=document.getElementById('paymentFontSizeNumber');
     const footerRange=document.getElementById('footerFontSize');
     const footerNumber=document.getElementById('footerFontSizeNumber');
+    const invoiceInfoRange=document.getElementById('invoiceInfoFontSize');
+    const invoiceInfoNumber=document.getElementById('invoiceInfoFontSizeNumber');
+
+    function setVars(){
+      document.documentElement.style.setProperty('--hdr-fs', headerRange.value + 'px');
+      document.documentElement.style.setProperty('--cust-fs', customerRange.value + 'px');
+      document.documentElement.style.setProperty('--seller-fs', customerRange.value + 'px');
+      document.documentElement.style.setProperty('--table-fs', tableRange.value + 'px');
+      document.documentElement.style.setProperty('--totals-fs', totalsRange.value + 'px');
+      document.documentElement.style.setProperty('--payment-fs', paymentRange.value + 'px');
+      document.documentElement.style.setProperty('--footer-fs', footerRange.value + 'px');
+      document.documentElement.style.setProperty('--invinfo-fs', invoiceInfoRange.value + 'px');
+    }
+
+    // --- Set initial sizes from backend defaults (Jinja) ---
+    headerRange.value = {{ sizes.header }};
+    headerNumber.value = "{{ sizes.header }}px";
+    customerRange.value = {{ sizes.customer }};
+    customerNumber.value = "{{ sizes.customer }}px";
+    tableRange.value = {{ sizes.table }};
+    tableNumber.value = "{{ sizes.table }}px";
+    totalsRange.value = {{ sizes.totals }};
+    totalsNumber.value = "{{ sizes.totals }}px";
+    paymentRange.value = {{ sizes.payment }};
+    paymentNumber.value = "{{ sizes.payment }}px";
+    footerRange.value = {{ sizes.footer }};
+    footerNumber.value = "{{ sizes.footer }}px";
+    invoiceInfoRange.value = {{ sizes.invoice_info }};
+    invoiceInfoNumber.value = "{{ sizes.invoice_info }}px";
 
     function bindSliderAndNumber(slider, number){
       if(!slider || !number) return;
@@ -384,7 +442,7 @@
       });
     }
 
-    [headerRange,customerRange,tableRange,totalsRange,paymentRange,footerRange].forEach(r=>{
+    [headerRange,customerRange,tableRange,totalsRange,paymentRange,footerRange,invoiceInfoRange].forEach(r=>{
       if(r) r.addEventListener('input', setVars);
     });
 
@@ -394,6 +452,7 @@
     bindSliderAndNumber(totalsRange, totalsNumber);
     bindSliderAndNumber(paymentRange, paymentNumber);
     bindSliderAndNumber(footerRange, footerNumber);
+    bindSliderAndNumber(invoiceInfoRange, invoiceInfoNumber);
 
     // --- Global reset button ---
     document.getElementById('resetSizesBtn').addEventListener('click', function(){
@@ -404,7 +463,8 @@
         table: [tableRange, tableNumber],
         totals: [totalsRange, totalsNumber],
         payment: [paymentRange, paymentNumber],
-        footer: [footerRange, footerNumber]
+        footer: [footerRange, footerNumber],
+        invoice_info: [invoiceInfoRange, invoiceInfoNumber]
       };
       for (const key in defaultSizes) {
         if (map[key]) {
@@ -426,7 +486,8 @@
           table: [tableRange, tableNumber],
           totals: [totalsRange, totalsNumber],
           payment: [paymentRange, paymentNumber],
-          footer: [footerRange, footerNumber]
+          footer: [footerRange, footerNumber],
+          invoice_info: [invoiceInfoRange, invoiceInfoNumber]
         };
         if(map[target] && typeof defaultSizes[target] !== 'undefined') {
           map[target][0].value = defaultSizes[target];
@@ -436,13 +497,10 @@
       });
     });
 
-    // On page load, set number fields with px
-    headerNumber.value = headerRange.value + "px";
-    customerNumber.value = customerRange.value + "px";
-    tableNumber.value = tableRange.value + "px";
-    totalsNumber.value = totalsRange.value + "px";
-    paymentNumber.value = paymentRange.value + "px";
-    footerNumber.value = footerRange.value + "px";
+    // Set initial sample rows and DC toggle state from backend (Jinja)
+    document.getElementById("sampleRows").value = "{{ rows if rows is defined else 5 }}";
+    const dcToggle = document.getElementById("toggleDc");
+    dcToggle.checked = {{ 'true' if dcno else 'false' }};
     setVars();
 
     // --- Invoice pagination logic ---
@@ -523,12 +581,69 @@
     }
     window.paginateInvoice = paginateInvoice;
 
+
     // Event listener for refreshLayout button
     document.getElementById("refreshLayout").addEventListener("click", paginateInvoice);
+
+    // --- Save Layout, Sample Rows, and DC Toggle Event Listeners ---
+    // Save This Layout button event
+    document.getElementById("saveLayout").addEventListener("click", function(){
+      const payload = {
+        header: headerRange.value,
+        customer: customerRange.value,
+        table: tableRange.value,
+        totals: totalsRange.value,
+        payment: paymentRange.value,
+        footer: footerRange.value,
+        invoice_info: invoiceInfoRange.value
+      };
+      fetch("/save-layout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(r => r.json()).then(data => {
+        alert("Layout saved successfully!");
+      }).catch(err => {
+        console.error("Error saving layout:", err);
+        alert("Failed to save layout.");
+      });
+    });
+
+    // Helper to gather all slider values and return as query string
+    function getSliderQueryParams(numRows, dcEnabled) {
+      const params = new URLSearchParams();
+      params.append('rows', numRows);
+      params.append('dc', dcEnabled);
+      params.append('header', headerRange.value);
+      params.append('customer', customerRange.value);
+      params.append('table', tableRange.value);
+      params.append('totals', totalsRange.value);
+      params.append('payment', paymentRange.value);
+      params.append('footer', footerRange.value);
+      params.append('invoice_info', invoiceInfoRange.value);
+      return params.toString();
+    }
+
+    // Sample rows select event
+    document.getElementById("sampleRows").addEventListener("change", function(){
+      const numRows = this.value;
+      const dcEnabled = document.getElementById("toggleDc").checked;
+      const query = getSliderQueryParams(numRows, dcEnabled);
+      window.location.href = `/test-pre-preview?${query}`;
+    });
+
+    // DC toggle switch event
+    dcToggle.addEventListener("change", function(){
+      const dcEnabled = this.checked;
+      const numRows = document.getElementById("sampleRows").value;
+      const query = getSliderQueryParams(numRows, dcEnabled);
+      window.location.href = `/test-pre-preview?${query}`;
+    });
 
     // Call paginateInvoice on load
     paginateInvoice();
   });
+
   // Zoom in/out logic
   let currentZoom = 1;
   // We need to zoom all .a4-preview pages
