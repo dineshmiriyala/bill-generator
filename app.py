@@ -72,26 +72,20 @@ def _desktop_data_dir(app_name: str) -> Path:
         return Path.home() / ".local" / "share" / app_name
 
 
-# Determine DB path before calling migrate_db
-if os.getenv("BG_DESKTOP") == "1":
-    db_file = _desktop_data_dir("SLO BILL") / "app.db"
-else:
-    db_file = basedir / "db" / "app.db"
-
-migrate_db(db_file.as_posix())  # <- Pass resolved DB path
-
 APP_NAME = "SLO BILL"
 is_desktop = os.getenv("BG_DESKTOP") == "1"
 
+# --- Unified DB config and migration ---
 if is_desktop:
     data_dir = _desktop_data_dir(APP_NAME)
     data_dir.mkdir(parents=True, exist_ok=True)
     db_file = data_dir / "app.db"
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file.as_posix()}"
 else:
     db_file = basedir / "db" / "app.db"
     db_file.parent.mkdir(parents=True, exist_ok=True)
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file.as_posix()}"
+
+migrate_db(db_file.as_posix())
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file.as_posix()}"
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -1535,7 +1529,7 @@ def backup_page():
             uploaded_path = basedir / "uploaded_backup.db"
             f.save(uploaded_path)
 
-            # Overwrite live DB with uploaded backup
+            # Overwrite live DB with uploaded backup (always to db_file)
             shutil.copy2(uploaded_path, db_file)
 
             # Log restore as a backup event
@@ -1552,7 +1546,6 @@ def backup_page():
         days_ago = (datetime.now() - last_record.occurred_at).days + 1
 
     logs = lastBackup.query.order_by(lastBackup.occurred_at.desc()).limit(5).all()
-
     for log in logs:
         if log.occurred_at:
             log.days_ago = (datetime.utcnow() - log.occurred_at).days
@@ -1582,19 +1575,25 @@ def backup_now():
     if is_desktop:
         # Desktop mode: Save backup in Documents/SLO_BILL_BACKUPS
         documents_dir = Path.home() / "Documents"
+        if not documents_dir.exists():
+            documents_dir = Path.home()
         backup_dir = documents_dir / "SLO_BILL_BACKUPS"
         backup_dir.mkdir(parents=True, exist_ok=True)
 
         ts = new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')
         backup_path = backup_dir / f"backup_{ts}.db"
 
-        shutil.copy2(db_file, backup_path)
+        # Copy from the correct db_file path
+        if not db_file.exists():
+            flash(f"⚠️ No DB file found at {db_file}", "danger")
+        else:
+            shutil.copy2(db_file, backup_path)
+            flash(f"✅ Backup saved to {backup_path}", "success")
 
-        flash(f"Backup saved to {backup_path}", "success")
         return redirect(url_for('backup_page'))
 
     else:
-        # Web mode: direct download
+        # Web mode: direct download from db_file
         buf = io.BytesIO()
         with open(db_file, 'rb') as f:
             buf.write(f.read())
@@ -1606,7 +1605,6 @@ def backup_now():
             download_name=f"backup_{new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')}.db",
             mimetype="application/octet-stream"
         )
-
 # --- Common builder for sample invoice context ---
 
 def _build_sample_invoice_context():
