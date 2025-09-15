@@ -23,3 +23,7 @@ static/img/.DS_Store
 
 # Alembic logs (keep versions/)
 migrations/*.log
+
+BillGenerator.spec
+
+build/
