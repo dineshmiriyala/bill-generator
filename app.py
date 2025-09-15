@@ -1519,7 +1519,6 @@ def latest_bill_preview():
                            total_in_words=amount_to_words(current_invoice.totalAmount),
                            sizes=current_sizes)
 
-
 # --- Backup Feature ---
 @app.route('/backup', methods=['GET', 'POST'])
 def backup_page():
@@ -1550,7 +1549,7 @@ def backup_page():
             flash("Invalid file. Please upload a .db backup.", "danger")
 
     if last_record:
-        days_ago = (datetime.now() - last_record.occurred_at).days
+        days_ago = (datetime.now() - last_record.occurred_at).days + 1
 
     logs = lastBackup.query.order_by(lastBackup.occurred_at.desc()).limit(5).all()
 
@@ -1571,7 +1570,9 @@ def backup_page():
 @app.route('/backup/now')
 def backup_now():
     """
-    Create backup of the DB and serve it as a direct download to the user (web) or save to Documents (desktop).
+    Create backup of the DB.
+    - In desktop mode: save into Documents/SLO_BILL_BACKUPS and flash a success message.
+    - In web mode: serve as a direct download to the user.
     """
     # Log this backup in DB
     new_entry = lastBackup(note="Backup downloaded")
@@ -1580,34 +1581,31 @@ def backup_now():
 
     if is_desktop:
         # Desktop mode: Save backup in Documents/SLO_BILL_BACKUPS
-        from pathlib import Path
-        import shutil
-        import os
-        # Compute backup dir under Documents
         documents_dir = Path.home() / "Documents"
         backup_dir = documents_dir / "SLO_BILL_BACKUPS"
         backup_dir.mkdir(parents=True, exist_ok=True)
-        # Compose filename with timestamp
+
         ts = new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')
         backup_path = backup_dir / f"backup_{ts}.db"
-        # Copy db file to backup_path
+
         shutil.copy2(db_file, backup_path)
+
         flash(f"Backup saved to {backup_path}", "success")
         return redirect(url_for('backup_page'))
+
     else:
         # Web mode: direct download
         buf = io.BytesIO()
         with open(db_file, 'rb') as f:
             buf.write(f.read())
         buf.seek(0)
+
         return send_file(
             buf,
             as_attachment=True,
             download_name=f"backup_{new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')}.db",
             mimetype="application/octet-stream"
         )
-
-
 
 # --- Common builder for sample invoice context ---
 
