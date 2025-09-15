@@ -12,13 +12,24 @@
       body {
         font-family: 'Poppins', sans-serif;
       }
+      :root {
+        --hdr-fs: {{ (sizes.header if sizes is defined and sizes.header is defined else 13) }}px;
+        --cust-fs: {{ (sizes.customer if sizes is defined and sizes.customer is defined else 16) }}px;
+        --invinfo-fs: {{ (sizes.invoice_info if sizes is defined and sizes.invoice_info is defined else 13) }}px;
+        --table-fs: {{ (sizes.table if sizes is defined and sizes.table is defined else 13) }}px;
+        --totals-fs: {{ (sizes.totals if sizes is defined and sizes.totals is defined else 15) }}px;
+        --payment-fs: {{ (sizes.payment if sizes is defined and sizes.payment is defined else 13) }}px;
+        --footer-fs: {{ (sizes.footer if sizes is defined and sizes.footer is defined else 10) }}px;
+      }
       .brand-logo {
-        height: 100px;
+        height: calc(var(--hdr-fs) * 4);
+        width: auto;
       }
       @media print {
         .brand-logo {
-          height: 76px !important;
-          max-width: 516px !important;
+          height: calc(var(--hdr-fs) * 4) !important;
+          width: auto !important;
+          max-width: none !important;
         }
       }
       .signature-img {
@@ -53,19 +64,16 @@
         margin: 16mm;
       }
       @media print {
-        body { font-size: 16px !important; line-height: 1.35; }
+        body { line-height: 1.35; }
         .container { max-width: 100% !important; }
-        /* Headings scaled between 12–18px range */
-        h1 { font-size: 20px !important; }
-        h2 { font-size: 20px !important; }
-        h3 { font-size: 19px !important; }
-        h4 { font-size: 18px !important; }
-        h5 { font-size: 17px !important; }
-        h6 { font-size: 16px !important; }
-        /* Tables and misc text */
-        table, .table, .table th, .table td { font-size: 16px !important; }
-        .payment-info { font-size: 16px !important; }
-        .text-muted { color: #6c757d !important; }
+        /* Use layoutConfig sizes for print as well */
+        .bill-heading { font-size: var(--hdr-fs) !important; }
+        .from-to-block, .from-to-block * { font-size: var(--cust-fs) !important; }
+        .invoice-info-block, .invoice-info-block * { font-size: var(--invinfo-fs) !important; }
+        .items-table, .items-table th, .items-table td { font-size: var(--table-fs) !important; }
+        .totals-block, .totals-block * { font-size: var(--totals-fs) !important; }
+        .payment-info { font-size: var(--payment-fs) !important; }
+        .footer-note, .services small, .thanks-note { font-size: var(--footer-fs) !important; }
         /* Keep logo and signature tidy for print */
         /* .brand-logo { height: 42px !important; } */
         .signature-img { max-width: 130px !important; }
@@ -74,11 +82,20 @@
         .table { border-color: #b5b5b5 !important; }
         .table-bordered > :not(caption) > * { border-width: 0.4px !important; }
         .table-bordered td, .table-bordered th { border-width: 0.4px !important; }
-        .services small { font-size: 0.55rem !important; font-weight: 400 !important; line-height: 0.75rem !important; }
+        .services small { font-weight: 400 !important; line-height: 0.75rem !important; }
         .fs-5 { font-size: 1.15rem !important; }
         .fs-4 { font-size: 1.25rem !important; }
       }
-      .bill-heading { text-align: center; margin-top:4px; font-size:20px; font-weight:bold; color:#000; }
+      /* Apply layoutConfig sizes */
+      .bill-heading { font-size: var(--hdr-fs) !important; }
+      .masthead, .masthead *, .bill-heading { font-size: var(--hdr-fs) !important; }
+      .from-to-block, .from-to-block * { font-size: var(--cust-fs) !important; }
+      .invoice-info-block, .invoice-info-block * { font-size: var(--invinfo-fs) !important; }
+      .items-table, .items-table th, .items-table td { font-size: var(--table-fs) !important; }
+      .totals-block, .totals-block * { font-size: var(--totals-fs) !important; }
+      .payment-info { font-size: var(--payment-fs) !important; }
+      .footer-note, .services small, .thanks-note { font-size: var(--footer-fs) !important; }
+      .bill-heading { text-align: center; margin-top:4px; font-weight:bold; color:#000; }
       .highlight-info { color:#1a2a6c; }
       .masthead { text-align: left; }
     </style>
@@ -92,7 +109,7 @@
           <h2 class="bill-heading">Bill of Supply</h2>
         </div>
 
-        <div class="row mb-4">
+        <div class="row mb-4 from-to-block">
             <div class="col-sm-6">
                 <h5>From:</h5>
                 <p class="fs-5">
@@ -102,7 +119,7 @@
                     Cell: 9848992207<br>
                     email: haripress@gmail.com<br>
                 </p>
-                <small class="text-muted" style="font-size: 0.6rem;">Composition Taxable Person. Not eligible to collect Tax on supplies.</small>
+                <small class="text-muted footer-note">Composition Taxable Person. Not eligible to collect Tax on supplies.</small>
             </div>
             <div class="col-sm-6 text-end">
                 <h5>To:</h5>
@@ -110,19 +127,19 @@
                     {% if customer.company %}<strong class="fs-4">{{ customer.company }}</strong><br>{% endif %}
                     {% if customer.address %}{{ customer["address"] }}<br>{% endif %}
                     {% if customer.gst %}GST: {{ customer["gst"] }}<br>{% endif %}
-                    {% if customer.phone %}ID_No: {{ customer["phone"] }}{% endif %}
+                    {% if customer.phone %}Phone: {{ customer["phone"] }}{% endif %}
                 </p>
             </div>
         </div>
 
-        <div class="row mb-3">
+        <div class="row mb-3 invoice-info-block">
             <div class="col-sm-6">
                 <p class="text-dark"><strong>Invoice No:</strong> {{ invoice.invoiceId }}</p>
                 <p class="text-dark"><strong>Date:</strong> {{ invoice.createdAt.strftime('%d-%m-%Y') }}</p>
             </div>
         </div>
 
-        <table class="table table-bordered">
+        <table class="table table-bordered items-table">
           {% if dcno %}
           <colgroup>
             <col style="width:6%">
@@ -163,7 +180,7 @@
             </tbody>
         </table>
 
-        <div class="text-end">
+        <div class="text-end totals-block">
             <h5>Total: ₹ <strong><span class="money" data-amount="{{ invoice.totalAmount or 0 }}"></span></strong></h5>
             {% if total_in_words %}
             <div class="text-muted" style="font-size: 0.95rem;">Amount in words: <em>{{ total_in_words }}</em></div>
@@ -171,7 +188,7 @@
         </div>
 
         <div class="mt-3 text-end">
-          <small class="text-muted" style="font-size: 0.7rem;">Computer generated receipt – signature not required</small>
+          <small class="text-muted footer-note">Computer generated receipt – signature not required</small>
         </div>
 
         <div class="row mt-5">
@@ -189,13 +206,13 @@
 
         <hr class="my-3" style="border:0;border-top:2px solid #c8c8c8;" />
         <div class="services text-center mt-2">
-          <small class="text-muted" style="font-size: 0.55rem; line-height: 0.85rem;">
+          <small class="text-muted">
             Services: Multi‑colour Offset Printing • Digital Printing • Brochures • Stickers • Invitations • Pamphlets • All Printing Works
           </small>
         </div>
 
         <div class="text-center mt-3">
-          <small class="text-muted" style="font-size: 0.75rem;">
+          <small class="text-muted thanks-note">
             Thank you for your business! For inquiries or bulk orders, reach us at <strong>9848992207</strong> or <strong>haripress@gmail.com</strong>.
           </small>
         </div>
@@ -205,6 +222,7 @@
             <p class="mt-2 text-muted" style="font-size: 0.9rem;">Tip: Uncheck “Headers and footers” in print dialog for a clean copy.</p>
         </div>
     </div>
+
 
 <script>
   (function(){
@@ -217,6 +235,19 @@
       el.textContent = formatINR(v);
     });
   })();
+</script>
+
+<script>
+  // Debug: log CSS variable values from :root
+  const rootStyles = getComputedStyle(document.documentElement);
+  console.log("LayoutConfig sizes in use:");
+  console.log("Header:", rootStyles.getPropertyValue('--hdr-fs'));
+  console.log("Customer:", rootStyles.getPropertyValue('--cust-fs'));
+  console.log("Invoice Info:", rootStyles.getPropertyValue('--invinfo-fs'));
+  console.log("Table:", rootStyles.getPropertyValue('--table-fs'));
+  console.log("Totals:", rootStyles.getPropertyValue('--totals-fs'));
+  console.log("Payment:", rootStyles.getPropertyValue('--payment-fs'));
+  console.log("Footer:", rootStyles.getPropertyValue('--footer-fs'));
 </script>
 
 </body>

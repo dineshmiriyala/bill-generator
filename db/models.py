@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from sqlalchemy import event, func, select
+import json
 
 db = SQLAlchemy()
 
@@ -81,5 +82,77 @@ class user(db.Model):
     role_id = db.Column(db.Integer, db.ForeignKey("role.id"))
     is_active = db.Column(db.Boolean, default = True)
     is_admin = db.Column(db.Boolean, default = False)
+
+class lastBackup(db.Model):
+    __tablename__ = "last_backup"
+
+    id = db.Column(db.Integer, primary_key=True)
+    occurred_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index = True)
+    note = db.Column(db.String(255))
+
+    # audit fields
+    created_at = db.Column(db.DateTime, nullable = False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
+
+class layoutConfig(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sizes_json = db.Column(db.Text, nullable=False, default=json.dumps({
+        "header": 13,
+        "customer": 16,
+        "table": 13,
+        "totals": 15,
+        "payment": 13,
+        "footer": 10,
+        "invoice_info": 13
+    }))
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False
+    )
+
+    def get_sizes(self):
+        """Return sizes as Python Dictionary."""
+        try:
+            return json.loads(self.sizes_json)
+        except (ValueError, TypeError):
+            return {}
+
+    def set_sizes(self, sizes: dict):
+        """Store sizes dict as json string."""
+        self.sizes_json = json.dumps(sizes)
+
+    def reset_sizes(self):
+        """Reset sizes to default values and save."""
+        default_sizes = {
+            "header": 13,
+            "customer": 16,
+            "table": 13,
+            "totals": 15,
+            "payment": 13,
+            "footer": 10,
+            "invoice_info": 13
+        }
+        self.set_sizes(default_sizes)
+        db.session.commit()
+
+    @classmethod
+    def get_or_create(cls, sizes: dict = None):
+        """Return layout config instance or create if it doesn't exist."""
+        instance = cls.query.first()
+        if not instance:
+            instance = cls()
+            if sizes:
+                instance.set_sizes(sizes)
+            db.session.add(instance)
+            db.session.commit()
+        return instance
 
 db.Index('ix_invoiceItem_invoice_item', invoiceItem.invoiceId, invoiceItem.itemId)

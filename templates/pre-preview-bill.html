@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ invoice.invoiceId }} - Invoice</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      .a4-preview {
+        transition: transform 0.3s ease;
+      }
+      :root {
+        --hdr-fs: {{ sizes.header }}px;
+        --cust-fs: {{ sizes.customer }}px;
+        --seller-fs: {{ sizes.customer }}px;
+        --table-fs: {{ sizes.table }}px;
+        --totals-fs: {{ sizes.totals }}px;
+        --payment-fs: {{ sizes.payment }}px;
+        --footer-fs: {{ sizes.footer }}px;
+        --invinfo-fs: {{ sizes.invoice_info }}px;
+      }
+      .invoice-info, .invoice-info * { font-size: var(--invinfo-fs) !important; }
+      .bill-header, .bill-header * { font-size: var(--hdr-fs) !important; }
+      .brand-logo {
+        height: calc(var(--hdr-fs) * 4) !important;
+        max-height: 120px;
+      }
+      .customer-block, .customer-block * { font-size: var(--cust-fs) !important; }
+      .seller-block, .seller-block * { font-size: var(--seller-fs) !important; }
+      .line-items, .line-items *, table, table * { font-size: var(--table-fs) !important; }
+      .totals, .totals * { font-size: var(--totals-fs) !important; }
+      .payment-info, .payment-info * { font-size: var(--payment-fs) !important; }
+      .services, .services *, .a4-preview .text-center small { font-size: var(--footer-fs) !important; }
+      @media print { #font-size-controls { display:none!important; } }
+      body {
+        font-family: 'Poppins', sans-serif;
+        background: #f8f9fa;
+      }
+      @media print {
+        body { line-height: 1.35; }
+        .bill-header, .bill-header * { font-size: var(--hdr-fs) !important; }
+        .customer-block, .customer-block * { font-size: var(--cust-fs) !important; }
+        .seller-block, .seller-block * { font-size: var(--seller-fs) !important; }
+        .line-items, .line-items *, table, table * { font-size: var(--table-fs) !important; }
+        .totals, .totals * { font-size: var(--totals-fs) !important; }
+        /* Keep logo and signature tidy for print */
+        /* .brand-logo { height: 42px !important; } */
+        .signature-img { max-width: 130px !important; }
+        /* Ultra-thin table borders (print/PDF) */
+        table.table { table-layout: auto !important; width: 100% !important; }
+        .table { border-color: #b5b5b5 !important; }
+        .table-bordered > :not(caption) > * { border-width: 0.4px !important; }
+        .table-bordered td, .table-bordered th { border-width: 0.4px !important; }
+        .services small { font-size: 0.55rem !important; font-weight: 400 !important; line-height: 0.75rem !important; }
+        /* Remove outline/shadow for .a4-preview and handle page breaks for print/PDF */
+        .a4-preview {
+          border: none !important;
+          box-shadow: none !important;
+          margin: 0;
+          height: auto !important;
+          min-height: 297mm;
+        }
+        .a4-preview > * {
+          page-break-inside: avoid;
+        }
+        .page-break {
+          page-break-before: always;
+        }
+      }
+      .bill-heading {
+        text-align: center;
+        margin-top:4px;
+        font-size: var(--hdr-fs) !important;
+        font-weight:bold;
+        color:#000;
+      }
+      .highlight-info { color:#1a2a6c; }
+      .masthead { text-align: left; }
+      .a4-preview {
+        width: 210mm;
+        min-height: 297mm;
+        background: white;
+        margin: auto;
+        padding: 20mm;
+        box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        border: 1px solid #ccc;
+      }
+      .apple-panel {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border: none;
+        color: #333;
+        width: 22vw;
+        max-width: 500px;
+        min-width: 280px;
+        flex: 1 1 auto;
+        max-height: 100vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        align-self: flex-end;
+        margin-left: auto;
+        transform: scale(0.85)
+      }
+      .apple-panel .panel-content {
+        transform: scale(1); /* shrink content */
+        transform-origin: top center;
+        width: 100%;
+        height: 100%;
+      }
+      /* Make font size controls panel flex column for responsive stacking */
+      #font-size-controls {
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Responsive button groupings in apple-panel */
+      .apple-panel .d-flex.justify-content-end.gap-2.mb-2 {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: center !important;
+        display: flex;
+      }
+
+      /* Make buttons and links inside apple-panel shrink gracefully */
+      .apple-panel button,
+      .apple-panel a {
+        flex: 1 1 auto;
+        min-width: 80px;
+      }
+      .page-break {
+        display: block;
+        height: 0;
+        margin: 0;
+        border: none;
+      }
+      @media screen {
+        .page-break {
+          display: block;
+          break-before: page;
+          margin-top: 20px;
+          border-top: 2px dashed #ccc;
+        }
+      }
+      .page-break-line {
+        font-size: 0.9rem;
+        color: #888;
+      }
+      @media print {
+        .page-break-line { display: none !important; }
+      }
+      #font-size-controls h6 {
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
+        color: #333;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 6px;
+        margin-bottom: 12px;
+      }
+    </style>
+</head>
+<body>
+
+<div class="sticky-top bg-light p-2" style="z-index:1050;">
+  <button onclick="history.back()" class="btn btn-outline-secondary">← Go Back</button>
+</div>
+
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-lg-9">
+      <div id="invoice-wrapper">
+        <!-- Pagination output will be injected here -->
+      </div> <!-- End #invoice-wrapper -->
+    </div>
+    <div class="col-lg-3 d-print-none">
+      <div class="apple-panel sticky-top" style="top:70px; z-index:1040;">
+        <div class="panel-content">
+        <div id="font-size-controls" class="border rounded p-3 mb-3 bg-light-subtle">
+          <h6 class="mb-3 fw-bold">Adjust Layout</h6>
+          <div class="d-flex justify-content-end mb-3">
+            <button type="button" class="btn btn-sm btn-danger fw-bold text-white" id="resetSizesBtn" style="white-space:nowrap;">Reset to Defaults</button>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="headerFontSize">Header</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="8" max="18" value="{{ sizes.header }}" id="headerFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.header }}px" id="headerFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="header" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="customerFontSize">From &amp; To</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="12" max="20" value="{{ sizes.customer }}" id="customerFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.customer }}px" id="customerFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="customer" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="invoiceInfoFontSize">Invoice Info</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="10" max="16" value="{{ sizes.invoice_info }}" id="invoiceInfoFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.invoice_info }}px" id="invoiceInfoFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="invoice_info" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="tableFontSize">Items Table</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="10" max="16" value="{{ sizes.table }}" id="tableFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.table }}px" id="tableFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="table" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="totalsFontSize">Totals</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="12" max="18" value="{{ sizes.totals }}" id="totalsFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.totals }}px" id="totalsFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="totals" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="paymentFontSize">Payment Info</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="10" max="16" value="{{ sizes.payment }}" id="paymentFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.payment }}px" id="paymentFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="payment" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small" for="footerFontSize">Footer</label>
+            <div class="input-group d-flex align-items-center gap-2">
+              <input type="range" class="form-range flex-grow-1" min="8" max="12" value="{{ sizes.footer }}" id="footerFontSize">
+              <input type="text" class="form-control form-control-sm" style="max-width:70px; margin-left:4px;" value="{{ sizes.footer }}px" id="footerFontSizeNumber" data-unit="px">
+              <button class="btn btn-sm btn-outline-danger reset-single" type="button" data-target="footer" tabindex="-1">↺</button>
+            </div>
+          </div>
+          <div class="mt-3">
+            <div class="d-flex justify-content-end gap-2 mb-2">
+              <button id="zoomIn" class="btn btn-outline-primary">+</button>
+              <button id="zoomOut" class="btn btn-outline-primary">-</button>
+              <button id="saveLayout" class="btn btn-success">Save</button>
+              <button id="cancelLayout" class="btn btn-outline-secondary">Cancel</button>
+              <a href="/" class="btn btn-secondary">Home</a>
+            </div>
+            <div class="d-flex justify-content-end gap-2 mb-2">
+              <button id="refreshLayout" class="btn btn-info">Refresh Preview</button>
+            </div>
+          </div>
+        </div>
+        <!-- Hidden invoice template at bottom for pagination (not visible, used as template) -->
+        <div id="page-content" style="display:none">
+  <div class="a4-preview">
+    <div class="masthead mb-2 bill-header">
+      <h1 class="visually-hidden">Sri Lakshmi Offset Printers — ESTD: 1973</h1>
+      <img class="brand-logo" src="{{ url_for('static', filename='img/brand-wordmark.svg') }}" alt="Sri Lakshmi Offset Printers — ESTD: 1973">
+      <h2 class="bill-heading">Bill of Supply</h2>
+    </div>
+    <div class="row mb-4">
+      <div class="col-sm-6 seller-block">
+        <h5>From:</h5>
+        <p class="fs-5">
+          <strong class="fs-4">Sri Lakshmi Offset Printers</strong><br>
+          PAMARRU, Krishna Dist - 521157<br>
+          GST: 37AVEPM5991R3ZG<br>
+          Cell: 9848992207<br>
+          email: haripress@gmail.com<br>
+        </p>
+        <small class="text-muted" style="font-size: 0.6rem;">Composition Taxable Person. Not eligible to collect Tax on supplies.</small>
+      </div>
+      <div class="col-sm-6 text-end customer-block">
+        <h5>To:</h5>
+        <p class="text-dark fs-5">
+          {% if customer.company %}<strong class="fs-4">{{ customer.company }}</strong><br>{% endif %}
+          {% if customer.address %}{{ customer["address"] }}<br>{% endif %}
+          {% if customer.gst %}GST: {{ customer["gst"] }}<br>{% endif %}
+          {% if customer.phone %}Phone: {{ customer["phone"] }}{% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="row mb-3 invoice-info">
+      <div class="col-sm-6">
+        <p class="text-dark"><strong>Invoice No:</strong> {{ invoice.invoiceId }}</p>
+        <p class="text-dark"><strong>Date:</strong> {{ invoice.createdAt.strftime('%d-%m-%Y') }}</p>
+      </div>
+    </div>
+    <div class="line-items">
+      <table class="table table-bordered">
+        {% if dcno %}
+        <colgroup>
+          <col style="width:6%">
+          <col style="width:58%">
+          <col style="width:16%">
+          <col style="width:10%">
+          <col style="width:10%">
+        </colgroup>
+        {% else %}
+        <colgroup>
+          <col style="width:6%">
+          <col style="width:64%">
+          <col style="width:15%">
+          <col style="width:15%">
+        </colgroup>
+        {% endif %}
+        <thead class="table-light text-center">
+          <tr>
+            <th>Serial No</th>
+            <th>Description</th>
+            {% if dcno %}<th>Delivery Challan No</th>{% endif %}
+            <th>Quantity</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td class="text-center">{{ loop.index }}</td>
+            <td class="text-start">{{ item[0] }}</td>
+            {% if dcno %}
+            <td class="text-center">{{ dc_numbers[loop.index0] if dc_numbers is defined and dc_numbers|length > loop.index0 else '' }}</td>
+            {% endif %}
+            <td class="text-center">{{ item[2] }}</td>
+            <td class="text-center"><span class="money" data-amount="{{ item[6] }}"></span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="totals text-end mt-4">
+      <h5>Total: ₹ <strong><span class="money" data-amount="{{ invoice.totalAmount or 0 }}"></span></strong></h5>
+      {% if total_in_words %}
+      <div class="text-muted" style="font-size: 0.95rem;">Amount in words: <em>{{ total_in_words }}</em></div>
+      {% endif %}
+    </div>
+    <div class="mt-3 text-end">
+      <small class="text-muted" style="font-size: 0.7rem;">Computer generated receipt – signature not required</small>
+    </div>
+    <div class="row mt-5">
+      <div class="col-12 payment-info border rounded p-3 bg-light-subtle">
+        <h6 class="mb-2">Payment Information</h6>
+        <div>
+          Account Name: <strong>Sri Lakshmi Offset Printers</strong><br>
+          Bank: <strong>State Bank of India, Pamarru</strong><br>
+          Account Number: <strong>38588014977</strong><br>
+          IFSC: <strong>SBIN0002776</strong><br>
+          PhonePe/GPay: <strong>9848992207</strong>
+        </div>
+      </div>
+    </div>
+    <hr class="my-3" style="border:0;border-top:2px solid #c8c8c8;" />
+    <div class="services text-center mt-2">
+      <small class="text-muted" style="font-size: 0.55rem; line-height: 0.85rem;">
+        Services: Multi‑colour Offset Printing • Digital Printing • Brochures • Stickers • Invitations • Pamphlets • All Printing Works
+      </small>
+    </div>
+    <div class="text-center mt-3">
+      <small class="text-muted" style="font-size: 0.75rem;">
+        Thank you for your business! For inquiries or bulk orders, reach us at <strong>9848992207</strong> or <strong>haripress@gmail.com</strong>.
+      </small>
+    </div>
+  </div>
+        </div>
+        </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    function formatINR(n){
+      const num = Number(n||0);
+      return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    document.querySelectorAll('.money').forEach(el => {
+      const v = el.getAttribute('data-amount');
+      el.textContent = formatINR(v);
+    });
+  })();
+
+  document.addEventListener('DOMContentLoaded', function(){
+    // --- Default values for sliders (from backend) ---
+    const defaultSizes = {{ sizes|tojson }};
+
+    const headerRange=document.getElementById('headerFontSize');
+    const headerNumber=document.getElementById('headerFontSizeNumber');
+    const customerRange=document.getElementById('customerFontSize');
+    const customerNumber=document.getElementById('customerFontSizeNumber');
+    const tableRange=document.getElementById('tableFontSize');
+    const tableNumber=document.getElementById('tableFontSizeNumber');
+    const totalsRange=document.getElementById('totalsFontSize');
+    const totalsNumber=document.getElementById('totalsFontSizeNumber');
+    const paymentRange=document.getElementById('paymentFontSize');
+    const paymentNumber=document.getElementById('paymentFontSizeNumber');
+    const footerRange=document.getElementById('footerFontSize');
+    const footerNumber=document.getElementById('footerFontSizeNumber');
+    const invoiceInfoRange=document.getElementById('invoiceInfoFontSize');
+    const invoiceInfoNumber=document.getElementById('invoiceInfoFontSizeNumber');
+
+    function setVars(){
+      document.documentElement.style.setProperty('--hdr-fs', headerRange.value + 'px');
+      document.documentElement.style.setProperty('--cust-fs', customerRange.value + 'px');
+      document.documentElement.style.setProperty('--seller-fs', customerRange.value + 'px');
+      document.documentElement.style.setProperty('--table-fs', tableRange.value + 'px');
+      document.documentElement.style.setProperty('--totals-fs', totalsRange.value + 'px');
+      document.documentElement.style.setProperty('--payment-fs', paymentRange.value + 'px');
+      document.documentElement.style.setProperty('--footer-fs', footerRange.value + 'px');
+      document.documentElement.style.setProperty('--invinfo-fs', invoiceInfoRange.value + 'px');
+    }
+
+    // --- Set initial sizes from backend defaults (Jinja) ---
+    headerRange.value = {{ sizes.header }};
+    headerNumber.value = "{{ sizes.header }}px";
+    customerRange.value = {{ sizes.customer }};
+    customerNumber.value = "{{ sizes.customer }}px";
+    tableRange.value = {{ sizes.table }};
+    tableNumber.value = "{{ sizes.table }}px";
+    totalsRange.value = {{ sizes.totals }};
+    totalsNumber.value = "{{ sizes.totals }}px";
+    paymentRange.value = {{ sizes.payment }};
+    paymentNumber.value = "{{ sizes.payment }}px";
+    footerRange.value = {{ sizes.footer }};
+    footerNumber.value = "{{ sizes.footer }}px";
+    invoiceInfoRange.value = {{ sizes.invoice_info }};
+    invoiceInfoNumber.value = "{{ sizes.invoice_info }}px";
+
+    function bindSliderAndNumber(slider, number){
+      if(!slider || !number) return;
+      // Helper to get unit (default px)
+      const unit = number.getAttribute('data-unit') || 'px';
+      slider.addEventListener('input', ()=>{
+        number.value = slider.value + unit;
+        setVars();
+      });
+      number.addEventListener('input', ()=>{
+        // Remove unit if present
+        let val = number.value;
+        if(val.endsWith(unit)) val = val.slice(0, -unit.length);
+        slider.value = val;
+        setVars();
+      });
+    }
+
+    [headerRange,customerRange,tableRange,totalsRange,paymentRange,footerRange,invoiceInfoRange].forEach(r=>{
+      if(r) r.addEventListener('input', setVars);
+    });
+
+    bindSliderAndNumber(headerRange, headerNumber);
+    bindSliderAndNumber(customerRange, customerNumber);
+    bindSliderAndNumber(tableRange, tableNumber);
+    bindSliderAndNumber(totalsRange, totalsNumber);
+    bindSliderAndNumber(paymentRange, paymentNumber);
+    bindSliderAndNumber(footerRange, footerNumber);
+    bindSliderAndNumber(invoiceInfoRange, invoiceInfoNumber);
+
+    // --- Global reset button ---
+    document.getElementById('resetSizesBtn').addEventListener('click', function(){
+      // Loop through all keys in defaultSizes and reset both slider and number
+      const map = {
+        header: [headerRange, headerNumber],
+        customer: [customerRange, customerNumber],
+        table: [tableRange, tableNumber],
+        totals: [totalsRange, totalsNumber],
+        payment: [paymentRange, paymentNumber],
+        footer: [footerRange, footerNumber],
+        invoice_info: [invoiceInfoRange, invoiceInfoNumber]
+      };
+      for (const key in defaultSizes) {
+        if (map[key]) {
+          map[key][0].value = defaultSizes[key];
+          map[key][1].value = defaultSizes[key] + "px";
+        }
+      }
+      setVars();
+    });
+
+    // --- Reset single slider button ---
+    document.querySelectorAll('.reset-single').forEach(btn => {
+      btn.addEventListener('click', function(){
+        const target = btn.getAttribute('data-target');
+        // Map data-target to slider and number, ensure header is mapped exactly
+        const map = {
+          header: [headerRange, headerNumber],
+          customer: [customerRange, customerNumber],
+          table: [tableRange, tableNumber],
+          totals: [totalsRange, totalsNumber],
+          payment: [paymentRange, paymentNumber],
+          footer: [footerRange, footerNumber],
+          invoice_info: [invoiceInfoRange, invoiceInfoNumber]
+        };
+        // Always use the backend-provided defaultSizes for reset value
+        if (map[target] && typeof defaultSizes[target] !== 'undefined') {
+          map[target][0].value = defaultSizes[target];
+          map[target][1].value = defaultSizes[target] + "px";
+          setVars();
+        }
+      });
+    });
+
+    setVars();
+
+    // --- Invoice pagination logic ---
+    // Paginate invoice, splitting tables row-by-row across pages
+    function paginateInvoice() {
+      const wrapper = document.getElementById("invoice-wrapper");
+      wrapper.innerHTML = "";
+      const rawContent = document.getElementById("page-content");
+      const template = rawContent.querySelector(".a4-preview");
+      if (!template) return;
+
+      const pageHeight = 1123; // ~297mm at 96dpi
+      const elements = Array.from(template.children);
+
+      let page = document.createElement("div");
+      page.className = "a4-preview";
+      wrapper.appendChild(page);
+
+      let currentHeight = 0;
+
+      elements.forEach(el => {
+        // Check if the element contains a table (not just is a TABLE)
+        if (el.querySelector && el.querySelector("table")) {
+          const table = el.querySelector("table");
+          const tableClone = table.cloneNode(false);
+          const thead = table.querySelector("thead");
+          if (thead) tableClone.appendChild(thead.cloneNode(true));
+
+          let tbody = document.createElement("tbody");
+          tableClone.appendChild(tbody);
+          page.appendChild(tableClone);
+
+          Array.from(table.querySelectorAll("tbody tr")).forEach(row => {
+            tbody.appendChild(row.cloneNode(true));
+            if (page.scrollHeight > pageHeight) {
+              tbody.removeChild(tbody.lastChild);
+
+              const pageBreakLine = document.createElement("div");
+              pageBreakLine.className = "page-break-line text-center text-muted my-3";
+              pageBreakLine.innerHTML = "<em>--- Page Break ---</em>";
+              wrapper.appendChild(pageBreakLine);
+
+              page = document.createElement("div");
+              page.className = "a4-preview mt-4";
+              wrapper.appendChild(page);
+
+              const newTable = table.cloneNode(false);
+              if (thead) newTable.appendChild(thead.cloneNode(true));
+              const newTbody = document.createElement("tbody");
+              newTable.appendChild(newTbody);
+              page.appendChild(newTable);
+
+              newTbody.appendChild(row.cloneNode(true));
+              tbody = newTbody;
+            }
+          });
+        } else {
+          const cloneEl = el.cloneNode(true);
+          page.appendChild(cloneEl);
+          if (page.scrollHeight > pageHeight) {
+            page.removeChild(cloneEl);
+
+            const pageBreakLine = document.createElement("div");
+            pageBreakLine.className = "page-break-line text-center text-muted my-3";
+            pageBreakLine.innerHTML = "<em>--- Page Break ---</em>";
+            wrapper.appendChild(pageBreakLine);
+
+            page = document.createElement("div");
+            page.className = "a4-preview mt-4";
+            wrapper.appendChild(page);
+
+            page.appendChild(cloneEl);
+          }
+        }
+      });
+      // Ensure CSS variables are applied to cloned elements
+      setVars();
+    }
+    window.paginateInvoice = paginateInvoice;
+
+
+    // Event listener for refreshLayout button
+    document.getElementById("refreshLayout").addEventListener("click", paginateInvoice);
+
+    // --- Save Layout Event Listener ---
+    // Save This Layout button event
+    document.getElementById("saveLayout").addEventListener("click", function(){
+      const payload = {
+        header: headerRange.value,
+        customer: customerRange.value,
+        table: tableRange.value,
+        totals: totalsRange.value,
+        payment: paymentRange.value,
+        footer: footerRange.value,
+        invoice_info: invoiceInfoRange.value
+      };
+      fetch("/update-layout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+      .then(r => {
+        if (r.ok) {
+          window.location.reload();
+        } else {
+          // Optionally log error
+          console.error("Error saving layout: response not OK");
+        }
+      })
+      .catch(err => {
+        // Optionally log error
+        console.error("Error saving layout:", err);
+      });
+    });
+
+    // --- Reset Layout button event ---
+    document.getElementById("resetSizesBtn").addEventListener("click", function(e){
+      // Prevent duplicate event logic for local reset
+      if (e.detail === 42) return; // Magic number to skip for local reset
+      fetch("/reset-layout", {
+        method: "POST"
+      })
+      .then(r => {
+        if (r.ok) {
+          window.location.reload();
+        } else {
+          // Optionally log error
+          console.error("Failed to reset layout.");
+        }
+      })
+      .catch(err => {
+        // Optionally log error
+        console.error("Failed to reset layout.", err);
+      });
+    });
+
+    // --- Cancel Layout button event ---
+    document.getElementById("cancelLayout").addEventListener("click", function() {
+      // Reload the page to restore existing sizes from backend without saving changes
+      window.location.reload();
+    });
+
+
+    // Call paginateInvoice on load
+    paginateInvoice();
+  });
+
+  // Zoom in/out logic
+  let currentZoom = 1;
+  // We need to zoom all .a4-preview pages
+  function setZoom() {
+    document.querySelectorAll(".a4-preview").forEach(function(preview) {
+      preview.style.transform = "scale(" + currentZoom + ")";
+      preview.style.transformOrigin = "top center";
+    });
+  }
+  document.getElementById("zoomIn").addEventListener("click", function() {
+    currentZoom += 0.1;
+    setZoom();
+  });
+  document.getElementById("zoomOut").addEventListener("click", function() {
+    currentZoom = Math.max(0.5, currentZoom - 0.1);
+    setZoom();
+  });
+</script>
+
+</body>
+
+
+<!-- Persistent Notice Modal (matches home page popup style) -->
+<div class="modal fade" id="persistentWarningModal" tabindex="-1" aria-labelledby="persistentNoticeLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#f8f9fa;">
+        <h5 class="modal-title" id="persistentNoticeLabel">Notice</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {{ persistent_notice }}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Show persistent warning modal if notice is non-empty
+    var persistentNotice = {{ persistent_notice|tojson }};
+    if (persistentNotice && persistentNotice.trim().length > 0) {
+      var modalEl = document.getElementById('persistentWarningModal');
+      var modal = new bootstrap.Modal(modalEl, {
+        backdrop: 'static',
+        keyboard: false
+      });
+      modal.show();
+    }
+  });
+</script>
+</html>
