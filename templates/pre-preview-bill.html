@@ -90,11 +90,48 @@
       }
       .apple-panel {
         background: #fff;
-        border-radius: 12px;
+        border-radius: 8px;
         padding: 1rem 1.25rem;
         box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        border: 1px solid #e0e0e0;
+        border: none;
         color: #333;
+        width: 22vw;
+        max-width: 500px;
+        min-width: 280px;
+        flex: 1 1 auto;
+        max-height: 100vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        align-self: flex-end;
+        margin-left: auto;
+        transform: scale(0.85)
+      }
+      .apple-panel .panel-content {
+        transform: scale(1); /* shrink content */
+        transform-origin: top center;
+        width: 100%;
+        height: 100%;
+      }
+      /* Make font size controls panel flex column for responsive stacking */
+      #font-size-controls {
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Responsive button groupings in apple-panel */
+      .apple-panel .d-flex.justify-content-end.gap-2.mb-2 {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: center !important;
+        display: flex;
+      }
+
+      /* Make buttons and links inside apple-panel shrink gracefully */
+      .apple-panel button,
+      .apple-panel a {
+        flex: 1 1 auto;
+        min-width: 80px;
       }
       .page-break {
         display: block;
@@ -142,6 +179,7 @@
     </div>
     <div class="col-lg-3 d-print-none">
       <div class="apple-panel sticky-top" style="top:70px; z-index:1040;">
+        <div class="panel-content">
         <div id="font-size-controls" class="border rounded p-3 mb-3 bg-light-subtle">
           <h6 class="mb-3 fw-bold">Adjust Layout</h6>
           <div class="d-flex justify-content-end mb-3">
@@ -327,6 +365,7 @@
       </small>
     </div>
   </div>
+        </div>
         </div>
     </div>
   </div>
@@ -547,7 +586,7 @@
     // Event listener for refreshLayout button
     document.getElementById("refreshLayout").addEventListener("click", paginateInvoice);
 
-    // --- Save Layout, Sample Rows, and DC Toggle Event Listeners ---
+    // --- Save Layout Event Listener ---
     // Save This Layout button event
     document.getElementById("saveLayout").addEventListener("click", function(){
       const payload = {

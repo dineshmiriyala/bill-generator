@@ -1,5 +1,4 @@
 from flask import Flask, render_template, render_template_string, request, Response, jsonify, redirect, url_for, flash
-from flask_mail import Mail, Message
 from datetime import datetime, timedelta, timezone
 from flask_migrate import Migrate
 from db.models import *
@@ -62,17 +61,6 @@ USER_PROFILE = {
 app = Flask(__name__)
 basedir = Path(__file__).parent.resolve()
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret')
-
-# --- Flask-Mail configuration ---
-app.config.update(
-    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
-    MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
-    MAIL_USE_TLS=True,
-    MAIL_USERNAME=os.getenv("MAIL_USER"),
-    MAIL_PASSWORD=os.getenv("MAIL_PASS"),
-    MAIL_DEFAULT_SENDER=os.getenv("MAIL_USER")
-)
-mail = Mail(app)
 
 
 def _desktop_data_dir(app_name: str) -> Path:
@@ -1529,7 +1517,7 @@ def latest_bill_preview():
                            dcno=dcno,
                            dc_numbers=dc_numbers,
                            total_in_words=amount_to_words(current_invoice.totalAmount),
-                           sizes=current_sizes),
+                           sizes=current_sizes)
 
 
 # --- Backup Feature ---
@@ -1607,45 +1595,72 @@ def backup_now():
 
 
 # --- Common builder for sample invoice context ---
+
 def _build_sample_invoice_context():
-    sample_invoice = type("Invoice", (), {})()
-    sample_invoice.invoiceId = "TEST123"
-    sample_invoice.createdAt = datetime.utcnow()
-    sample_invoice.totalAmount = 98765.43
+    # Get the most recent invoice
+    recent_invoice = invoice.query.order_by(invoice.createdAt.desc()).first()
 
-    sample_customer = {
-        "company": "Acme Corporation Pvt Ltd",
-        "address": "123 Main Street, Hyderabad, Telangana, 500001",
-        "gst": "37ABCDE1234F1Z5",
-        "phone": "9876543210",
-        "email": "contact@acmecorp.com"
-    }
+    if not recent_invoice:
+        # Fallback if no invoice exists
+        return {
+            "invoice": type("Invoice", (), {"invoiceId": "NO_DATA", "createdAt": datetime.utcnow(), "totalAmount": 0.0})(),
+            "customer": {},
+            "items": [],
+            "dcno": False,
+            "dc_numbers": [],
+            "total_in_words": "",
+            "sizes": layoutConfig().get_or_create().get_sizes(),
+            "rows": 0,
+            "persistent_notice": session.get("persistent_notice"),
+        }
 
-    num_rows = session.get("sample_rows", 5)
+    # Get customer info
+    cust = customer.query.get(recent_invoice.customerId)
+
+    # Get items from invoiceItem joined with item
+    line_items = invoiceItem.query.filter_by(invoiceId=recent_invoice.id).all()
+    items = []
+    for li in line_items:
+        itm = item.query.get(li.itemId)
+        items.append({
+            "name": itm.name if itm else "Unknown",
+            "hsn": "N/A",
+            "qty": li.quantity,
+            "rate": li.rate,
+            "discount": li.discount,
+            "tax": li.taxPercentage,
+            "amount": li.line_total
+        })
+
     sample_items = [
-        (f"Sample Item {i+1}", f"HSN{i+1:04}", i+1, (i+1)*2, i % 5, (i*3) % 18, (i+1)*111.11)
-        for i in range(num_rows)
+        (i["name"], i["hsn"], i["qty"], i["rate"], i["discount"], i["tax"], i["amount"])
+        for i in items
     ]
 
+    # Delivery challan toggle
     dcno = session.get("dc_enabled", False)
-    dc_numbers = [f"DC{str(i+1).zfill(3)}" for i in range(num_rows)] if dcno else []
+    dc_numbers = [i.dc_number for i in items if hasattr(i, "dc_number")] if dcno else []
 
-    config = layoutConfig().get_or_create()
-    current_sizes = config.get_sizes()
-
+    # Layout sizes
+    current_sizes = layoutConfig().get_or_create().get_sizes()
 
     return {
-        "invoice": sample_invoice,
-        "customer": sample_customer,
+        "invoice": recent_invoice,
+        "customer": {
+            "company": getattr(cust, "company", ""),
+            "address": getattr(cust, "address", ""),
+            "gst": getattr(cust, "gst", ""),
+            "phone": getattr(cust, "phone", ""),
+            "email": getattr(cust, "email", ""),
+        },
         "items": sample_items,
         "dcno": dcno,
         "dc_numbers": dc_numbers,
-        "total_in_words": "Ninety Eight Thousand Seven Hundred Sixty Five Rupees and Forty Three Paise",
+        "total_in_words": recent_invoice.total_in_words if hasattr(recent_invoice, "total_in_words") else "",
         "sizes": current_sizes,
-        "rows": num_rows,
+        "rows": len(sample_items),
         "persistent_notice": session.get("persistent_notice"),
     }
-
 
 # --- Unified Layout Handler ---
 def handle_layout(action=None, data=None):
