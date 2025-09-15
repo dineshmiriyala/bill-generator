@@ -1571,26 +1571,41 @@ def backup_page():
 @app.route('/backup/now')
 def backup_now():
     """
-    Create backup of the DB and serve it as a direct download to the user.
+    Create backup of the DB and serve it as a direct download to the user (web) or save to Documents (desktop).
     """
     # Log this backup in DB
     new_entry = lastBackup(note="Backup downloaded")
     db.session.add(new_entry)
     db.session.commit()
 
-    # Load DB into memory buffer
-    buf = io.BytesIO()
-    with open(db_file, 'rb') as f:
-        buf.write(f.read())
-    buf.seek(0)
-
-    # Direct download
-    return send_file(
-        buf,
-        as_attachment=True,
-        download_name=f"backup_{new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')}.db",
-        mimetype="application/octet-stream"
-    )
+    if is_desktop:
+        # Desktop mode: Save backup in Documents/SLO_BILL_BACKUPS
+        from pathlib import Path
+        import shutil
+        import os
+        # Compute backup dir under Documents
+        documents_dir = Path.home() / "Documents"
+        backup_dir = documents_dir / "SLO_BILL_BACKUPS"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        # Compose filename with timestamp
+        ts = new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')
+        backup_path = backup_dir / f"backup_{ts}.db"
+        # Copy db file to backup_path
+        shutil.copy2(db_file, backup_path)
+        flash(f"Backup saved to {backup_path}", "success")
+        return redirect(url_for('backup_page'))
+    else:
+        # Web mode: direct download
+        buf = io.BytesIO()
+        with open(db_file, 'rb') as f:
+            buf.write(f.read())
+        buf.seek(0)
+        return send_file(
+            buf,
+            as_attachment=True,
+            download_name=f"backup_{new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')}.db",
+            mimetype="application/octet-stream"
+        )
 
 
 
