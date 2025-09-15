@@ -26,4 +26,3 @@ migrations/*.log
 
 BillGenerator.spec
 
-build/
