@@ -84,7 +84,7 @@
             {% endif %}
             <td>{{ qty }}</td>
             <td>{{ rate }}</td>
-            <td class="text-end">{{ (qty | float) * (rate | float) }}</td>
+            <td class="text-end">{{ line_totals[loop.index0] }}</td>
           </tr>
           {% endfor %}
         </tbody>

@@ -105,6 +105,8 @@ migrate = Migrate(app, db)
 # add at top with other imports
 from sqlalchemy import inspect
 
+def rounding_to_nearest_zero(number):
+    return round(number / 10) * 10
 
 def _ensure_db_initialized():
     """
@@ -1000,7 +1002,7 @@ def start_bill():
         dc_val = ''
         if dc_numbers and i < len(dc_numbers) and dc_numbers[i]:
             dc_val = dc_numbers[i].strip()
-        line_total = qty * rate
+        line_total = rounding_to_nearest_zero(qty * rate)
         total += line_total
         item_rows.append([desc, qty, rate, line_total, dc_val])
 
@@ -1008,7 +1010,7 @@ def start_bill():
     new_invoice = invoice(
         customerId=selected_customer.id,
         createdAt=datetime.now(timezone.utc),
-        totalAmount=round(total, 2),
+        totalAmount=(round(total, 2)),
         pdfPath="",  # set after inv_name built
         invoiceId="",  # temporary
         exclude_phone=exclude_phone,
@@ -1048,7 +1050,7 @@ def start_bill():
             rate=rate,
             discount=0,
             taxPercentage=0,
-            line_total=line_total,
+            line_total=rounding_to_nearest_zero(line_total),
             dcNo=(dc_val if dc_val else None)
         ))
 
@@ -1173,6 +1175,7 @@ def view_bill_locked(invoicenumber):
 
     # build row wise lists for the template
     descriptions, quantities, rates, dc_numbers = [], [], [], []
+    line_totals = []
 
     total = 0.0
     for li in line_items:
@@ -1181,7 +1184,8 @@ def view_bill_locked(invoicenumber):
         quantities.append(li.quantity)
         rates.append(li.rate)
         dc_numbers.append(li.dcNo or '')
-        total += (li.quantity or 0) * (li.rate or 0)
+        line_totals.append(li.line_total)
+        total += li.line_total or 0
 
     # Determine whether to show DC column
     dcno = any((x or '').strip() for x in dc_numbers)
@@ -1193,6 +1197,7 @@ def view_bill_locked(invoicenumber):
         quantities=quantities,
         rates=rates,
         dc_numbers=dc_numbers,
+        line_totals=line_totals,
         dcno=dcno,
         total=round(total, 2),
         invoice_no=current_invoice.invoiceId
@@ -1327,6 +1332,7 @@ def edit_bill(invoicenumber):
 
     # Build lists for template
     descriptions, quantities, rates, dc_numbers = [], [], [], []
+    line_totals = []
     total = 0.0
     for li in line_items:
         itm = item.query.get(li.itemId)
@@ -1334,7 +1340,8 @@ def edit_bill(invoicenumber):
         quantities.append(li.quantity)
         rates.append(li.rate)
         dc_numbers.append(li.dcNo or '')
-        total += (li.quantity or 0) * (li.rate or 0)
+        line_totals.append(li.line_total or 0)
+        total += li.line_total or 0
 
     dcno = any((x or '').strip() for x in dc_numbers)
 
@@ -1370,13 +1377,15 @@ def edit_bill(invoicenumber):
         dc_numbers=dc_numbers,
         dcno=dcno,
         total=round(total, 2),
+        grand_total=round(total, 2),
         invoice_no=current_invoice.invoiceId,
         edit_mode=True,  # flag to distinguish editing vs new bill
         prev_invoice_no=prev_invoice_no,
         prev_created_at=prev_created_at,
         exclude_phone=exclude_phone,
         exclude_gst=exclude_gst,
-        exclude_addr=exclude_addr
+        exclude_addr=exclude_addr,
+        line_totals=line_totals
     )
 
 
@@ -1424,7 +1433,7 @@ def update_bill(invoicenumber):
         rate = float(rates[i]) if i < len(rates) and rates[i] else 0.0
         dc = (dc_numbers[i].strip() if i < len(dc_numbers) and dc_numbers[i] else None)
 
-        line_total = qty * rate
+        line_total = rounding_to_nearest_zero(qty * rate)
         total += line_total
         rows.append((desc, qty, rate, dc, line_total))
 
@@ -1449,12 +1458,12 @@ def update_bill(invoicenumber):
             rate=rate,
             discount=0,
             taxPercentage=0,
-            line_total=line_total,
+            line_total=rounding_to_nearest_zero(line_total),
             dcNo=dc if dc else None
         ))
 
     # 5) Update invoice total (and updatedAt if you have it)
-    current_invoice.totalAmount = round(total, 2)
+    current_invoice.totalAmount = (round(total, 2))
 
     # 5.5) Update customer-level metadata before saving invoice
     current_invoice.exclude_phone = request.form.get('exclude_phone') in ('on', 'true', '1')
