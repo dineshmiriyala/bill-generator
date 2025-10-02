@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="menu-container">
+  <!-- Main Menu -->
+  <div id="mainMenu" class="menu-list active">
+    <button class="back-btn-main" onclick="history.back()">←Go Back/Home</button>
+    <button class="menu-item" data-target="billMenu">Billing Information</button>
+    <button class="menu-item" data-target="customerMenu">Customer Management</button>
+    <button class="menu-item" data-target="inventoryMenu">Inventory Management</button>
+    <button class="menu-item" data-target="accountMenu">My Account and Analytics</button>
+  </div>
+
+  <!-- Billing Submenu -->
+  <div id="billMenu" class="submenu">
+    <button class="back-btn">← Back</button>
+    <a href="/select_customer">Create New Bill</a>
+    <a href="/view_bills">View Bills</a>
+    <a href="/test-pre-preview">PDF Editor</a>
+  </div>
+
+  <!-- Customer Submenu -->
+  <div id="customerMenu" class="submenu">
+    <button class="back-btn">← Back</button>
+    <a href="/create_customers">Add New Customer</a>
+    <a href="/view_customers">View Customers</a>
+  </div>
+
+  <!-- Inventory Submenu -->
+  <div id="inventoryMenu" class="submenu">
+    <button class="back-btn">← Back</button>
+    <a href="/view_inventory">View Items</a>
+    <a href="/add_inventory">Add New Item</a>
+  </div>
+
+  <!-- Account Submenu -->
+  <div id="accountMenu" class="submenu">
+    <button class="back-btn">← Back</button>
+    <a href="/statements">Get Statements</a>
+    <a href="/recover">Recover</a>
+    <a href="/analytics">Analytics</a>
+    <a href="/about_user?section=about">About</a>
+  </div>
+</div>
+
+<style>
+  .menu-container {
+    position: relative;
+    width: 340px;
+    margin: 2rem auto;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    min-height: 80vh;
+  }
+  .menu-list, .submenu {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    transition: transform 0.3s ease;
+  }
+  .menu-list {
+    transform: translateX(0);
+  }
+  .menu-list.hidden {
+    transform: translateX(-100%);
+  }
+  .submenu {
+    transform: translateX(100%);
+  }
+  .submenu.active {
+    transform: translateX(0);
+  }
+  .menu-item, .back-btn, .submenu a {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    background: #212529;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: background 0.2s;
+    cursor: pointer;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .menu-item:hover, .back-btn:hover, .submenu a:hover {
+    background: #343a40;
+  }
+  .back-btn-main {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    background: #212529;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: background 0.2s;
+    cursor: pointer;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .back-btn-main:hover {
+    background: #343a40;
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.menu-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = document.getElementById(btn.dataset.target);
+        document.getElementById('mainMenu').classList.add('hidden');
+        target.classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('.back-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.parentElement.classList.remove('active');
+        document.getElementById('mainMenu').classList.remove('hidden');
+      });
+    });
+  });
+</script>
+{% if session and session.get('persistent_notice') %}
+<div class="modal fade" id="persistentNoticeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Notice</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {{ session.persistent_notice|safe }}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var noticeModal = new bootstrap.Modal(document.getElementById('persistentNoticeModal'));
+    noticeModal.show();
+  });
+</script>
+{% endif %}
+{% endblock %}

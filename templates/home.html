@@ -2,68 +2,27 @@
 {% set hide_navbar = True %}
 
 {% block content %}
-<div class="container d-flex flex-column justify-content-center align-items-center text-center vh-100">
+
+<div class="d-flex flex-column justify-content-center align-items-center text-center vh-100">
   <h1 class="mb-4">Sri Lakshmi Offset Printers</h1>
   <p class="lead mb-5">Making prints as colorful as your life. Since 1973.</p>
-
   <div class="d-flex flex-column gap-3">
-    <div class="accordion" id="accordionExample">
-      <!-- Bill Main Button -->
-      <button class="custom-btn mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#billOptions" aria-expanded="false" aria-controls="billOptions">
-        Bill
-      </button>
-      <!-- Collapsible Sub-Options for Bill -->
-      <div class="collapse mb-4" id="billOptions" data-bs-parent="#accordionExample">
-          <div class="d-flex flex-column gap-2 mt-3">
-              <a href="/select_customer" class="custom-btn small-btn">Create New Bill</a>
-              <a href="/view_bills" class="custom-btn small-btn">View Bills</a>
-              <a href="/test-pre-preview" class="custom-btn small-btn">PDF Editor</a>
-          </div>
-      </div>
-
-      <!-- Customer Main Button -->
-      <button class="custom-btn mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#customerOptions" aria-expanded="false" aria-controls="customerOptions">
-        Customer
-      </button>
-      <!-- Collapsible Sub-Options -->
-      <div class="collapse mb-4" id="customerOptions" data-bs-parent="#accordionExample">
-          <div class="d-flex flex-column gap-2 mt-3">
-              <a href="/create_customers" class="custom-btn small-btn">Add New Customer</a>
-              <a href="/view_customers" class="custom-btn small-btn">View Customers</a>
-          </div>
-      </div>
-
-
-       <!-- Inventory Main Button -->
-      <button class="custom-btn mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#inventoryOptions" aria-expanded="false" aria-controls="inventoryOptions">
-        Inventory
-      </button>
-      <!-- Collapsible Sub-Options -->
-      <div class="collapse mb-4" id="inventoryOptions" data-bs-parent="#accordionExample">
-          <div class="d-flex flex-column gap-2 mt-3">
-              <a href="/view_inventory" class="custom-btn small-btn">View Items</a>
-              <a href="/add_inventory" class="custom-btn small-btn">Add New Item</a>
-          </div>
-      </div>
-
-      <!-- Accounts Main Button -->
-      <button class="custom-btn mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#accountsOptions" aria-expanded="false" aria-controls="accountsOptions">
-        My Account
-      </button>
-      <!-- Collapsible Sub-Options -->
-      <div class="collapse mb-4" id="accountsOptions" data-bs-parent="#accordionExample">
-          <div class="d-flex flex-column gap-2 mt-3">
-              <a href="/statements" class="custom-btn small-btn">Get Statements</a>
-              <a href="/recover" class="custom-btn small-btn">Recover</a>
-              <a href="/about_user?section=about" class="custom-btn small-btn">About</a>
-          </div>
-      </div>
-
-    </div>
+    <a href="/select_customer" class="btn btn-dark btn-lg">Create New Bill</a>
+    <a href="/create_customers" class="btn btn-dark btn-lg">Add New Customer</a>
+    <a href="/view_bills" class="btn btn-dark btn-lg">View Bills</a>
+    <a href="/analytics" class="btn btn-dark btn-lg d-flex justify-content-between align-items-center">
+      <span>Analytics</span>
+      <span class="badge-apple ms-2">NEW</span>
+    </a>
+    <a href="/test-pre-preview" class="btn btn-dark btn-lg d-flex justify-content-between align-items-center">
+      <span>Invoice Editor</span>
+      <span class="badge-apple ms-2">NEW</span>
+    </a>
+    <a href="/more" class="btn btn-dark btn-lg">More</a>
   </div>
 </div>
 
-{% if session.persistent_notice %}
+{% if session and session.get('persistent_notice') %}
 <div class="modal fade" id="persistentNoticeModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -87,4 +46,18 @@
   });
 </script>
 {% endif %}
+
+<style>
+  .badge-apple {
+    background-color: #e0e0e5;
+    color: #000;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+</style>
+
 {% endblock %}

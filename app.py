@@ -1,4 +1,5 @@
 from flask import Flask, render_template, render_template_string, request, Response, jsonify, redirect, url_for, flash
+from analytics import get_sales_trends, get_top_customers, get_customer_retention, get_day_wise_billing
 from datetime import datetime, timedelta, timezone
 from flask_migrate import Migrate
 from db.models import *
@@ -106,7 +107,8 @@ migrate = Migrate(app, db)
 from sqlalchemy import inspect
 
 def rounding_to_nearest_zero(number):
-    return round(number / 10) * 10
+    return number
+    # return round(number / 10) * 10
 
 def _ensure_db_initialized():
     """
@@ -179,6 +181,43 @@ def recover_customer(id):
     db.session.commit()
     flash('Customer recovered successfully.', 'success')
     return redirect(url_for('recover_page'))
+
+@app.route('/more')
+def more():
+    return render_template(
+        'more.html'
+    )
+
+@app.route('/analytics')
+def analytics():
+    # Get sales trends for day, month, year, and weekday
+    day_labels, day_totals = get_sales_trends("day")
+    month_labels, month_totals = get_sales_trends("month")
+    year_labels, year_totals = get_sales_trends("year")
+    # Fetch weekday-level sales trends
+    weekday_labels, weekday_totals = get_sales_trends("weekday")
+    customer_names, revenues = get_top_customers()
+    one_time, repeat = get_customer_retention()
+    daywise_labels, daywise_counts, daywise_totals = get_day_wise_billing()
+
+    return render_template(
+        'analytics.html',
+        day_labels=day_labels,
+        day_totals=day_totals,
+        month_labels=month_labels,
+        month_totals=month_totals,
+        year_labels=year_labels,
+        year_totals=year_totals,
+        weekday_labels=weekday_labels,
+        weekday_totals=weekday_totals,
+        customer_names=customer_names,
+        revenues=revenues,
+        one_time=one_time,
+        repeat=repeat,
+        daywise_labels=daywise_labels,
+        daywise_counts=daywise_counts,
+        daywise_totals=daywise_totals,
+    )
 
 
 @app.route('/edit_user/<int:customer_id>', methods=['GET', 'POST'])
@@ -1618,8 +1657,7 @@ def handle_layout(action=None, data=None):
 def test_pre_preview():
     try:
         if session['persistent_notice']:
-            if 'backup' in session['persistent_notice']:
-                session['persistent_notice'] = None
+            pass  # keep notice, just no backup check
     except Exception:
         pass
     ctx = handle_layout(action="view")

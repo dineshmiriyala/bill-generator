@@ -77,49 +77,77 @@
     <!-- Items -->
     <h5 class="mb-3">Items</h5>
     <div id="items">
-      <div id="items-header" class="row g-3 align-items-end mb-2 fw-semibold small text-muted">
-        <div class="col-md-1">S.No</div>
-        <div class="col-md-4">Description</div>
-        <div class="col-md-2 dc-col" style="{% if not dcno %}display:none;{% endif %}">DC No</div>
-        <div class="col-md-2">Qty</div>
-        <div class="col-md-2">Unit Price</div>
-        <div class="col-md-2">Total</div>
-        <div class="col-md-1 text-end"></div>
+      {# Define grid classes for semantic columns #}
+      {% set sno_cls = 'col-md-1' %}
+      {% if dcno %}
+        {% set desc_cls = 'col-md-3' %}
+        {% set dc_cls = 'col-md-2 dc-col' %}
+      {% else %}
+        {% set desc_cls = 'col-md-5' %}
+        {% set dc_cls = 'col-md-2 dc-col d-none' %}
+      {% endif %}
+      {% set qty_cls = 'col-md-1 qty-col' %}
+      {% set rate_cls = 'col-md-2 rate-col' %}
+      {% set total_cls = 'col-md-1 total-col' %}
+      {% set actions_cls = 'col-md-2 actions-col' %}
+
+      <div id="items-header" class="row g-2 align-items-center mb-2 fw-semibold small text-muted">
+        <div class="{{ sno_cls }} d-flex justify-content-center align-items-center sno-col">S.No</div>
+        <div class="{{ desc_cls }} d-flex align-items-center desc-col">Description</div>
+        <div class="{{ dc_cls }} d-flex justify-content-center align-items-center">DC No</div>
+        <div class="{{ qty_cls }} d-flex justify-content-center align-items-center">Qty</div>
+        <div class="{{ rate_cls }} d-flex justify-content-center align-items-center">Unit Price</div>
+        <div class="{{ total_cls }} d-flex justify-content-center align-items-center">Total</div>
+        <div class="{{ actions_cls }} d-flex justify-content-center align-items-center">Actions</div>
       </div>
       {% if success or edit_mode %}
         {% for description, quantity, rate, line_total in zip(descriptions, quantities, rates, line_totals) %}
-        <div class="row g-3 align-items-end mb-3 item-row" data-last-edited="">
-          <div class="col-md-1 serial-col"><span class="serial-index">{{ loop.index }}</span></div>
-          <div class="col-md-4">
+        <div class="row g-2 align-items-center mb-2 item-row" data-last-edited="">
+          <div class="{{ sno_cls }} serial-col sno-col"><span class="serial-index">{{ loop.index }}</span></div>
+          <div class="{{ desc_cls }} desc-col">
             <input type="text" name="description[]" class="form-control item-description" list="inventoryList" value="{{ description }}" placeholder="Item description" required>
-            <datalist id="inventoryList">{% for item in inventory %}<option value="{{ item.name }}">{% endfor %}</datalist>
           </div>
-          <div class="col-md-2 dc-col" style="{% if not dcno %}display:none;{% endif %}">
+          <div class="{{ dc_cls }}">
             <input type="text" name="dc_no[]" class="form-control dc-input" value="{{ dc_numbers[loop.index0] if dc_numbers is defined and dc_numbers|length > loop.index0 else '' }}" {% if not dcno %}disabled{% endif %}>
           </div>
-          <div class="col-md-2"><input type="number" name="quantity[]" class="form-control qty-input" step="1" value="{{ quantity }}" placeholder="Quantity" required></div>
-          <div class="col-md-2"><input type="number" name="rate[]" class="form-control rate-input" step="0.01" value="{{ rate }}" placeholder="Unit price" required></div>
-          <div class="col-md-2"><input type="number" name="total[]" class="form-control total-input" step="0.01" value="{{ line_total }}" placeholder="Line total" required></div>
-          <div class="col-md-1 d-flex justify-content-end"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
+          <div class="{{ qty_cls }}"><input type="number" name="quantity[]" class="form-control qty-input" step="1" value="{{ quantity }}" placeholder="Qty" required></div>
+          <div class="{{ rate_cls }}"><input type="number" name="rate[]" class="form-control rate-input" step="0.01" value="{{ rate }}" placeholder="Unit price" required></div>
+          <div class="{{ total_cls }}"><input type="number" name="total[]" class="form-control total-input" step="0.01" value="{{ line_total }}" placeholder="Total" required></div>
+          <div class="{{ actions_cls }} d-flex">
+            <button type="button" class="btn btn-info btn-sm me-1 round-zero">Round</button>
+            <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
+          </div>
         </div>
         {% endfor %}
+        <datalist id="inventoryList">{% for item in inventory %}<option value="{{ item.name }}">{% endfor %}</datalist>
       {% else %}
-        <div class="row g-3 align-items-end mb-3 item-row" data-last-edited="">
-          <div class="col-md-1 serial-col"><span class="serial-index">1</span></div>
-          <div class="col-md-4">
+        <div class="row g-2 align-items-center mb-2 item-row" data-last-edited="">
+          <div class="{{ sno_cls }} serial-col sno-col"><span class="serial-index">1</span></div>
+          <div class="{{ desc_cls }} desc-col">
             <input type="text" name="description[]" class="form-control item-description" list="inventoryList" required placeholder="Item description">
-            <datalist id="inventoryList">{% for item in inventory %}<option value="{{ item.name }}">{% endfor %}</datalist>
           </div>
-          <div class="col-md-2 dc-col" style="display:none;"><input type="text" name="dc_no[]" class="form-control dc-input" disabled></div>
-          <div class="col-md-2"><input type="number" name="quantity[]" class="form-control qty-input" step="1" placeholder="Quantity" required></div>
-          <div class="col-md-2"><input type="number" name="rate[]" class="form-control rate-input" step="0.01" placeholder="Unit price" required></div>
-          <div class="col-md-2"><input type="number" name="total[]" class="form-control total-input" step="0.01" placeholder="Line total" required></div>
-          <div class="col-md-1 d-flex justify-content-end"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
+          <div class="{{ dc_cls }}">
+            <input type="text" name="dc_no[]" class="form-control dc-input" disabled>
+          </div>
+          <div class="{{ qty_cls }}"><input type="number" name="quantity[]" class="form-control qty-input" step="1" placeholder="Qty" required></div>
+          <div class="{{ rate_cls }}"><input type="number" name="rate[]" class="form-control rate-input" step="0.01" placeholder="Unit price" required></div>
+          <div class="{{ total_cls }}"><input type="number" name="total[]" class="form-control total-input" step="0.01" placeholder="Total" required></div>
+          <div class="{{ actions_cls }} d-flex">
+            <button type="button" class="btn btn-info btn-sm me-1 round-zero">Round</button>
+            <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
+          </div>
         </div>
+        <datalist id="inventoryList">{% for item in inventory %}<option value="{{ item.name }}">{% endfor %}</datalist>
       {% endif %}
     </div>
 
-    <div class="mb-3"><button type="button" id="addItem" class="btn btn-secondary">Add Item</button></div>
+    <div class="mb-3">
+      <button type="button" id="addItem" class="btn btn-secondary">Add Item</button>
+      <button type="button" id="roundAll" class="btn btn-info ms-2">Round All</button>
+    </div>
+    <div class="text-muted small fst-italic mb-3">
+      Note: The <strong>Round</strong> button adjusts that line's total to the nearest 10 (e.g., 1234 → 1230, 1236 → 1240).
+    </div>
 
     <!-- Grand Total -->
     <div class="mb-4 text-end pe-3">
@@ -155,6 +183,14 @@
 </div>
 
 <script>
+// Build price map from inventory safely
+const priceMap = {};
+{% if inventory %}
+  {% for item in inventory %}
+    priceMap[{{ item.name|tojson }}] = {{ (item.unitPrice or 0)|tojson }};
+  {% endfor %}
+{% endif %}
+
 function roundToNearest10(num) {
   return Math.round(num / 10) * 10;
 }
@@ -177,7 +213,6 @@ function calculateTotal() {
       grand += totalVal;
     } else {
       let total = qty * rate;
-      total = roundToNearest10(total);
       totalInput.value = total ? total.toFixed(2) : '';
       grand += total;
     }
@@ -186,9 +221,42 @@ function calculateTotal() {
 }
 
 function setupRow(row){
-  row.querySelector('[name="quantity[]"]').addEventListener('input', () => { row.dataset.lastEdited='quantity'; calculateTotal(); });
-  row.querySelector('[name="rate[]"]').addEventListener('input', () => { row.dataset.lastEdited='rate'; calculateTotal(); });
-  row.querySelector('[name="total[]"]').addEventListener('input', () => { row.dataset.lastEdited='total'; calculateTotal(); });
+  const descInput = row.querySelector('[name="description[]"]');
+  const rateInput = row.querySelector('[name="rate[]"]');
+  const qtyInput = row.querySelector('[name="quantity[]"]');
+  const totalInput = row.querySelector('[name="total[]"]');
+
+  function maybeAutofill() {
+    if (!descInput || !rateInput) return;
+    const key = descInput.value;
+    if (key in priceMap) {
+      if (!rateInput.value || rateInput.dataset.autofilled === "true") {
+        const v = parseFloat(priceMap[key]);
+        rateInput.value = isNaN(v) ? priceMap[key] : v.toFixed(2);
+        rateInput.dataset.autofilled = "true";
+        row.dataset.lastEdited = 'rate';
+        calculateTotal();
+      }
+    }
+  }
+
+  if (descInput) {
+    descInput.addEventListener('input', maybeAutofill);
+    descInput.addEventListener('change', maybeAutofill);
+  }
+  if (rateInput) {
+    rateInput.addEventListener('input', () => {
+      rateInput.dataset.autofilled = "false";
+      row.dataset.lastEdited='rate';
+      calculateTotal();
+    });
+  }
+  if (qtyInput) {
+    qtyInput.addEventListener('input', () => { row.dataset.lastEdited='quantity'; calculateTotal(); });
+  }
+  if (totalInput) {
+    totalInput.addEventListener('input', () => { row.dataset.lastEdited='total'; calculateTotal(); });
+  }
 }
 
 function renumberRows(){
@@ -204,9 +272,32 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const newRow = firstRow.cloneNode(true);
     newRow.querySelectorAll('input').forEach(inp=>inp.value='');
     newRow.dataset.lastEdited='';
+    const newRate = newRow.querySelector('[name="rate[]"]');
+    if (newRate) newRate.dataset.autofilled = "false";
     document.getElementById('items').appendChild(newRow);
     renumberRows();
     setupRow(newRow);
+    calculateTotal();
+  });
+
+  document.getElementById('roundAll').addEventListener('click', ()=>{
+    document.querySelectorAll('.item-row').forEach(row=>{
+      const qtyInput = row.querySelector('[name="quantity[]"]');
+      const rateInput = row.querySelector('[name="rate[]"]');
+      const totalInput = row.querySelector('[name="total[]"]');
+      const qty = parseFloat(qtyInput?.value) || 0;
+      const rate = parseFloat(rateInput?.value) || 0;
+      let basis = parseFloat(totalInput.value) || (qty * rate);
+      const rounded = roundToNearest10(basis);
+      totalInput.value = rounded.toFixed(2);
+      if(qty > 0){
+        rateInput.value = (rounded / qty).toFixed(2);
+      }
+      // Lock qty after rounding
+      qtyInput.readOnly = true;
+      qtyInput.classList.add("bg-light");
+      row.dataset.lastEdited = 'total';
+    });
     calculateTotal();
   });
 
@@ -219,6 +310,46 @@ document.addEventListener('DOMContentLoaded', ()=>{
         calculateTotal();
       }
     }
+    if(e.target.classList.contains('round-zero')){
+      const row = e.target.closest('.item-row');
+      const qtyInput = row.querySelector('[name="quantity[]"]');
+      const rateInput = row.querySelector('[name="rate[]"]');
+      const totalInput = row.querySelector('[name="total[]"]');
+      const qty = parseFloat(qtyInput?.value) || 0;
+      const rate = parseFloat(rateInput?.value) || 0;
+      let basis = parseFloat(totalInput.value) || (qty * rate);
+      const rounded = roundToNearest10(basis);
+      totalInput.value = rounded.toFixed(2);
+      if(qty > 0){
+        rateInput.value = (rounded / qty).toFixed(2);
+      }
+      // Lock the quantity field after rounding
+      qtyInput.readOnly = true;
+      qtyInput.classList.add("bg-light");
+      row.dataset.lastEdited = 'total';
+      calculateTotal();
+    }
+  });
+
+  // Handle Delivery Challan toggle
+  document.getElementById('toggleDC').addEventListener('change', function(){
+    const enabled = this.checked;
+    // Show/Hide DC columns and enable/disable inputs
+    document.querySelectorAll('.dc-col').forEach(col => {
+      col.classList.toggle('d-none', !enabled);
+      const input = col.querySelector('input');
+      if (input) input.disabled = !enabled;
+    });
+    // Adjust Description width to keep grid sum = 12
+    const headerDesc = document.querySelector('#items-header .desc-col');
+    if (headerDesc) {
+      headerDesc.classList.toggle('col-md-5', !enabled);
+      headerDesc.classList.toggle('col-md-3', enabled);
+    }
+    document.querySelectorAll('#items .item-row .desc-col').forEach(el=>{
+      el.classList.toggle('col-md-5', !enabled);
+      el.classList.toggle('col-md-3', enabled);
+    });
   });
 });
 // Form validation for all item fields before submit
