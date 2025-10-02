@@ -75,18 +75,18 @@ def get_top_customers(limit=5):
     """
     q = (
         db.session.query(
-            customer.name,
+            customer.company,
             func.sum(invoice.totalAmount).label("revenue")
         )
         .join(invoice, customer.id == invoice.customerId)
         .filter(invoice.isDeleted == False)
-        .group_by(customer.name)
+        .group_by(customer.company)
         .order_by(func.sum(invoice.totalAmount).desc())
         .limit(limit)
     )
     names, revenues = [], []
     for row in q:
-        names.append(row.name)
+        names.append(row.company)
         revenues.append(float(row.revenue))
     return names, revenues
 

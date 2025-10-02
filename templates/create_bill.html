@@ -331,6 +331,44 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   });
 
+  // Clear Form button handler: clears all item rows except the first, resets the first row's inputs and state
+  const clearBtn = document.getElementById('clearForm');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function() {
+      const itemRows = document.querySelectorAll('#items .item-row');
+      if (itemRows.length === 0) return;
+      // Remove all but the first row
+      itemRows.forEach((row, idx) => {
+        if (idx > 0) row.remove();
+      });
+      // Reset the first row's inputs and state
+      const firstRow = itemRows[0];
+      if (firstRow) {
+        // Reset all relevant inputs
+        const descInput = firstRow.querySelector('[name="description[]"]');
+        const dcInput = firstRow.querySelector('[name="dc_no[]"]');
+        const qtyInput = firstRow.querySelector('[name="quantity[]"]');
+        const rateInput = firstRow.querySelector('[name="rate[]"]');
+        const totalInput = firstRow.querySelector('[name="total[]"]');
+        if (descInput) descInput.value = '';
+        if (dcInput) dcInput.value = '';
+        if (qtyInput) {
+          qtyInput.value = '';
+          qtyInput.readOnly = false;
+          qtyInput.classList.remove("bg-light");
+        }
+        if (rateInput) {
+          rateInput.value = '';
+          rateInput.dataset.autofilled = "false";
+        }
+        if (totalInput) totalInput.value = '';
+        firstRow.dataset.lastEdited = '';
+      }
+      renumberRows();
+      calculateTotal();
+    });
+  }
+
   // Handle Delivery Challan toggle
   document.getElementById('toggleDC').addEventListener('change', function(){
     const enabled = this.checked;
