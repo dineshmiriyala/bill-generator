@@ -1,98 +1,80 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="container py-4">
-  <h2 class="mb-4 text-center">Create Bill</h2>
+  <h2 class="mb-4 text-center">{{ 'Edit Bill' if edit_mode else 'Create Bill' }}</h2>
 
-{% if edit_mode %}
+  {% if edit_mode %}
   <div id="editModeBanner" class="bg-info bg-opacity-10 border border-info rounded p-3 d-flex justify-content-between align-items-center mb-3">
     <div>
-      <strong>Editing Invoice:</strong> <span class="badge bg-secondary">{{ prev_invoice_no or invoice_no }}</span>
+      <strong>Editing Invoice:</strong>
+      <span class="badge bg-secondary">{{ prev_invoice_no or invoice_no }}</span>
       <span class="ms-3 text-muted">Created at: {{ prev_created_at }}</span>
     </div>
     <a href="{{ url_for('bill_preview', invoicenumber=invoice_no) }}" target="_blank" class="btn btn-sm btn-outline-primary">Open current PDF</a>
   </div>
-{% endif %}
+  {% endif %}
 
   <form method="POST" action="{% if edit_mode %}{{ url_for('update_bill', invoicenumber=invoice_no) }}{% else %}/create-bill{% endif %}">
     {% if edit_mode %}<input type="hidden" name="invoice_no" value="{{ invoice_no }}">{% endif %}
+
+    <!-- Customer Details -->
     <div class="mb-4">
       <h5>Customer Details</h5>
       <table class="table table-striped table-bordered align-middle text-start">
         <thead class="table-light">
           <tr>
-            <th>Name</th>
-            <th>Company</th>
-            <th>ID</th>
-            <th>GST</th>
-            <th>Address</th>
-            <th></th>
-            <th></th>
+            <th>Name</th><th>Company</th><th>ID</th><th>GST</th><th>Address</th><th></th><th></th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td class="text-muted fst-italic small">{{ customer.name }}</td>
-            <td>
-              {{ customer.company }}
-            </td>
-            <td>
-              <span id="phoneValue" class="d-block">{{ customer.phone }}</span>
-            </td>
-            <td>
-              <span id="gstValue" class="d-block">{{ customer.gst }}</span>
-            </td>
-            <td><span id="addressValue" class="d-block">{{ customer.address }}</span></td>
-            <td>
-              {% if not edit_mode %}<a href="{{ url_for('select_customer') }}" class="btn btn-sm btn-success">Change</a>{% endif %}
-            </td>
+            <td class="text-muted fst-italic small">{{ customer.name if customer else '' }}</td>
+            <td>{{ customer.company if customer else '' }}</td>
+            <td><span id="phoneValue" class="d-block">{{ customer.phone if customer else '' }}</span></td>
+            <td><span id="gstValue" class="d-block">{{ customer.gst if customer else '' }}</span></td>
+            <td><span id="addressValue" class="d-block">{{ customer.address if customer else '' }}</span></td>
+            <td>{% if not edit_mode %}<a href="{{ url_for('select_customer') }}" class="btn btn-sm btn-success">Change</a>{% endif %}</td>
             <td></td>
           </tr>
           <tr>
-            <td></td>
-            <td></td>
+            <td></td><td></td>
             <td class="text-center align-top">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="excludePhone" name="exclude_phone"
-                  data-initial="{{ 'true' if exclude_phone else 'false' }}"
-                  {% if exclude_phone in [True, 'true', 'on', '1'] %}checked{% endif %}>
+                  {% if exclude_phone %}checked{% endif %}>
                 <label class="form-check-label small" for="excludePhone">Exclude ID</label>
               </div>
             </td>
             <td class="text-center align-top">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="excludeGST" name="exclude_gst"
-                  data-initial="{{ 'true' if exclude_gst else 'false' }}"
-                  {% if exclude_gst in [True, 'true', 'on', '1'] %}checked{% endif %}>
+                  {% if exclude_gst %}checked{% endif %}>
                 <label class="form-check-label small" for="excludeGST">Exclude GST</label>
               </div>
             </td>
             <td class="text-center align-top">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="excludeAddress" name="exclude_addr"
-                  data-initial="{{ 'true' if exclude_addr else 'false' }}"
-                  {% if exclude_addr in [True, 'true', 'on', '1'] %}checked{% endif %}>
+                  {% if exclude_addr %}checked{% endif %}>
                 <label class="form-check-label small" for="excludeAddress">Exclude Address</label>
               </div>
             </td>
-            <td></td>
-            <td></td>
-          </tr>
-          <tr>
-            <td></td>
-            <td class="text-muted small fst-italic" colspan="5">Note: Only Company Name will appear in the final bill</td>
+            <td></td><td></td>
           </tr>
         </tbody>
       </table>
-      <input type="hidden" name="customer_phone" value="{{ customer.phone }}">
+      <input type="hidden" name="customer_phone" value="{{ customer.phone if customer else '' }}">
     </div>
 
     <hr>
 
+    <!-- Delivery Challan toggle -->
     <div class="form-check form-switch mb-2">
       <input class="form-check-input" type="checkbox" id="toggleDC" {% if dcno %}checked{% endif %}>
       <label class="form-check-label" for="toggleDC">Include Delivery Challan No per item</label>
     </div>
 
+    <!-- Items -->
     <h5 class="mb-3">Items</h5>
     <div id="items">
       <div id="items-header" class="row g-3 align-items-end mb-2 fw-semibold small text-muted">
@@ -106,227 +88,80 @@
       </div>
       {% if success or edit_mode %}
         {% for description, quantity, rate, line_total in zip(descriptions, quantities, rates, line_totals) %}
-          <div class="row g-3 align-items-end mb-3 item-row">
-            <div class="col-md-1 serial-col"><span class="serial-index">{{ loop.index }}</span></div>
-            <div class="col-md-4">
-              <input type="text" name="description[]" class="form-control item-description" list="inventoryList" placeholder="Item Name" value="{{ description }}" required>
-              <datalist id="inventoryList">
-                {% for item in inventory %}
-                <option value="{{ item.name }}">
-                {% endfor %}
-              </datalist>
-              <input type="hidden" name="item_id[]" value="">
-            </div>
-            <div class="col-md-2 dc-col" style="{% if not dcno %}display:none;{% endif %}">
-              <input type="text" name="dc_no[]" class="form-control dc-input" placeholder="DC No" {% if not dcno %}disabled{% endif %} value="{{ dc_numbers[loop.index0] if dc_numbers is defined and dc_numbers|length > loop.index0 else '' }}">
-            </div>
-            <div class="col-md-2">
-              <input type="number" name="quantity[]" class="form-control" placeholder="Qty" step="1" inputmode="numeric" value="{{ quantity }}" required>
-            </div>
-            <div class="col-md-2">
-              <input type="number" name="rate[]" class="form-control rate-input" placeholder="Unit Price" step="0.01" inputmode="decimal" value="{{ rate }}" required>
-            </div>
-            <div class="col-md-2">
-              <input type="number" name="total[]" class="form-control total-input" placeholder="Total" step="0.01" inputmode="decimal" value="{{ line_total }}">
-            </div>
-            <div class="col-md-1 d-flex justify-content-end align-items-end">
-              <button type="button" class="btn btn-danger remove-item">Remove</button>
-            </div>
+        <div class="row g-3 align-items-end mb-3 item-row" data-last-edited="">
+          <div class="col-md-1 serial-col"><span class="serial-index">{{ loop.index }}</span></div>
+          <div class="col-md-4">
+            <input type="text" name="description[]" class="form-control item-description" list="inventoryList" value="{{ description }}" placeholder="Item description" required>
+            <datalist id="inventoryList">{% for item in inventory %}<option value="{{ item.name }}">{% endfor %}</datalist>
           </div>
+          <div class="col-md-2 dc-col" style="{% if not dcno %}display:none;{% endif %}">
+            <input type="text" name="dc_no[]" class="form-control dc-input" value="{{ dc_numbers[loop.index0] if dc_numbers is defined and dc_numbers|length > loop.index0 else '' }}" {% if not dcno %}disabled{% endif %}>
+          </div>
+          <div class="col-md-2"><input type="number" name="quantity[]" class="form-control qty-input" step="1" value="{{ quantity }}" placeholder="Quantity" required></div>
+          <div class="col-md-2"><input type="number" name="rate[]" class="form-control rate-input" step="0.01" value="{{ rate }}" placeholder="Unit price" required></div>
+          <div class="col-md-2"><input type="number" name="total[]" class="form-control total-input" step="0.01" value="{{ line_total }}" placeholder="Line total" required></div>
+          <div class="col-md-1 d-flex justify-content-end"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
+        </div>
         {% endfor %}
       {% else %}
-        <div class="row g-3 align-items-end mb-3 item-row">
+        <div class="row g-3 align-items-end mb-3 item-row" data-last-edited="">
           <div class="col-md-1 serial-col"><span class="serial-index">1</span></div>
           <div class="col-md-4">
-            <input type="text" name="description[]" class="form-control item-description" list="inventoryList" placeholder="Description" required>
-            <datalist id="inventoryList">
-              {% for item in inventory %}
-              <option value="{{ item.name }}">
-              {% endfor %}
-            </datalist>
-            <input type="hidden" name="item_id[]" value="">
+            <input type="text" name="description[]" class="form-control item-description" list="inventoryList" required placeholder="Item description">
+            <datalist id="inventoryList">{% for item in inventory %}<option value="{{ item.name }}">{% endfor %}</datalist>
           </div>
-          <div class="col-md-2 dc-col" style="display:none;">
-            <input type="text" name="dc_no[]" class="form-control dc-input" placeholder="DC No" disabled>
-          </div>
-          <div class="col-md-2">
-            <input type="number" name="quantity[]" class="form-control" placeholder="Qty" step="1" inputmode="numeric" required>
-          </div>
-          <div class="col-md-2">
-            <input type="number" name="rate[]" class="form-control rate-input" placeholder="Unit Price" step="0.01" inputmode="decimal" required>
-          </div>
-          <div class="col-md-2">
-            <input type="number" name="total[]" class="form-control total-input" placeholder="Total" step="0.01" inputmode="decimal" value="">
-          </div>
-          <div class="col-md-1 d-flex justify-content-end align-items-end">
-            <button type="button" class="btn btn-danger remove-item">Remove</button>
-          </div>
+          <div class="col-md-2 dc-col" style="display:none;"><input type="text" name="dc_no[]" class="form-control dc-input" disabled></div>
+          <div class="col-md-2"><input type="number" name="quantity[]" class="form-control qty-input" step="1" placeholder="Quantity" required></div>
+          <div class="col-md-2"><input type="number" name="rate[]" class="form-control rate-input" step="0.01" placeholder="Unit price" required></div>
+          <div class="col-md-2"><input type="number" name="total[]" class="form-control total-input" step="0.01" placeholder="Line total" required></div>
+          <div class="col-md-1 d-flex justify-content-end"><button type="button" class="btn btn-danger remove-item">Remove</button></div>
         </div>
       {% endif %}
     </div>
 
-    <div class="mb-3">
-      <button type="button" id="addItem" class="btn btn-secondary">Add Item</button>
-    </div>
+    <div class="mb-3"><button type="button" id="addItem" class="btn btn-secondary">Add Item</button></div>
 
+    <!-- Grand Total -->
     <div class="mb-4 text-end pe-3">
       <label class="form-label fw-semibold">New Total (INR):</label>
-      <span id="totalAmount" class="fw-bold fs-5">
-        {% if (success or edit_mode) and grand_total %}
-          {{ grand_total }}
-        {% else %}
-          0.00
-        {% endif %}
-      </span>
+      <span id="totalAmount" class="fw-bold fs-5">{{ grand_total if (success or edit_mode) and grand_total else '0.00' }}</span>
     </div>
 
+    <!-- Action buttons -->
     {% if edit_mode %}
       <button type="submit" class="btn btn-primary">Update Bill</button>
-      <!-- Appears only when changes are detected -->
-      <button type="submit" id="createNewBillBtn" class="btn btn-success ms-2 d-none" formaction="/create-bill" formmethod="POST">Create New Bill</button>
+      <button type="submit" id="createNewBillBtn" class="btn btn-success ms-2" formaction="/create-bill" formmethod="POST">Create New Bill</button>
       <a href="{{ url_for('select_customer') }}" class="btn btn-outline-secondary ms-2">Start Fresh</a>
     {% else %}
       <button type="submit" class="btn btn-primary">Generate Bill</button>
       <button type="button" id="clearForm" class="btn btn-outline-danger ms-2">Clear Form</button>
-      {% if success and not edit_mode %}
-      <a href="{{ url_for('latest_bill_preview') }}" target="_blank" class="btn btn-success ms-2" id="printBillBtn">Print Generated Bill</a>
-      {% endif %}
+      {% if success and not edit_mode %}<a href="{{ url_for('latest_bill_preview') }}" target="_blank" class="btn btn-success ms-2" id="printBillBtn">Print Generated Bill</a>{% endif %}
     {% endif %}
 
     {% if edit_mode %}
-    <div class="mt-3">
-      <a href="{{ url_for('bill_preview', invoicenumber=invoice_no) }}" target="_blank" class="btn btn-outline-primary btn-sm">Preview Current Bill</a>
-    </div>
+    <div class="mt-3"><a href="{{ url_for('bill_preview', invoicenumber=invoice_no) }}" target="_blank" class="btn btn-outline-primary btn-sm">Preview Current Bill</a></div>
     {% endif %}
 
     {% if success %}
-      {% set bill_label = invoice_no or filename %}
-      {% if edit_mode %}
-      <div class="alert alert-success mt-4 d-flex justify-content-between align-items-center">
-        <div>
-          <strong>Bill updated successfully</strong>
-          {% if bill_label %}<span class="ms-2">(Invoice: <span class="badge bg-secondary">{{ bill_label }}</span>)</span>{% endif %}
-        </div>
-        <a href="{{ url_for('bill_preview', invoicenumber=invoice_no) }}" target="_blank" class="btn btn-outline-primary btn-sm">Preview Bill</a>
+    <div class="alert alert-success mt-4 d-flex justify-content-between align-items-center">
+      <div>
+        <strong>Bill {{ 'updated' if edit_mode else 'generated' }} successfully</strong>
+        {% if invoice_no %}<span class="ms-2">(Invoice: <span class="badge bg-secondary">{{ invoice_no }}</span>)</span>{% endif %}
       </div>
-      {% else %}
-      <div class="alert alert-success mt-4 d-flex justify-content-between align-items-center">
-        <div>
-          <strong>Bill generated successfully</strong>
-          {% if bill_label %}<span class="ms-2">(Invoice: <span class="badge bg-secondary">{{ bill_label }}</span>)</span>{% endif %}
-        </div>
-        <a href="{{ url_for('latest_bill_preview') }}" target="_blank" class="btn btn-outline-primary btn-sm">Preview Bill</a>
-      </div>
-      {% endif %}
+      <a href="{{ url_for('bill_preview', invoicenumber=invoice_no) if edit_mode else url_for('latest_bill_preview') }}" target="_blank" class="btn btn-outline-primary btn-sm">Preview Bill</a>
+    </div>
     {% endif %}
   </form>
 </div>
 
 <script>
-  function renumberRows(){
-    document.querySelectorAll('#items .item-row').forEach((row, idx) => {
-      const idxEl = row.querySelector('.serial-index');
-      if (idxEl) idxEl.textContent = String(idx + 1);
-    });
-  }
-
-  document.getElementById("addItem").addEventListener("click", () => {
-    const itemRow = document.querySelector(".item-row").cloneNode(true);
-    itemRow.querySelectorAll("input").forEach(input => input.value = "");
-    const toggleChecked = document.getElementById("toggleDC").checked;
-    itemRow.querySelectorAll(".dc-col").forEach(col => { col.style.display = toggleChecked ? '' : 'none'; });
-    itemRow.querySelectorAll(".dc-input").forEach(inp => { inp.disabled = !toggleChecked; if (!toggleChecked) inp.value = ''; });
-    document.getElementById("items").appendChild(itemRow);
-    renumberRows();
-  });
-
-  document.getElementById("items").addEventListener("click", e => {
-    if (e.target.classList.contains("remove-item")) {
-      const row = e.target.closest(".item-row");
-      if (document.querySelectorAll(".item-row").length > 1) {
-        row.remove();
-        renumberRows();
-        calculateTotal(); // update total after removal
-      }
-    }
-  });
-</script>
-
-<script>
-  function updateLabelState() {
-    const phoneCheckbox = document.getElementById("excludePhone");
-    const gstCheckbox = document.getElementById("excludeGST");
-    const addressCheckbox = document.getElementById("excludeAddress");
-    const phoneValue = document.getElementById("phoneValue");
-    const gstValue = document.getElementById("gstValue");
-    const addressValue = document.getElementById("addressValue");
-
-    if (phoneCheckbox && phoneValue) {
-      if (!phoneValue.dataset.original) phoneValue.dataset.original = phoneValue.textContent;
-      phoneValue.textContent = phoneCheckbox.checked ? '' : phoneValue.dataset.original;
-    }
-
-    if (gstCheckbox && gstValue) {
-      if (!gstValue.dataset.original) gstValue.dataset.original = gstValue.textContent;
-      gstValue.textContent = gstCheckbox.checked ? '' : gstValue.dataset.original;
-    }
-
-    if (addressCheckbox && addressValue) {
-      if (!addressValue.dataset.original) addressValue.dataset.original = addressValue.textContent;
-      addressValue.textContent = addressCheckbox.checked ? '' : addressValue.dataset.original;
-    }
-  }
-
-  document.addEventListener("DOMContentLoaded", function () {
-    const phoneCheckbox = document.getElementById("excludePhone");
-    const gstCheckbox = document.getElementById("excludeGST");
-    const addressCheckbox = document.getElementById("excludeAddress");
-
-    if (phoneCheckbox) phoneCheckbox.addEventListener("change", updateLabelState);
-    if (gstCheckbox) gstCheckbox.addEventListener("change", updateLabelState);
-    if (addressCheckbox) addressCheckbox.addEventListener("change", updateLabelState);
-
-    updateLabelState();  // initialize on load
-  });
-</script>
-
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-  const inventoryData = {
-    {% for item in inventory %}
-    "{{ item.name }}": {
-      rate: {{ item.unitPrice }}
-    },
-    {% endfor %}
-  };
-
-  document.getElementById("items").addEventListener("input", function(e) {
-    if (e.target.classList.contains("item-description")) {
-      const selectedItem = e.target.value;
-      const row = e.target.closest(".item-row");
-      const rateInput = row.querySelector('[name="rate[]"]');
-
-      if (inventoryData[selectedItem]) {
-        rateInput.value = inventoryData[selectedItem].rate;
-      }
-    }
-  });
-});
-</script>
-
-<script>
-// Flags controlled by server
-const USE_BACKEND_TOTALS = {{ 'true' if success or edit_mode else 'false' }};
-const USE_FRONTEND_ROUNDING = {{ 'false' if success or edit_mode else 'true' }};
-
 function roundToNearest10(num) {
-  if (!num) return 0;
   return Math.round(num / 10) * 10;
 }
 
 function calculateTotal() {
-  let grandTotal = 0;
-  document.querySelectorAll(".item-row").forEach(row => {
+  let grand = 0;
+  document.querySelectorAll('.item-row').forEach(row => {
     const qtyInput = row.querySelector('[name="quantity[]"]');
     const rateInput = row.querySelector('[name="rate[]"]');
     const totalInput = row.querySelector('[name="total[]"]');
@@ -339,209 +174,67 @@ function calculateTotal() {
       if (qty > 0) {
         rateInput.value = (totalVal / qty).toFixed(2);
       }
-      grandTotal += totalVal;
+      grand += totalVal;
     } else {
       let total = qty * rate;
       total = roundToNearest10(total);
-      totalInput.value = total.toFixed(2);
-      grandTotal += total;
+      totalInput.value = total ? total.toFixed(2) : '';
+      grand += total;
     }
   });
-  document.getElementById("totalAmount").textContent = grandTotal.toFixed(2);
+  document.getElementById('totalAmount').textContent = grand.toFixed(2);
 }
 
-document.getElementById("items").addEventListener("input", calculateTotal);
-
-// Set up listeners for manual edit tracking and last edited field
-function setupTotalManualListeners(context) {
-  (context || document).querySelectorAll('.item-row').forEach(row => {
-    // Total input listener
-    row.querySelectorAll('.total-input').forEach(totalInput => {
-      if (!totalInput.dataset.listenerAdded) {
-        totalInput.addEventListener('input', () => {
-          totalInput.dataset.manual = "true";
-          totalInput.closest('.item-row').dataset.lastEdited = 'total';
-          calculateTotal();
-        });
-        totalInput.dataset.listenerAdded = "true";
-      }
-    });
-    // Rate input listener
-    row.querySelectorAll('[name="rate[]"]').forEach(rateInput => {
-      if (!rateInput.dataset.listenerAdded) {
-        rateInput.addEventListener('input', () => {
-          rateInput.closest('.item-row').dataset.lastEdited = 'rate';
-          calculateTotal();
-        });
-        rateInput.dataset.listenerAdded = "true";
-      }
-    });
-    // Quantity input listener
-    row.querySelectorAll('[name="quantity[]"]').forEach(qtyInput => {
-      if (!qtyInput.dataset.listenerAdded) {
-        qtyInput.addEventListener('input', () => {
-          qtyInput.closest('.item-row').dataset.lastEdited = 'quantity';
-          calculateTotal();
-        });
-        qtyInput.dataset.listenerAdded = "true";
-      }
-    });
-  });
+function setupRow(row){
+  row.querySelector('[name="quantity[]"]').addEventListener('input', () => { row.dataset.lastEdited='quantity'; calculateTotal(); });
+  row.querySelector('[name="rate[]"]').addEventListener('input', () => { row.dataset.lastEdited='rate'; calculateTotal(); });
+  row.querySelector('[name="total[]"]').addEventListener('input', () => { row.dataset.lastEdited='total'; calculateTotal(); });
 }
 
-document.addEventListener("DOMContentLoaded", function() {
-  setupTotalManualListeners();
-  // On load, if first-create, compute with rounding; if edit/success, just sum existing without overriding
+function renumberRows(){
+  document.querySelectorAll('#items .item-row').forEach((row,i)=>{ row.querySelector('.serial-index').textContent = i+1; });
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.querySelectorAll('.item-row').forEach(row=>setupRow(row));
   calculateTotal();
+
+  document.getElementById('addItem').addEventListener('click', ()=>{
+    const firstRow = document.querySelector('.item-row');
+    const newRow = firstRow.cloneNode(true);
+    newRow.querySelectorAll('input').forEach(inp=>inp.value='');
+    newRow.dataset.lastEdited='';
+    document.getElementById('items').appendChild(newRow);
+    renumberRows();
+    setupRow(newRow);
+    calculateTotal();
+  });
+
+  document.getElementById('items').addEventListener('click', e=>{
+    if(e.target.classList.contains('remove-item')){
+      const row = e.target.closest('.item-row');
+      if(document.querySelectorAll('.item-row').length>1){
+        row.remove();
+        renumberRows();
+        calculateTotal();
+      }
+    }
+  });
 });
-
-// After adding rows, rebind
-const addBtnEl = document.getElementById("addItem");
-if (addBtnEl) {
-  addBtnEl.addEventListener("click", function(){
-    setTimeout(function(){
-      setupTotalManualListeners();
-      calculateTotal();
-    }, 0);
+// Form validation for all item fields before submit
+document.querySelector("form").addEventListener("submit", function(e) {
+  let valid = true;
+  document.querySelectorAll(".item-row").forEach(row => {
+    row.querySelectorAll("input").forEach(inp => {
+      if (!inp.value && inp.hasAttribute("required")) {
+        valid = false;
+      }
+    });
   });
-}
-</script>
-<script>
-const clearBtn = document.getElementById("clearForm"); if (clearBtn) {
-clearBtn.addEventListener("click", () => {
-  document.querySelectorAll(".item-row").forEach((row, index) => {
-    row.querySelectorAll("input").forEach(input => input.value = "");
-    if (index > 0) row.remove();  // Keep only the first row
-  });
-  document.querySelectorAll(".dc-input").forEach(inp => inp.value = "");
-  document.getElementById("totalAmount").textContent = "0.00";
-  const printBtn = document.getElementById("printBillBtn");
-  if (printBtn) printBtn.remove();
+  if (!valid) {
+    e.preventDefault();
+    alert("Please fill in all item fields (description, quantity, unit price, and total) before submitting.");
+  }
 });
-}
-</script>
-
-<script>
-  function applyDCToggle(checked){
-    document.querySelectorAll('.dc-col').forEach(col => { col.style.display = checked ? '' : 'none'; });
-    document.querySelectorAll('.dc-input').forEach(inp => { inp.disabled = !checked; });
-  }
-  const dcToggle = document.getElementById('toggleDC');
-  if (dcToggle) {
-    dcToggle.addEventListener('change', (e) => {
-      // Retain existing DC values; just hide/show and disable/enable inputs
-      applyDCToggle(e.target.checked);
-    });
-  }
-  // initialize on load based on server value
-  const initialDC = {{ 'true' if dcno else 'false' }};
-  try { document.getElementById('toggleDC').checked = initialDC; } catch (e) {}
-  applyDCToggle(initialDC);
-</script>
-
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    const isSuccess = "{{ success }}".toLowerCase() === "true";
-    const isEdit = {{ 'true' if edit_mode else 'false' }};
-    if (isSuccess || isEdit) {
-      setupTotalManualListeners();
-      calculateTotal();
-    }
-  });
-</script>
-<script>
-// Edit mode change detection (now includes exclude checkboxes)
-(function(){
-  // Build an initial snapshot of the form when the page loads (edit mode only)
-  const isEdit = {{ 'true' if edit_mode else 'false' }};
-  if (!isEdit) return;
-
-  function readRows() {
-    const rows = [];
-    document.querySelectorAll('#items .item-row').forEach((row) => {
-      const desc = (row.querySelector('[name="description[]"]').value || '').trim();
-      const qty  = (row.querySelector('[name="quantity[]"]').value || '').trim();
-      const rate = (row.querySelector('[name="rate[]"]').value || '').trim();
-      const dcInp = row.querySelector('[name="dc_no[]"]');
-      const dc   = dcInp ? (dcInp.value || '').trim() : '';
-      rows.push({desc, qty, rate, dc});
-    });
-    return rows;
-  }
-
-  function snapshot() {
-    return {
-      dcEnabled: document.getElementById('toggleDC')?.checked || false,
-      rows: readRows(),
-      excludePhone: document.getElementById('excludePhone')?.checked || false,
-      excludeGST: document.getElementById('excludeGST')?.checked || false,
-      excludeAddress: document.getElementById('excludeAddress')?.checked || false
-    };
-  }
-
-  const initial = snapshot();
-
-  function differ(a, b){
-    try { return JSON.stringify(a) !== JSON.stringify(b); } catch(e){ return true; }
-  }
-
-  function hasExcludeChanged(current) {
-    return current.excludePhone !== initial.excludePhone ||
-           current.excludeGST !== initial.excludeGST ||
-           current.excludeAddress !== initial.excludeAddress;
-  }
-
-  function updateCreateButton(){
-    const btn = document.getElementById('createNewBillBtn');
-    if (!btn) return;
-    const current = snapshot();
-    const changed = differ(initial, current) || hasExcludeChanged(current);
-    if (changed) {
-      btn.classList.remove('d-none');
-      btn.disabled = false;
-    } else {
-      btn.classList.add('d-none');
-      btn.disabled = true;
-    }
-  }
-
-  // Watch for any input changes, row adds/removes, and DC toggle changes
-  document.getElementById('items').addEventListener('input', updateCreateButton);
-  document.getElementById('items').addEventListener('click', (e)=>{
-    if (e.target.classList.contains('remove-item')) {
-      // Defer until DOM updates
-      setTimeout(updateCreateButton, 0);
-    }
-  });
-  const addBtn = document.getElementById('addItem');
-  if (addBtn) {
-    addBtn.addEventListener('click', ()=> setTimeout(updateCreateButton, 0));
-  }
-  const dcToggleEl = document.getElementById('toggleDC');
-  if (dcToggleEl) dcToggleEl.addEventListener('change', updateCreateButton);
-
-  // Watch exclude checkboxes
-  const watchExcludeChanges = () => {
-    ['excludePhone', 'excludeGST', 'excludeAddress'].forEach(id => {
-      const cb = document.getElementById(id);
-      if (!cb) return;
-      cb.addEventListener('change', updateCreateButton);
-    });
-  };
-  watchExcludeChanges();
-
-  // Initial evaluation
-  updateCreateButton();
-})();
-</script>
-<script>
-  document.querySelector('form').addEventListener('submit', function(){
-    document.querySelectorAll('.rate-input').forEach(inp => {
-      if (!inp.value) return;
-      let v = inp.value.replace(/[₹\s]/g,'').replace(/,/g,'');
-      if (!v.includes('.') && inp.value.includes(',')) v = v.replace(',', '.');
-      inp.value = v;
-    });
-  });
 </script>
 {% endblock %}

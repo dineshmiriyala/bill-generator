@@ -374,24 +374,7 @@ def _flash_test():
 # Home Route
 @app.route('/')
 def home():
-    # Check for last backup
-    session.pop('persistent_notice', None)
-    last_record = lastBackup.query.order_by(lastBackup.occurred_at.desc()).first()
-
-    if not last_record or not last_record.occurred_at:
-        # No backups exist
-        session['persistent_notice'] = (
-            "⚠️ No backup has been done yet."
-            "<a href='" + url_for('backup_page') + "' class='btn btn-sm btn-warning ms-2'>Create your first backup</a>"
-        )
-    else:
-        days_since = (datetime.now() - last_record.occurred_at).days
-        if days_since > 30:
-            session['persistent_notice'] = (
-                "⚠️ Last backup is over 30 days old. Click here:"
-                "<a href='" + url_for('backup_page') + "' class='btn btn-sm btn-danger ms-2'>Backup now</a>"
-            )
-
+    session['persistent_notice'] = None
     return render_template('home.html')
 
 
@@ -1200,7 +1183,8 @@ def view_bill_locked(invoicenumber):
         line_totals=line_totals,
         dcno=dcno,
         total=round(total, 2),
-        invoice_no=current_invoice.invoiceId
+        invoice_no=current_invoice.invoiceId,
+        back_to_select_customer = True
     )
 
 
@@ -1527,94 +1511,6 @@ def latest_bill_preview():
                            dc_numbers=dc_numbers,
                            total_in_words=amount_to_words(current_invoice.totalAmount),
                            sizes=current_sizes)
-
-
-# --- Backup Feature ---
-@app.route('/backup', methods=['GET', 'POST'])
-def backup_page():
-    """
-    Backup management page showing last backup time and allowing restore via upload.
-    """
-    days_ago = None
-    last_record = lastBackup.query.order_by(lastBackup.occurred_at.desc()).first()
-
-    if request.method == 'POST' and 'backupFile' in request.files:
-        f = request.files['backupFile']
-        if f and f.filename.endswith('.db'):
-            # Save uploaded file temporarily
-            uploaded_path = basedir / "uploaded_backup.db"
-            f.save(uploaded_path)
-
-            # Overwrite live DB with uploaded backup
-            shutil.copy2(uploaded_path, db_file)
-
-            # Log restore as a backup event
-            new_entry = lastBackup(note="Backup restored")
-            db.session.add(new_entry)
-            db.session.commit()
-
-            flash("Backup restored successfully!", "success")
-            return redirect(url_for('backup_page'))
-        else:
-            flash("Invalid file. Please upload a .db backup.", "danger")
-
-    if last_record:
-        days_ago = (datetime.now() - last_record.occurred_at).days
-
-    logs = lastBackup.query.order_by(lastBackup.occurred_at.desc()).limit(5).all()
-
-    for log in logs:
-        if log.occurred_at:
-            log.days_ago = (datetime.utcnow() - log.occurred_at).days
-        else:
-            log.days_ago = None
-
-    return render_template(
-        'backup.html',
-        last_backup_date=last_record.occurred_at.strftime("%Y-%m-%d %H:%M") if last_record else "Never",
-        days_ago=days_ago if days_ago is not None else "N/A",
-        backup_logs=logs
-    )
-
-
-@app.route('/backup/now')
-def backup_now():
-    """
-    Create backup of the DB and serve it as a direct download to the user (web) or save to Documents (desktop).
-    """
-    # Log this backup in DB
-    new_entry = lastBackup(note="Backup downloaded")
-    db.session.add(new_entry)
-    db.session.commit()
-
-    if is_desktop:
-        # Desktop mode: Save backup in Documents/SLO_BILL_BACKUPS
-        from pathlib import Path
-        import shutil
-        import os
-        # Compute backup dir under Documents
-        documents_dir = Path.home() / "Documents"
-        backup_dir = documents_dir / "SLO_BILL_BACKUPS"
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        # Compose filename with timestamp
-        ts = new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')
-        backup_path = backup_dir / f"backup_{ts}.db"
-        # Copy db file to backup_path
-        shutil.copy2(db_file, backup_path)
-        flash(f"Backup saved to {backup_path}", "success")
-        return redirect(url_for('backup_page'))
-    else:
-        # Web mode: direct download
-        buf = io.BytesIO()
-        with open(db_file, 'rb') as f:
-            buf.write(f.read())
-        buf.seek(0)
-        return send_file(
-            buf,
-            as_attachment=True,
-            download_name=f"backup_{new_entry.occurred_at.strftime('%Y%m%d_%H%M%S')}.db",
-            mimetype="application/octet-stream"
-        )
 
 
 

@@ -1,23 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Bill Generator</title>
-    <!-- Bootstrap 5 CSS CDN -->
-    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.min.css') }}">
+  <meta charset="UTF-8">
+  <title>Bill Generator</title>
+  <!-- Bootstrap 5 CSS CDN -->
+  <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.min.css') }}">
 </head>
 <body class="d-flex flex-column min-vh-100">
 
-<!-- Navbar -->
 {% if not hide_navbar %}
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
   <div class="container d-flex justify-content-between align-items-center">
-    <button class="btn btn-outline-light btn-sm me-2" onclick="goBack()">← Back</button>
+    <!-- Back and Home Buttons Grouped -->
+    <div class="d-flex align-items-center">
+      {% if back_to_select_customer %}
+        <a href="{{ url_for('select_customer') }}" class="btn btn-outline-light btn-sm me-2">← Back</a>
+      {% else %}
+        <button class="btn btn-outline-light btn-sm me-2" onclick="history.back()">← Back</button>
+      {% endif %}
+      <a href="{{ url_for('home') }}" class="btn btn-outline-light btn-sm me-2">🏠 Home</a>
+    </div>
+    <!-- Brand -->
     <a class="navbar-brand" href="/">Sri Lakshmi Offset Printers</a>
+    <!-- Quick Links -->
     <div class="dropdown ms-3">
-      <button class="btn btn-secondary dropdown-toggle" type="button" id="staticDropdownButton" data-bs-toggle="dropdown" aria-expanded="false">
+      <button class="btn btn-secondary dropdown-toggle" type="button" id="staticDropdownButton"
+              data-bs-toggle="dropdown" aria-expanded="false">
         Quick Links
       </button>
       <ul class="dropdown-menu" aria-labelledby="staticDropdownButton">
@@ -30,6 +40,8 @@
     </div>
   </div>
 </nav>
+
+<!-- Flash Messages -->
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
     <div class="container mt-3">
@@ -50,25 +62,15 @@
   </div>
 </main>
 
-<footer class = "text-muted fixed-bottom bg-light py-2">
-    <div class = "container text-end">
-        <small>Created by MD</small>
-    </div>
+<footer class="text-muted fixed-bottom bg-light py-2">
+  <div class="container text-end">
+    <small>Created by MD</small>
+  </div>
 </footer>
 
 <!-- Bootstrap 5 JS Bundle -->
 <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
-<script>
-  function goBack() {
-    if (history.length > 1) {
-      history.back();
-    } else {
-      window.location.href = '/';
-    }
-  }
-</script>
 
-</body>
 <script>
   document.addEventListener('DOMContentLoaded', function(){
     const alerts = document.querySelectorAll('.alert');
@@ -83,4 +85,6 @@
     }
   });
 </script>
+
+</body>
 </html>

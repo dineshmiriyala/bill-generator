@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block content %}
+{% set back_to_select_customer = True %}
 <div class="container py-4">
   {% if session.persistent_notice %}
     <div style="background-color: #d1e7dd; border: 1px solid #badbcc; color: #0f5132; padding: 12px 16px; border-radius: 4px; position: relative; margin-bottom: 1rem;">
@@ -106,8 +107,8 @@
     const nextField = document.getElementById('nextField');
     if (!form || !nextField) return;
 
-    // Prefer going back to the bills list; if we came from the list, use that exact URL (preserves filters/sort)
-    const listFallback = '{{ url_for('view_bills') }}';
+    // Prefer going back to the create bill page if no referrer
+    const listFallback = '{{ url_for('select_customer') }}';
     const ref = document.referrer || '';
     if (ref.includes('/view_bills')) {
       nextField.value = ref;
