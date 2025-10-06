@@ -270,10 +270,30 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('addItem').addEventListener('click', ()=>{
     const firstRow = document.querySelector('.item-row');
     const newRow = firstRow.cloneNode(true);
-    newRow.querySelectorAll('input').forEach(inp=>inp.value='');
-    newRow.dataset.lastEdited='';
+
+    // Clear all inputs in the cloned row
+    newRow.querySelectorAll('input').forEach(inp=>{
+      inp.value = '';
+      // Make sure no readOnly state is carried over from a rounded row
+      inp.readOnly = false;
+      inp.classList.remove('bg-light');
+    });
+
+    // Reset row edit state
+    newRow.dataset.lastEdited = '';
+
+    // Ensure qty is explicitly editable (belt-and-suspenders)
+    const newQty = newRow.querySelector('[name="quantity[]"]');
+    if (newQty) {
+      newQty.readOnly = false;
+      newQty.classList.remove('bg-light');
+    }
+
+    // Reset autofill marker on rate
     const newRate = newRow.querySelector('[name="rate[]"]');
     if (newRate) newRate.dataset.autofilled = "false";
+
+    // Append and rewire listeners
     document.getElementById('items').appendChild(newRow);
     renumberRows();
     setupRow(newRow);
