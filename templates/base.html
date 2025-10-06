@@ -7,6 +7,26 @@
   <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.min.css') }}">
+  <style>
+    .btn-back {
+      background-color: #0056b3;
+      color: #fff;
+      border: none;
+    }
+    .btn-back:hover {
+      background-color: #003f7f;
+      color: #fff;
+    }
+    .btn-home {
+      background-color: #198754;
+      color: #fff;
+      border: none;
+    }
+    .btn-home:hover {
+      background-color: #146c43;
+      color: #fff;
+    }
+  </style>
 </head>
 <body class="d-flex flex-column min-vh-100">
 
@@ -16,11 +36,11 @@
     <!-- Back and Home Buttons Grouped -->
     <div class="d-flex align-items-center">
       {% if back_to_select_customer %}
-        <a href="{{ url_for('select_customer') }}" class="btn btn-outline-light btn-sm me-2">← Back</a>
+        <a href="{{ url_for('select_customer') }}" class="btn btn-back btn-sm me-2">← Back</a>
       {% else %}
-        <button class="btn btn-outline-light btn-sm me-2" onclick="history.back()">← Back</button>
+        <button class="btn btn-back btn-sm me-2" onclick="history.back()">← Back</button>
       {% endif %}
-      <a href="{{ url_for('home') }}" class="btn btn-outline-light btn-sm me-2">🏠 Home</a>
+      <a href="{{ url_for('home') }}" class="btn btn-home btn-sm me-2">🏠 Home</a>
     </div>
     <!-- Brand -->
     <a class="navbar-brand" href="/">Sri Lakshmi Offset Printers</a>
