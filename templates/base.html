@@ -6,7 +6,6 @@
   <!-- Bootstrap 5 CSS CDN -->
   <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.min.css') }}">
   <style>
     .btn-back {
       background-color: #0056b3;
@@ -44,19 +43,27 @@
     </div>
     <!-- Brand -->
     <a class="navbar-brand" href="/">Sri Lakshmi Offset Printers</a>
-    <!-- Quick Links -->
-    <div class="dropdown ms-3">
-      <button class="btn btn-secondary dropdown-toggle" type="button" id="staticDropdownButton"
-              data-bs-toggle="dropdown" aria-expanded="false">
-        Quick Links
-      </button>
-      <ul class="dropdown-menu" aria-labelledby="staticDropdownButton">
-        <li><a class="dropdown-item" href="/view_bills">View Bills</a></li>
-        <li><a class="dropdown-item" href="/select_customer">Create Bill</a></li>
-        <li><a class="dropdown-item" href="/view_customers">View Customers</a></li>
-        <li><a class="dropdown-item" href="/view_inventory">Inventory</a></li>
-        <li><a class="dropdown-item" href="/statements">Statements</a></li>
-      </ul>
+    <div class="dropdown d-flex align-items-center ms-3">
+      <div>
+        <button class="btn btn-secondary dropdown-toggle me-2" type="button" id="staticDropdownButton"
+                data-bs-toggle="dropdown" aria-expanded="false">
+          Quick Links
+        </button>
+        <ul class="dropdown-menu" aria-labelledby="staticDropdownButton">
+          <li><a class="dropdown-item" href="/view_bills">View Bills</a></li>
+          <li><a class="dropdown-item" href="/select_customer">Create Bill</a></li>
+          <li><a class="dropdown-item" href="/view_customers">View Customers</a></li>
+          <li><a class="dropdown-item" href="/view_inventory">Inventory</a></li>
+          <li><a class="dropdown-item" href="/statements">Statements</a></li>
+        </ul>
+      </div>
+      <!-- Apple-Style Search Bar -->
+      <div class="position-relative" style="width: 220px;">
+        <input type="search" id="globalSearch" class="form-control form-control-sm rounded-pill ps-5 shadow-sm"
+               placeholder="Search…" style="background-color: #f5f5f7; border: none;">
+        <span style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #888;">🔍</span>
+        <ul id="searchResults" class="list-group position-absolute w-100 shadow-sm" style="z-index: 1050; display: none; top: 36px;"></ul>
+      </div>
     </div>
   </div>
 </nav>
@@ -102,6 +109,54 @@
           } catch(e){}
         });
       }, 4000);
+    }
+  });
+</script>
+
+<script>
+  const searchLinks = [
+    { name: "View Bills", url: "/view_bills" },
+    { name: "Create Bill", url: "/select_customer" },
+    { name: "View Customers", url: "/view_customers" },
+    { name: "Add Customer", url: "/create_customers" },
+    { name: "Inventory List", url: "/view_inventory" },
+    { name: "Add Item", url: "/add_inventory" },
+    { name: "Statements (Date-wise)", url: "/statements" },
+    { name: "Company Statements", url: "/statements_company" },
+    { name: "Invoice Layout Editor", url: "/test-pre-preview" },
+    { name: "Data Recovery", url: "/recover" },
+    { name: "Data Recovery", url: "/recover" },
+    { name: "Home", url: "/" },
+    { name: "About Application", url: "/about_user?section=about" }
+  ];
+
+  const searchInput = document.getElementById('globalSearch');
+  const searchResults = document.getElementById('searchResults');
+
+  searchInput.addEventListener('input', () => {
+    const query = searchInput.value.toLowerCase();
+    searchResults.innerHTML = '';
+    if (!query) {
+      searchResults.style.display = 'none';
+      return;
+    }
+
+    const matches = searchLinks.filter(link => link.name.toLowerCase().includes(query));
+    matches.forEach(match => {
+      const item = document.createElement('li');
+      item.className = 'list-group-item list-group-item-action';
+      item.textContent = match.name;
+      item.addEventListener('click', () => {
+        window.location.href = match.url;
+      });
+      searchResults.appendChild(item);
+    });
+    searchResults.style.display = matches.length ? 'block' : 'none';
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!searchResults.contains(e.target) && e.target !== searchInput) {
+      searchResults.style.display = 'none';
     }
   });
 </script>
