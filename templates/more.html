@@ -1,176 +1,255 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="menu-container">
-  <!-- Main Menu -->
-  <div id="mainMenu" class="menu-list active">
-    <button class="back-btn-main" onclick="history.back()">←Go Back/Home</button>
-    <button class="menu-item" data-target="statementsMenu">Statements & Reports</button>
-    <button class="menu-item" data-target="billMenu">Billing & Invoicing</button>
-    <button class="menu-item" data-target="customerMenu">Customers</button>
-    <button class="menu-item" data-target="inventoryMenu">Inventory</button>
-    <button class="menu-item" data-target="accountMenu">Account & Insights</button>
-  </div>
-
-  <!-- Billing Submenu -->
-  <div id="billMenu" class="submenu">
-    <button class="back-btn">← Back</button>
-    <a href="/select_customer">Create Invoice</a>
-    <a href="/view_bills">View Invoices</a>
-    <a href="/test-pre-preview">Invoice Layout Editor</a>
-  </div>
-
-  <!-- Customer Submenu -->
-  <div id="customerMenu" class="submenu">
-    <button class="back-btn">← Back</button>
-    <a href="/create_customers">Add Customer</a>
-    <a href="/view_customers">Customer List</a>
-  </div>
-
-  <!-- Inventory Submenu -->
-  <div id="inventoryMenu" class="submenu">
-    <button class="back-btn">← Back</button>
-    <a href="/view_inventory">Inventory List</a>
-    <a href="/add_inventory">Add Item</a>
-  </div>
-
-  <!-- Statements Submenu -->
-  <div id="statementsMenu" class="submenu">
-    <button class="back-btn">← Back</button>
-    <a href="/statements_company">Company Statements</a>
-    <a href="/statements">Date-wise Statements</a>
-  </div>
-
-  <!-- Account Submenu -->
-  <div id="accountMenu" class="submenu">
-    <button class="back-btn">← Back</button>
-    <a href="/recover">Data Recovery</a>
-    <a href="/analytics">Business Analytics</a>
-    <a href="/about_user?section=about">About Application</a>
-  </div>
-</div>
-
 <style>
-  .menu-container {
-    position: relative;
-    width: 340px;
-    margin: 2rem auto;
+  body {
+    background-color: #f0f0f3;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    overflow: hidden;
-    min-height: 80vh;
   }
-  .menu-list, .submenu {
+  .more-card {
+    background: #fff;
+    border-radius: 24px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.12);
+    width: 440px; /* was 360px */
+    min-height: 640px; /* new to make it taller */
+    padding: 2.5rem 3rem 3.5rem; /* slightly more padding for balance */
+    box-sizing: border-box;
+    animation: fadeIn 0.5s ease forwards;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    position: absolute;
-    top: 0;
-    left: 0;
+    align-items: center;
+  }
+  @keyframes fadeIn {
+    from {opacity: 0; transform: translateY(12px);}
+    to {opacity: 1; transform: translateY(0);}
+  }
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #111;
+    margin: 0 0 0.25rem;
+    text-align: center;
+  }
+  p.subtitle {
+    font-size: 1rem;
+    font-weight: 400;
+    color: #444;
+    margin: 0 0 2rem;
+    text-align: center;
+  }
+  .btn-login-home {
     width: 100%;
-    transition: transform 0.3s ease;
+    background: linear-gradient(135deg, #007aff, #00c6ff);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 0.85rem 1rem;
+    border-radius: 16px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,122,255,0.39);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+    user-select: none;
+    margin-bottom: 0.75rem;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
   }
-  .menu-list {
-    transform: translateX(0);
+  .btn-login-home:last-child {
+    margin-bottom: 0;
   }
-  .menu-list.hidden {
-    transform: translateX(-100%);
+  .btn-login-home:hover {
+    background: linear-gradient(135deg, #005ecb, #0099d6);
+    box-shadow: 0 6px 20px rgba(0,94,203,0.5);
+  }
+  .back-home-btn {
+    margin-top: 2rem;
+    width: 100%;
+    background: linear-gradient(135deg, #007aff, #00c6ff);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 0.85rem 1rem;
+    border-radius: 16px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,122,255,0.39);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+    user-select: none;
+    text-align: center;
+  }
+  .back-home-btn:hover {
+    background: linear-gradient(135deg, #005ecb, #0099d6);
+    box-shadow: 0 6px 20px rgba(0,94,203,0.5);
+  }
+  .more-page {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 3rem 1rem;
+  }
+  .section {
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+  .section-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #007aff, #00c6ff);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 0.85rem 1rem;
+    border-radius: 16px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,122,255,0.39);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+    user-select: none;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .section-btn:hover,
+  .section-btn:focus {
+    background: linear-gradient(135deg, #005ecb, #0099d6);
+    box-shadow: 0 6px 20px rgba(0,94,203,0.5);
+    outline: none;
+  }
+  .arrow {
+    font-weight: 800;
+    transition: transform 0.25s ease;
+  }
+  .arrow.open {
+    transform: rotate(90deg);
   }
   .submenu {
-    transform: translateX(100%);
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease;
+    margin-top: 0.5rem;
   }
-  .submenu.active {
-    transform: translateX(0);
+  .submenu.open {
+    max-height: 500px; /* enough for links */
   }
-  .menu-item, .back-btn, .submenu a {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    padding: 0.75rem 1rem;
-    font-size: 1rem;
-    background: #212529;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
+  .submenu a {
+    display: block;
     text-decoration: none;
-    transition: background 0.2s;
-    cursor: pointer;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .menu-item:hover, .back-btn:hover, .submenu a:hover {
-    background: #343a40;
-  }
-  .back-btn-main {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    margin: 0.4rem 0;
+    padding: 0.6rem 0.9rem;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #e6f0ff, #d0e9ff);
+    color: #007aff;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0,122,255,0.15);
+    transition: background 0.25s ease, box-shadow 0.25s ease;
     text-align: center;
-    padding: 0.75rem 1rem;
-    font-size: 1rem;
-    background: #0056b3; /* distinct blue color */
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    text-decoration: none;
-    transition: background 0.2s;
-    cursor: pointer;
-    width: 100%;
-    box-sizing: border-box;
   }
-  .back-btn-main:hover {
-    background: #003f7f; /* darker on hover */
-  }
-
-  .back-btn {
-    background: #0056b3; /* same as main back button */
-    color: #fff;
-  }
-  .back-btn:hover {
-    background: #003f7f; /* same darker hover as main back button */
+  .submenu a:hover,
+  .submenu a:focus {
+    background: linear-gradient(135deg, #cce3ff, #a9d0ff);
+    box-shadow: 0 4px 14px rgba(0,94,203,0.3);
+    outline: none;
   }
 </style>
 
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.menu-item').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const target = document.getElementById(btn.dataset.target);
-        document.getElementById('mainMenu').classList.add('hidden');
-        target.classList.add('active');
-      });
-    });
+<div class="more-page">
+  <div class="more-card" role="main" aria-label="More Options Menu">
+    <h1>More Options</h1>
+    <p class="subtitle">Access additional tools and insights</p>
 
-    document.querySelectorAll('.back-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        btn.parentElement.classList.remove('active');
-        document.getElementById('mainMenu').classList.remove('hidden');
-      });
-    });
-  });
-</script>
-{% if session and session.get('persistent_notice') %}
-<div class="modal fade" id="persistentNoticeModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Notice</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        {{ session.persistent_notice|safe }}
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+    <div class="section">
+      <button class="section-btn" type="button" aria-expanded="false" aria-controls="statementsSub">
+        Statements &amp; Reports
+        <span class="arrow">▶</span>
+      </button>
+      <div id="statementsSub" class="submenu" hidden>
+        <a href="/statements_company">Company Statements</a>
+        <a href="/statements">Date-wise Statements</a>
       </div>
     </div>
+
+    <div class="section">
+      <button class="section-btn" type="button" aria-expanded="false" aria-controls="billingSub">
+        Billing &amp; Invoicing
+        <span class="arrow">▶</span>
+      </button>
+      <div id="billingSub" class="submenu" hidden>
+        <a href="/select_customer">Create Invoice</a>
+        <a href="/view_bills">View Invoices</a>
+        <a href="/test-pre-preview">Invoice Layout Editor</a>
+      </div>
+    </div>
+
+    <div class="section">
+      <button class="section-btn" type="button" aria-expanded="false" aria-controls="customersSub">
+        Customers
+        <span class="arrow">▶</span>
+      </button>
+      <div id="customersSub" class="submenu" hidden>
+        <a href="/create_customers">Add Customer</a>
+        <a href="/view_customers">Customer List</a>
+      </div>
+    </div>
+
+    <div class="section">
+      <button class="section-btn" type="button" aria-expanded="false" aria-controls="inventorySub">
+        Inventory
+        <span class="arrow">▶</span>
+      </button>
+    <div id="inventorySub" class="submenu" hidden>
+        <a href="/view_inventory">Inventory List</a>
+        <a href="/add_inventory">Add Item</a>
+      </div>
+    </div>
+
+    <div class="section">
+      <button class="section-btn" type="button" aria-expanded="false" aria-controls="accountSub">
+        Account &amp; Insights
+        <span class="arrow">▶</span>
+      </button>
+      <div id="accountSub" class="submenu" hidden>
+        <a href="/recover">Data Recovery</a>
+        <a href="/analytics">Business Analytics</a>
+        <a href="/about_user?section=about">About Application</a>
+      </div>
+    </div>
+
+    <button type="button" class="back-home-btn" onclick="location.href='/'" aria-label="Back to Home">← Back to Home</button>
   </div>
 </div>
+
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    var noticeModal = new bootstrap.Modal(document.getElementById('persistentNoticeModal'));
-    noticeModal.show();
+  document.addEventListener('DOMContentLoaded', () => {
+    const sectionButtons = document.querySelectorAll('.section-btn');
+
+    sectionButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const controls = btn.getAttribute('aria-controls');
+        const submenu = document.getElementById(controls);
+        const arrow = btn.querySelector('.arrow');
+        const isOpen = submenu.classList.contains('open');
+
+        // Close all
+        document.querySelectorAll('.submenu').forEach(sm => {
+          sm.classList.remove('open');
+          sm.setAttribute('hidden', '');
+        });
+        document.querySelectorAll('.section-btn').forEach(b => {
+          b.setAttribute('aria-expanded', 'false');
+          const a = b.querySelector('.arrow');
+          if (a) a.classList.remove('open');
+        });
+
+        // Toggle the clicked one
+        if (!isOpen) {
+          submenu.classList.add('open');
+          submenu.removeAttribute('hidden');
+          btn.setAttribute('aria-expanded', 'true');
+          arrow.classList.add('open');
+        }
+      });
+    });
   });
 </script>
-{% endif %}
 {% endblock %}

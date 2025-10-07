@@ -72,6 +72,29 @@
           <li><a class="dropdown-item" href="/add_inventory">New Inventory Item</a></li>
         </ul>
       </div>
+
+      <!-- User Dropdown -->
+      <div class="dropdown me-2">
+        <button class="btn btn-sm" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false"
+                style="background-color: transparent; border: none; color: #f0f6fc; font-size: 1.6rem;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" fill="currentColor" class="bi bi-person"
+               viewBox="0 0 16 16">
+            <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+            <path fill-rule="evenodd"
+                  d="M8 9a5 5 0 0 0-4.546 2.916C3.338 13.5 4.881 15 8 15s4.662-1.5 4.546-3.084A5 5 0 0 0 8 9z"/>
+          </svg>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-dark shadow-sm" aria-labelledby="userDropdown"
+            style="min-width: 230px; left: 0;">
+          <li class="dropdown-item text-white-50">Username: {{ session.get('username', 'N/A') }}</li>
+          <li class="dropdown-item text-white-50">User ID: {{ session.get('user_id', 'N/A') }}</li>
+          <li class="dropdown-item text-white-50">Role: {{ session.get('role', 'N/A') }}</li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item text-danger fw-semibold" href="/logout">Logout</a></li>
+          <li><a class="dropdown-item text-warning fw-semibold" href="/logout?next=/login">Change User</a></li>
+        </ul>
+      </div>
+
     </div>
   </div>
 </nav>
@@ -156,7 +179,9 @@
     { name: "Data Recovery", url: "/recover" },
     { name: "Data Recovery", url: "/recover" },
     { name: "Home", url: "/" },
-    { name: "About Application", url: "/about_user?section=about" }
+    { name: "About Application", url: "/about_user?section=about" },
+    { name: "logout", url: "/logout" },
+    { name: "Change User", url: "/logout?next=/login" }
   ];
 
   const searchInput = document.getElementById('globalSearch');

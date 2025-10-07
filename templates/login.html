@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% set hide_navbar = True %}
+{% block content %}
+<div class="login-container">
+    <div class="login-card">
+        <div class="text-center mb-4">
+            <h1 class="title">Sri Lakshmi Offset Printers</h1>
+            <p class="subtitle">Login</p>
+            {% with messages = get_flashed_messages(with_categories=True) %}
+              {% if messages %}
+                <div class="flash-popup-inline mt-3">
+                  {% for category, message in messages %}
+                    <div class="flash-message-inline">
+                      {{ message }}
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endwith %}
+        </div>
+        <form method="POST" action="{{ url_for('login') }}">
+            <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" class="input-field" id="username" name="username" placeholder="Enter username" required>
+            </div>
+            <div class="mb-4">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" class="input-field" id="password" name="password" placeholder="Enter password" required>
+            </div>
+            <button type="submit" class="btn-login">
+                Login
+            </button>
+        </form>
+        <div class="back-home">
+            <a href="/" class="back-link">← Back to Home</a>
+        </div>
+    </div>
+</div>
+
+<!-- Note: If session user changes mid workflow, redirect to home page is handled in Flask route logic -->
+
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=SF+Pro+Text:wght@400;600&display=swap');
+
+    .login-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        background: none; /* removed shaded background */
+    }
+
+    .login-card {
+        max-width: 400px;
+        background: #fff;
+        border-radius: 16px;
+        padding: 40px 32px 32px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.07);
+        font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+            Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+        animation: fadeInCard 0.6s ease forwards;
+    }
+
+    @keyframes fadeInCard {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .title {
+        font-weight: 600;
+        font-size: 1.75rem;
+        color: #333;
+        margin-bottom: 4px;
+        letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+        font-weight: 400;
+        font-size: 1rem;
+        color: #888;
+        margin-top: 0;
+    }
+
+    .form-label {
+        display: block;
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #666;
+        margin-bottom: 8px;
+    }
+
+    .input-field {
+        width: 100%;
+        padding: 12px 14px;
+        font-size: 1rem;
+        border: 1.5px solid #ccc;
+        border-radius: 12px;
+        background: #fafafa;
+        color: #333;
+        transition: border-color 0.3s ease, background-color 0.3s ease;
+        outline-offset: 2px;
+        outline-color: transparent;
+        outline-style: solid;
+        outline-width: 2px;
+        box-shadow: none;
+        font-family: inherit;
+    }
+
+    .input-field::placeholder {
+        color: #bbb;
+    }
+
+    .input-field:hover {
+        border-color: #a6c8ff;
+        background-color: #fbfdff;
+    }
+
+    .input-field:focus {
+        border-color: #3a7ff6;
+        background-color: #fff;
+        outline-color: #3a7ff6;
+    }
+
+    .btn-login {
+        width: 100%;
+        padding: 14px 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #fff;
+        background: linear-gradient(135deg, #3a7ff6 0%, #1e5de8 100%);
+        border: none;
+        border-radius: 14px;
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(58, 127, 246, 0.4);
+        transition: box-shadow 0.3s ease, background 0.3s ease;
+        font-family: inherit;
+        user-select: none;
+    }
+
+    .btn-login:hover,
+    .btn-login:focus {
+        box-shadow: 0 0 16px rgba(58, 127, 246, 0.7);
+        background: linear-gradient(135deg, #1e5de8 0%, #3a7ff6 100%);
+        outline: none;
+    }
+
+    .flash-popup {
+        position: fixed;
+        top: 1rem;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2000;
+        pointer-events: none;
+        animation: fadeInOutFlash 4s ease forwards;
+        max-width: 90vw;
+    }
+
+    @keyframes fadeInOutFlash {
+        0% { opacity: 0; transform: translateY(-10px); }
+        10%, 90% { opacity: 1; transform: translateY(0); }
+        100% { opacity: 0; transform: translateY(-10px); }
+    }
+
+    .flash-message {
+        background: transparent;
+        color: #666;
+        font-weight: 500;
+        font-size: 0.9rem;
+        padding: 8px 16px;
+        border-radius: 12px;
+        pointer-events: auto;
+        user-select: none;
+        text-align: center;
+        box-shadow: 0 0 6px rgba(0,0,0,0.05);
+        margin-bottom: 6px;
+    }
+
+    .back-home {
+        margin-top: 24px;
+        text-align: center;
+    }
+
+    .back-link {
+        color: #3a7ff6;
+        font-weight: 500;
+        font-size: 0.95rem;
+        text-decoration: none;
+        transition: color 0.3s ease;
+        user-select: none;
+    }
+
+    .back-link:hover,
+    .back-link:focus {
+        color: #1e5de8;
+        text-decoration: underline;
+        outline: none;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 480px) {
+        .login-card {
+            margin: 10vh 16px;
+            padding: 32px 24px 24px;
+        }
+
+        .title {
+            font-size: 1.5rem;
+        }
+
+        .btn-login {
+            font-size: 1rem;
+            padding: 12px 0;
+        }
+    }
+
+    .flash-popup-inline {
+        text-align: center;
+        animation: fadeInOutFlash 4s ease forwards;
+    }
+    .flash-message-inline {
+        background: #f8d7da;
+        color: #721c24;
+        font-weight: 500;
+        border-radius: 10px;
+        padding: 6px 10px;
+        font-size: 0.9rem;
+        display: inline-block;
+        box-shadow: 0 0 6px rgba(0,0,0,0.05);
+    }
+</style>
+{% endblock %}

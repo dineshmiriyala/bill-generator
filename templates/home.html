@@ -6,20 +6,36 @@
 <div class="d-flex flex-column justify-content-center align-items-center text-center vh-100">
   <h1 class="mb-4">Sri Lakshmi Offset Printers</h1>
   <p class="lead mb-5">Making prints as colorful as your life. Since 1973.</p>
-  <div class="d-flex flex-column gap-3">
-    <a href="/select_customer" class="btn btn-dark btn-lg">Create New Bill</a>
-    <a href="/create_customers" class="btn btn-dark btn-lg">Add New Customer</a>
-    <a href="/view_bills" class="btn btn-dark btn-lg">View Bills</a>
-    <a href="/analytics" class="btn btn-dark btn-lg d-flex justify-content-between align-items-center">
-      <span>Analytics</span>
-      <span class="badge-apple ms-2">NEW</span>
-    </a>
-    <a href="/test-pre-preview" class="btn btn-dark btn-lg d-flex justify-content-between align-items-center">
-      <span>Invoice Editor</span>
-      <span class="badge-apple ms-2">NEW</span>
-    </a>
-    <a href="/more" class="btn btn-dark btn-lg">More</a>
+  {% with messages = get_flashed_messages(with_categories=True) %}
+    {% if messages %}
+      <div class="flash-popup-inline mt-3">
+        {% for category, message in messages %}
+          <div class="flash-message-inline">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+  {% if session.get('user_id') %}
+  <h5 class="text-muted mb-4 welcome-message">Welcome, {{ session.get('username') }}!</h5>
+  <div class="home-menu-card mt-4 p-4 d-flex flex-column align-items-center fade-in">
+    <a href="/select_customer" class="btn btn-login-home w-100 mb-3">Create New Bill</a>
+    <a href="/create_customers" class="btn btn-login-home w-100 mb-3">Add New Customer</a>
+    <a href="/view_bills" class="btn btn-login-home w-100 mb-3">View Bills</a>
+    <a href="/analytics" class="btn btn-login-home w-100 mb-3">Analytics</a>
+    <a href="/test-pre-preview" class="btn btn-login-home w-100 mb-3">Invoice Editor</a>
+    <div class="d-flex justify-content-between w-100">
+      <a href="/more" class="btn btn-login-home flex-fill me-2" style="max-width: 48%;">More &rarr;</a>
+      <a href="/logout" class="btn btn-logout-home flex-fill ms-2" style="max-width: 48%;">Logout</a>
+    </div>
   </div>
+  {% else %}
+  <div class="home-login-card mt-4 p-4 d-flex flex-column align-items-center fade-in">
+    <a href="/login" class="btn btn-login-home mb-3 w-100">Login</a>
+    <a href="/logout" class="btn btn-login-home w-100">Quit</a>
+  </div>
+  {% endif %}
 </div>
 
 {% if session and session.get('persistent_notice') %}
@@ -48,15 +64,99 @@
 {% endif %}
 
 <style>
-  .badge-apple {
-    background-color: #e0e0e5;
-    color: #000;
-    font-size: 0.75rem;
-    font-weight: 500;
-    padding: 0.2rem 0.6rem;
-    border-radius: 999px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+  .welcome-message {
+    color: #6e6e73;
+    letter-spacing: 0.3px;
+    font-weight: 300;
+  }
+  .flash-popup-inline {
+      text-align: center;
+      animation: fadeInOutFlash 4s ease forwards;
+  }
+  .flash-message-inline {
+      background: #f8d7da;
+      color: #721c24;
+      font-weight: 500;
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 0.9rem;
+      display: inline-block;
+      box-shadow: 0 0 6px rgba(0,0,0,0.05);
+  }
+  @keyframes fadeInOutFlash {
+      0% { opacity: 0; transform: translateY(-10px); }
+      10%, 90% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-10px); }
+  }
+
+  /* New styles for home login card and buttons */
+  .home-login-card {
+    background: #f5f5f7;
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    max-width: 320px;
+    width: 90%;
+  }
+  .btn-login-home {
+    background: linear-gradient(135deg, #007aff, #00c6ff);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-weight: 600;
+    padding: 0.75rem 1.2rem;
+    font-size: 1rem;
+    transition: background 0.3s ease;
+    box-shadow: 0 4px 14px rgba(0,122,255,0.39);
+    cursor: pointer;
+    text-align: center;
+    display: inline-block;
+  }
+  .btn-login-home:hover,
+  .btn-login-home:focus {
+    background: linear-gradient(135deg, #005ecb, #0099d6);
+    box-shadow: 0 6px 20px rgba(0,94,203,0.5);
+    outline: none;
+  }
+  .fade-in {
+    animation: fadeInUp 0.6s ease forwards;
+  }
+  @keyframes fadeInUp {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .home-menu-card {
+    background: #f5f5f7;
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    max-width: 340px;
+    width: 90%;
+  }
+  .btn-logout-home {
+    background: linear-gradient(135deg, #ff3b30, #ff2d55);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-weight: 600;
+    padding: 0.75rem 1.2rem;
+    font-size: 1rem;
+    transition: background 0.3s ease;
+    box-shadow: 0 4px 14px rgba(255,45,85,0.39);
+    cursor: pointer;
+    text-align: center;
+    display: inline-block;
+  }
+  .btn-logout-home:hover,
+  .btn-logout-home:focus {
+    background: linear-gradient(135deg, #d70015, #ff375f);
+    box-shadow: 0 6px 20px rgba(255,45,85,0.5);
+    outline: none;
   }
 </style>
 

@@ -1836,6 +1836,36 @@ def reset_layout():
     ctx = handle_layout(action="reset")
     return render_template("pre-preview-bill.html", **ctx)
 
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        if username == 'dinesh' and password == 'pass':
+            session['user_id'] = 1
+            session['username'] = username
+            session['role'] = 'admin'
+            return redirect(url_for('home'))
+        else:
+            flash('Invalid username or password', 'danger')
+            return render_template("login.html")
+    # GET request
+    return render_template("login.html")
+
+@app.route('/logout')
+def logout():
+    next_page = request.args.get('next')
+
+    #clear session
+    session.clear()
+    flash('You have been successfully logged out', 'success')
+
+    if next_page:
+        return redirect(next_page)
+    return redirect(url_for('home'))
+
+
 app.jinja_env.globals.update(zip=zip)
 
 if __name__ == '__main__':
