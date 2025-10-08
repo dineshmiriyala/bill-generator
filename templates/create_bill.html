@@ -184,6 +184,12 @@
   </form>
 </div>
 
+<style>
+  .rounded-mark {
+    font-size: 1.2em;
+    color: green;
+  }
+</style>
 <script>
 // Build price map from inventory safely
 const priceMap = {};
@@ -267,7 +273,9 @@ function renumberRows(){
 
 document.addEventListener('DOMContentLoaded', ()=>{
   document.querySelectorAll('.item-row').forEach(row=>setupRow(row));
-  calculateTotal();
+  {% if not edit_mode %}
+    calculateTotal();
+  {% endif %}
 
   document.getElementById('addItem').addEventListener('click', ()=>{
     const firstRow = document.querySelector('.item-row');
@@ -335,6 +343,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if (roundedHidden) {
         roundedHidden.value = "1";
       }
+      // Add tick mark for all rounded rows
+      let existingMark = row.querySelector('.rounded-mark');
+      if (!existingMark) {
+        const tick = document.createElement('span');
+        tick.className = 'rounded-mark ms-2 text-success fw-bold';
+        tick.textContent = '✓';
+        const actionCol = row.querySelector('.actions-col');
+        if (actionCol) {
+          actionCol.appendChild(tick);
+        } else {
+          row.appendChild(tick);
+        }
+      }
     });
     calculateTotal();
   });
@@ -369,6 +390,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
       let roundedHidden = row.querySelector('input[type="hidden"][name="rounded[]"]');
       if (roundedHidden) {
         roundedHidden.value = "1";
+      }
+      // Show visual cue for rounded row
+      let existingMark = row.querySelector('.rounded-mark');
+      if (!existingMark) {
+        const tick = document.createElement('span');
+        tick.className = 'rounded-mark ms-2 text-success fw-bold';
+        tick.textContent = '✓';
+        const actionCol = row.querySelector('.actions-col');
+        if (actionCol) {
+          actionCol.appendChild(tick);
+        } else {
+          row.appendChild(tick);
+        }
       }
       calculateTotal();
     }
