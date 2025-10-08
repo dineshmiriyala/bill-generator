@@ -26,7 +26,6 @@ migrations/*.log
 
 # Build artifacts (PyInstaller)
 build/
-dist/
 *.spec
 *.toc
 *.pkg
