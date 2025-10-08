@@ -23,3 +23,39 @@ static/img/.DS_Store
 
 # Alembic logs (keep versions/)
 migrations/*.log
+
+# Build artifacts (PyInstaller)
+build/
+*.spec
+*.toc
+*.pkg
+*.pyz
+*.zip
+*.html
+
+# Flask cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtual environment
+venv/
+.venv/
+env/
+.env/
+
+# Local database files
+*.db
+*.sqlite3
+
+# Backup and temp files
+*.bak
+*.tmp
+*.swp
+
+# System files
+Thumbs.db
+ehthumbs.db
+desktop.ini

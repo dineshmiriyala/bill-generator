@@ -6,40 +6,96 @@
   <!-- Bootstrap 5 CSS CDN -->
   <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.min.css') }}">
+  <style>
+    .btn-back {
+      background-color: #0056b3;
+      color: #fff;
+      border: none;
+    }
+    .btn-back:hover {
+      background-color: #003f7f;
+      color: #fff;
+    }
+    .btn-home {
+      background-color: #198754;
+      color: #fff;
+      border: none;
+    }
+    .btn-home:hover {
+      background-color: #146c43;
+      color: #fff;
+    }
+  </style>
 </head>
 <body class="d-flex flex-column min-vh-100">
 
 {% if not hide_navbar %}
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-  <div class="container d-flex justify-content-between align-items-center">
-    <!-- Back and Home Buttons Grouped -->
+<nav class="navbar navbar-expand-lg" style="background-color: #24292f; padding: 0.5rem 1rem;">
+  <div class="container d-flex align-items-center justify-content-between w-100">
+    <!-- Left side: Back + Menu -->
     <div class="d-flex align-items-center">
       {% if back_to_select_customer %}
-        <a href="{{ url_for('select_customer') }}" class="btn btn-outline-light btn-sm me-2">← Back</a>
+        <a href="{{ url_for('select_customer') }}" class="btn btn-sm me-2" style="background-color: #30363d; color: #f0f6fc; border: 1px solid #484f58;">←</a>
       {% else %}
-        <button class="btn btn-outline-light btn-sm me-2" onclick="history.back()">← Back</button>
+        <button class="btn btn-sm me-2" onclick="history.back()" style="background-color: #30363d; color: #f0f6fc; border: 1px solid #484f58;">←</button>
       {% endif %}
-      <a href="{{ url_for('home') }}" class="btn btn-outline-light btn-sm me-2">🏠 Home</a>
+      <button class="btn btn-sm me-3" id="menuToggle"
+              style="background-color: transparent; border: none; color: #f0f6fc; font-size: 1.4rem;">☰</button>
+      <a class="navbar-brand fw-semibold text-white" href="/" style="font-size: 1.1rem;">Sri Lakshmi Offset Printers</a>
     </div>
-    <!-- Brand -->
-    <a class="navbar-brand" href="/">Sri Lakshmi Offset Printers</a>
-    <!-- Quick Links -->
-    <div class="dropdown ms-3">
-      <button class="btn btn-secondary dropdown-toggle" type="button" id="staticDropdownButton"
-              data-bs-toggle="dropdown" aria-expanded="false">
-        Quick Links
-      </button>
-      <ul class="dropdown-menu" aria-labelledby="staticDropdownButton">
-        <li><a class="dropdown-item" href="/view_bills">View Bills</a></li>
-        <li><a class="dropdown-item" href="/select_customer">Create Bill</a></li>
-        <li><a class="dropdown-item" href="/view_customers">View Customers</a></li>
-        <li><a class="dropdown-item" href="/view_inventory">Inventory</a></li>
-        <li><a class="dropdown-item" href="/statements">Statements</a></li>
-      </ul>
+
+    <!-- Right side: Search + Add (+) Dropdown -->
+    <div class="d-flex align-items-center">
+      <!-- Apple-Style Search Bar -->
+      <div class="position-relative me-3" style="width: 220px;">
+        <input type="search" id="globalSearch" class="form-control form-control-sm rounded-1 ps-3"
+               placeholder="Search…" style="background-color: #0d1117; color: #f0f6fc; border: 1px solid #30363d; caret-color: #f0f6fc;">
+        <style>
+          ::placeholder {
+            color: #9ca3af !important;
+            opacity: 1;
+          }
+        </style>
+        <ul id="searchResults" class="list-group position-absolute w-100 shadow-sm"
+            style="z-index: 1050; display: none; top: 36px;"></ul>
+      </div>
+
+      <!-- GitHub-style "+" Dropdown -->
+      <div class="dropdown">
+        <button class="btn btn-sm" type="button" id="newDropdown" data-bs-toggle="dropdown" aria-expanded="false"
+                style="background-color: #21262d; border: 1px solid #30363d; color: #f0f6fc; font-size: 1.3rem; line-height: 1;">
+          +
+        </button>
+        <ul class="dropdown-menu dropdown-menu-dark shadow-sm" aria-labelledby="newDropdown" style="left: 0;">
+          <li><a class="dropdown-item" href="/select_customer">New Bill</a></li>
+          <li><a class="dropdown-item" href="/create_customers">New Customer</a></li>
+          <li><a class="dropdown-item" href="/add_inventory">New Inventory Item</a></li>
+        </ul>
+      </div>
     </div>
   </div>
 </nav>
+
+<!-- Offcanvas Sidebar for Quick Links -->
+<div class="offcanvas offcanvas-start text-bg-dark" tabindex="-1" id="offcanvasMenu" aria-labelledby="offcanvasMenuLabel">
+  <div class="offcanvas-header border-bottom border-secondary">
+    <h5 class="offcanvas-title" id="offcanvasMenuLabel">Quick Links</h5>
+    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body">
+    <ul class="list-unstyled">
+      <li><a class="text-white text-decoration-none d-block py-2" href="/view_bills">View Bills</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/select_customer">Create Bill</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/view_customers">View Customers</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/view_inventory">Inventory</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/statements">Statements</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/statements_company">Company Statements</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/analytics">Business Analytics</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/recover">Data Recovery</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/about_user?section=about">About Application</a></li>
+    </ul>
+  </div>
+</div>
 
 <!-- Flash Messages -->
 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -83,6 +139,62 @@
         });
       }, 4000);
     }
+  });
+</script>
+
+<script>
+  const searchLinks = [
+    { name: "View Bills", url: "/view_bills" },
+    { name: "Create Bill", url: "/select_customer" },
+    { name: "View Customers", url: "/view_customers" },
+    { name: "Add Customer", url: "/create_customers" },
+    { name: "Inventory List", url: "/view_inventory" },
+    { name: "Add Item", url: "/add_inventory" },
+    { name: "Statements (Date-wise)", url: "/statements" },
+    { name: "Company Statements", url: "/statements_company" },
+    { name: "Invoice Layout Editor", url: "/test-pre-preview" },
+    { name: "Data Recovery", url: "/recover" },
+    { name: "Data Recovery", url: "/recover" },
+    { name: "Home", url: "/" },
+    { name: "About Application", url: "/about_user?section=about" }
+  ];
+
+  const searchInput = document.getElementById('globalSearch');
+  const searchResults = document.getElementById('searchResults');
+
+  searchInput.addEventListener('input', () => {
+    const query = searchInput.value.toLowerCase();
+    searchResults.innerHTML = '';
+    if (!query) {
+      searchResults.style.display = 'none';
+      return;
+    }
+
+    const matches = searchLinks.filter(link => link.name.toLowerCase().includes(query));
+    matches.forEach(match => {
+      const item = document.createElement('li');
+      item.className = 'list-group-item list-group-item-action';
+      item.textContent = match.name;
+      item.addEventListener('click', () => {
+        window.location.href = match.url;
+      });
+      searchResults.appendChild(item);
+    });
+    searchResults.style.display = matches.length ? 'block' : 'none';
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!searchResults.contains(e.target) && e.target !== searchInput) {
+      searchResults.style.display = 'none';
+    }
+  });
+</script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const offcanvasEl = document.getElementById('offcanvasMenu');
+    const bsOffcanvas = new bootstrap.Offcanvas(offcanvasEl);
+    document.getElementById('menuToggle').addEventListener('click', () => bsOffcanvas.toggle());
   });
 </script>
 

@@ -5,41 +5,48 @@
   <!-- Main Menu -->
   <div id="mainMenu" class="menu-list active">
     <button class="back-btn-main" onclick="history.back()">←Go Back/Home</button>
-    <button class="menu-item" data-target="billMenu">Billing Information</button>
-    <button class="menu-item" data-target="customerMenu">Customer Management</button>
-    <button class="menu-item" data-target="inventoryMenu">Inventory Management</button>
-    <button class="menu-item" data-target="accountMenu">My Account and Analytics</button>
+    <button class="menu-item" data-target="statementsMenu">Statements & Reports</button>
+    <button class="menu-item" data-target="billMenu">Billing & Invoicing</button>
+    <button class="menu-item" data-target="customerMenu">Customers</button>
+    <button class="menu-item" data-target="inventoryMenu">Inventory</button>
+    <button class="menu-item" data-target="accountMenu">Account & Insights</button>
   </div>
 
   <!-- Billing Submenu -->
   <div id="billMenu" class="submenu">
     <button class="back-btn">← Back</button>
-    <a href="/select_customer">Create New Bill</a>
-    <a href="/view_bills">View Bills</a>
-    <a href="/test-pre-preview">PDF Editor</a>
+    <a href="/select_customer">Create Invoice</a>
+    <a href="/view_bills">View Invoices</a>
+    <a href="/test-pre-preview">Invoice Layout Editor</a>
   </div>
 
   <!-- Customer Submenu -->
   <div id="customerMenu" class="submenu">
     <button class="back-btn">← Back</button>
-    <a href="/create_customers">Add New Customer</a>
-    <a href="/view_customers">View Customers</a>
+    <a href="/create_customers">Add Customer</a>
+    <a href="/view_customers">Customer List</a>
   </div>
 
   <!-- Inventory Submenu -->
   <div id="inventoryMenu" class="submenu">
     <button class="back-btn">← Back</button>
-    <a href="/view_inventory">View Items</a>
-    <a href="/add_inventory">Add New Item</a>
+    <a href="/view_inventory">Inventory List</a>
+    <a href="/add_inventory">Add Item</a>
+  </div>
+
+  <!-- Statements Submenu -->
+  <div id="statementsMenu" class="submenu">
+    <button class="back-btn">← Back</button>
+    <a href="/statements_company">Company Statements</a>
+    <a href="/statements">Date-wise Statements</a>
   </div>
 
   <!-- Account Submenu -->
   <div id="accountMenu" class="submenu">
     <button class="back-btn">← Back</button>
-    <a href="/statements">Get Statements</a>
-    <a href="/recover">Recover</a>
-    <a href="/analytics">Analytics</a>
-    <a href="/about_user?section=about">About</a>
+    <a href="/recover">Data Recovery</a>
+    <a href="/analytics">Business Analytics</a>
+    <a href="/about_user?section=about">About Application</a>
   </div>
 </div>
 
@@ -101,7 +108,7 @@
     text-align: center;
     padding: 0.75rem 1rem;
     font-size: 1rem;
-    background: #212529;
+    background: #0056b3; /* distinct blue color */
     color: #fff;
     border: none;
     border-radius: 8px;
@@ -112,7 +119,15 @@
     box-sizing: border-box;
   }
   .back-btn-main:hover {
-    background: #343a40;
+    background: #003f7f; /* darker on hover */
+  }
+
+  .back-btn {
+    background: #0056b3; /* same as main back button */
+    color: #fff;
+  }
+  .back-btn:hover {
+    background: #003f7f; /* same darker hover as main back button */
   }
 </style>
 

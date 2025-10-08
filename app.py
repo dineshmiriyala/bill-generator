@@ -105,10 +105,16 @@ migrate = Migrate(app, db)
 
 # add at top with other imports
 from sqlalchemy import inspect
+from decimal import Decimal, ROUND_HALF_UP
 
-def rounding_to_nearest_zero(number):
-    return number
-    # return round(number / 10) * 10
+def rounding_to_nearest_zero(amount):
+    """Rounding number to nearest zero"""
+    try:
+        d = Decimal(str(amount))
+    except Exception:
+        d = Decimal('0')
+    tens = (d / Decimal('10')).quantize(Decimal('1'), rounding = ROUND_HALF_UP)
+    return float(tens * Decimal('10'))
 
 def _ensure_db_initialized():
     """
@@ -667,17 +673,16 @@ def view_inventory():
 
 @app.route('/statements', methods=['GET'])
 def statements():
-    """HTML/CSV Statement for month/year/custom with optional phone filter.
+    """HTML/CSV Statement for month/year/custom.
     Query params:
       - scope: 'month' | 'year' | 'custom' (default: current year when absent)
       - year, month (when scope requires it)
       - start, end in YYYY-MM-DD (custom)
-      - phone (optional exact match)
       - format: 'html' (default) or 'csv'
     """
     scope = (request.args.get('scope') or '').lower()
     fmt = (request.args.get('format') or 'html').lower()
-    phone = request.args.get('phone')
+    # phone = request.args.get('phone')  # removed phone search for now
 
     # Default: if no scope supplied, go to current year
     if not scope:
@@ -710,7 +715,6 @@ def statements():
                     end_date=None,
                     total_invoices=0,
                     total_amount=0,
-                    phone=phone or '',
                     per_customer={},
                     invs=[],
                     inv_rows=[],
@@ -718,14 +722,10 @@ def statements():
                     error='Please choose a date range to view custom statements.'
                 )
             start_dt = datetime.strptime(start, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-            # inclusive end-of-day
-            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(
-                seconds=1)
+            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(seconds=1)
         else:
-            # Unknown scope -> default to current year
             return redirect(url_for('statements', scope='year', year=today.year))
     except Exception:
-        # On any parsing issue, fall back to current year
         return redirect(url_for('statements', scope='year', year=today.year))
 
     # Base query: exclude soft-deleted; within range
@@ -735,9 +735,11 @@ def statements():
                  invoice.createdAt >= start_dt,
                  invoice.createdAt <= end_dt))
 
-    if phone:
-        q = q.join(customer, invoice.customerId == customer.id).filter(customer.isDeleted == False,
-                                                                       customer.phone == phone)
+    # if phone:
+    #     q = q.join(customer, invoice.customerId == customer.id).filter(
+    #         customer.isDeleted == False,
+    #         customer.phone == phone
+    #     )
 
     invs = q.order_by(invoice.createdAt.desc()).all()
 
@@ -755,30 +757,59 @@ def statements():
         per_company[company_label]["count"] += 1
         per_company[company_label]["amount"] += float(inv.totalAmount or 0)
 
+    # ---- CSV Export ----
     if fmt == 'csv':
-        # CSV already Company-first
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow(["Invoice No", "Date", "Company", "Phone", "Total Amount"])
+
+        # ---- Header Section ----
+        writer.writerow(["Sri Lakshmi Offset Printers - Statement"])
+        writer.writerow(["Generated On", datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+        writer.writerow(["Statement Period", f"{start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}"])
+        writer.writerow([])
+
+        # ---- Table Header ----
+        writer.writerow(["Invoice No", "Date", "Company", "Phone", "Total Amount (INR)"])
+
+        # ---- Table Data ----
         for inv in invs:
             cust = inv.customer
-            company_label = (cust.company or '').strip() if cust else ''
-            if not company_label:
-                company_label = '(No Company)'
+            company_label = (cust.company or '').strip() if cust else '(No Company)'
+            phone_val = cust.phone if cust else ''
+            total_val = float(inv.totalAmount or 0)
             writer.writerow([
                 inv.invoiceId,
                 inv.createdAt.strftime('%Y-%m-%d'),
                 company_label,
-                cust.phone if cust else '',
-                f"{float(inv.totalAmount or 0):.2f}"
+                phone_val,
+                f"{total_val:.2f}"
             ])
+
+        # ---- Summary Section ----
         writer.writerow([])
-        writer.writerow(["TOTAL INVOICES", total_invoices])
-        writer.writerow(["TOTAL AMOUNT", f"{total_amount:.2f}"])
+        writer.writerow(["Summary"])
+        writer.writerow(["Total Invoices", total_invoices])
+        writer.writerow(["Total Amount (INR)", f"{total_amount:.2f}"])
+        if total_invoices > 0:
+            avg_invoice = total_amount / total_invoices
+            writer.writerow(["Average Invoice Value (INR)", f"{avg_invoice:.2f}"])
+        max_invoice = max([float(inv.totalAmount or 0) for inv in invs], default=0.0)
+        writer.writerow(["Highest Invoice Value (INR)", f"{max_invoice:.2f}"])
+        min_invoice = min([float(inv.totalAmount or 0) for inv in invs], default=0.0)
+        writer.writerow(["Lowest Invoice Value (INR)", f"{min_invoice:.2f}"])
+        writer.writerow([])
+
+        # ---- Disclaimer ----
+        writer.writerow(["Disclaimer", "This is a system-generated statement. No signature required."])
+
+        # ---- Filename ----
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        filename = f"statement_{today_str}.csv"
+
         return Response(
             buf.getvalue(),
             mimetype='text/csv',
-            headers={'Content-Disposition': 'attachment; filename=statement.csv'}
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
         )
 
     # ---- Build rows for HTML (Company only) ----
@@ -803,14 +834,151 @@ def statements():
         end_date=end_dt.date(),
         total_invoices=total_invoices,
         total_amount=round(total_amount, 2),
-        per_customer=per_company,  # name kept for template compatibility
-        invs=invs,  # keep if template references it elsewhere
-        inv_rows=inv_rows,  # <-- use this in the table
+        per_customer=per_company,
+        invs=invs,
+        inv_rows=inv_rows,
         scope=scope,
-        phone=phone,
         request=request,
     )
 
+@app.route('/statements_company', methods=['GET', 'POST'])
+def statements_company():
+    """Generate HTML/CSV statements filtered by company name or phone/ID."""
+    query = (request.args.get('query') or '').strip()
+    fmt = (request.args.get('format') or 'html').lower()
+    start = request.args.get('start')
+    end = request.args.get('end')
+
+    today = datetime.now(timezone.utc).date()
+    start_dt, end_dt = datetime(2000, 1, 1, tzinfo=timezone.utc), datetime.now(timezone.utc)
+
+    if start and end:
+        try:
+            start_dt = datetime.strptime(start, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(seconds=1)
+        except Exception:
+            pass
+
+    # 🔹 Suggestions only (no invoice query yet)
+    suggestions = []
+    try:
+        suggestions = [
+            {"company": c.company or "", "phone": c.phone}
+            for c in customer.query.filter(customer.isDeleted == False).all()
+            if (c.company or c.phone)
+        ]
+    except Exception as e:
+        print("Suggestion load failed:", e)
+
+    invs = []
+    total_invoices = 0
+    total_amount = 0.0
+
+    # 🔹 Only query invoices when there's a search term
+    if query:
+        q = (invoice.query
+             .options(joinedload(invoice.customer))
+             .filter(invoice.isDeleted == False,
+                     invoice.createdAt >= start_dt,
+                     invoice.createdAt <= end_dt)
+             .join(customer, invoice.customerId == customer.id)
+             .filter(customer.isDeleted == False,
+                     or_(
+                         func.lower(customer.company).like(f"%{query.lower()}%"),
+                         customer.phone == query
+                     )))
+
+        invs = q.order_by(invoice.createdAt.desc()).all()
+        total_invoices = len(invs)
+        total_amount = sum(float(inv.totalAmount or 0) for inv in invs)
+
+    # 🔹 CSV Export
+    if fmt == 'csv' and query:
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+
+        # ---- Header Section ----
+        writer.writerow(["Sri Lakshmi Offset Printers - Customer Statement"])
+        writer.writerow(["Generated On", datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+        writer.writerow(["Customer Name", query])
+        writer.writerow(["Statement Period", f"{start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}"])
+        writer.writerow([])
+
+        # ---- Table Header ----
+        writer.writerow(["Invoice No", "Date", "Company", "Phone", "Total Amount (INR)"])
+
+        # ---- Table Data ----
+        for inv in invs:
+            cust = inv.customer
+            company_label = (cust.company or '').strip() if cust else '(No Company)'
+            phone_val = cust.phone if cust else ''
+            total_val = float(inv.totalAmount or 0)
+            writer.writerow([
+                inv.invoiceId,
+                inv.createdAt.strftime('%Y-%m-%d'),
+                company_label,
+                phone_val,
+                f"{total_val:.2f}"
+            ])
+
+        # ---- Summary Section ----
+        writer.writerow([])
+        writer.writerow(["Summary"])
+        writer.writerow(["Total Invoices", total_invoices])
+        writer.writerow(["Total Amount (INR)", f"{total_amount:.2f}"])
+        if total_invoices > 0:
+            avg_invoice = total_amount / total_invoices
+            writer.writerow(["Average Invoice Value (INR)", f"{avg_invoice:.2f}"])
+        max_invoice = max([float(inv.totalAmount or 0) for inv in invs], default=0.0)
+        writer.writerow(["Highest Invoice Value (INR)", f"{max_invoice:.2f}"])
+        writer.writerow([])
+
+        # ---- Payment Information ----
+        writer.writerow(["Payment Information"])
+        writer.writerow(["Account Name", "Sri Lakshmi Offset Printers"])
+        writer.writerow(["Bank", "State Bank of India, Pamarru"])
+        writer.writerow(["Account Number", "38588014977"])
+        writer.writerow(["IFSC", "SBIN0002776"])
+        writer.writerow(["PhonePe/GPay", "9848992207"])
+        writer.writerow([])
+
+        # ---- Disclaimer ----
+        writer.writerow(["Disclaimer", "This is a system-generated statement. No signature required."])
+
+        # ---- Filename ----
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        safe_name = (query or "company").replace(" ", "_").replace("/", "_")
+        filename = f"{safe_name}_statement_{today_str}.csv"
+
+        return Response(
+            buf.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+    # 🔹 Build rows for HTML
+    inv_rows = []
+    for inv in invs:
+        cust = inv.customer
+        company_label = (cust.company or '').strip() if cust else '(No Company)'
+        inv_rows.append({
+            "invoice_no": inv.invoiceId,
+            "date": inv.createdAt.strftime('%Y-%m-%d'),
+            "company": company_label,
+            "phone": cust.phone if cust else '',
+            "total": float(inv.totalAmount or 0),
+        })
+
+    return render_template(
+        'statements_company.html',
+        query=query,
+        start_date=start_dt.date(),
+        end_date=end_dt.date(),
+        total_invoices=total_invoices,
+        total_amount=round(total_amount, 2),
+        inv_rows=inv_rows,
+        request=request,
+        suggestions=suggestions,
+    )
 
 @app.route('/api/statements', methods=['GET'])
 def api_statements_summary():
@@ -1007,6 +1175,7 @@ def start_bill():
     quantities = request.form.getlist('quantity[]')
     rates = request.form.getlist('rate[]')
     dc_numbers = request.form.getlist('dc_no[]')  # may be [] if toggle off
+    rounded_flags = request.form.getlist('rounded[]')
 
     # Get exclusion flags
     exclude_phone = bool(request.form.get('exclude_phone'))
@@ -1024,7 +1193,9 @@ def start_bill():
         dc_val = ''
         if dc_numbers and i < len(dc_numbers) and dc_numbers[i]:
             dc_val = dc_numbers[i].strip()
-        line_total = rounding_to_nearest_zero(qty * rate)
+        rounded = (i < len(rounded_flags) and rounded_flags[i] == "1")
+        raw_total = qty * rate
+        line_total = rounding_to_nearest_zero(raw_total) if rounded else raw_total
         total += line_total
         item_rows.append([desc, qty, rate, line_total, dc_val])
 
@@ -1072,7 +1243,7 @@ def start_bill():
             rate=rate,
             discount=0,
             taxPercentage=0,
-            line_total=rounding_to_nearest_zero(line_total),
+            line_total=line_total,
             dcNo=(dc_val if dc_val else None)
         ))
 
@@ -1443,6 +1614,7 @@ def update_bill(invoicenumber):
     quantities = request.form.getlist('quantity[]')
     rates = request.form.getlist('rate[]')
     dc_numbers = request.form.getlist('dc_no[]')  # may be empty if toggle off
+    rounded_flags = request.form.getlist('rounded[]')
 
     # 3) Normalize rows + recompute totals
     rows = []
@@ -1455,8 +1627,9 @@ def update_bill(invoicenumber):
         qty = int(quantities[i]) if i < len(quantities) and quantities[i] else 0
         rate = float(rates[i]) if i < len(rates) and rates[i] else 0.0
         dc = (dc_numbers[i].strip() if i < len(dc_numbers) and dc_numbers[i] else None)
-
-        line_total = rounding_to_nearest_zero(qty * rate)
+        rounded = (i < len(rounded_flags) and rounded_flags[i] == "1")
+        raw_total = qty * rate
+        line_total = rounding_to_nearest_zero(raw_total) if rounded else raw_total
         total += line_total
         rows.append((desc, qty, rate, dc, line_total))
 
@@ -1481,7 +1654,7 @@ def update_bill(invoicenumber):
             rate=rate,
             discount=0,
             taxPercentage=0,
-            line_total=rounding_to_nearest_zero(line_total),
+            line_total=line_total,
             dcNo=dc if dc else None
         ))
 

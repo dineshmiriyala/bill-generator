@@ -1,127 +1,136 @@
 {% extends "base.html" %}
 {% block content %}
-<h1 style="margin: 16px 0;">Statements</h1>
-{% if error %}
-<div class="alert alert-warning" role="alert" style="margin: 12px 0;">
-  {{ error }}
+<div class="container py-4">
+  <h2 class="text-center fw-semibold mb-4">Statements Overview</h2>
+  {% if error %}
+  <div class="alert alert-warning" role="alert" style="margin: 12px 0;">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <form method="get" action="{{ url_for('statements') }}" class="mb-4">
+    <div class="row justify-content-center align-items-end g-3">
+      <div class="col-md-5 col-lg-4">
+        <label for="scope" class="form-label fw-medium">Select Scope</label>
+        <select name="scope" id="scope" class="form-select shadow-sm">
+          <option value="month" {% if scope == 'month' %}selected{% endif %}>Month</option>
+          <option value="year" {% if scope == 'year' %}selected{% endif %}>Year</option>
+          <option value="custom" {% if scope == 'custom' %}selected{% endif %}>Custom</option>
+        </select>
+      </div>
+
+      <div class="col-md-2 hidden" id="wrapYear">
+        <label for="year" class="form-label fw-medium">Year</label>
+        <input type="number" class="form-control shadow-sm" name="year" id="year" min="2000" max="2100" value="{{ request.args.get('year','') }}">
+      </div>
+
+      <div class="col-md-2 hidden" id="wrapMonth">
+        <label for="month" class="form-label fw-medium">Month</label>
+        <input type="number" class="form-control shadow-sm" name="month" id="month" min="1" max="12" value="{{ request.args.get('month','') }}">
+      </div>
+
+      <div class="col-md-2 hidden" id="wrapStart">
+        <label for="start" class="form-label fw-medium">Start Date</label>
+        <input type="date" class="form-control shadow-sm" name="start" id="start" value="{{ request.args.get('start','') }}">
+      </div>
+
+      <div class="col-md-2 hidden" id="wrapEnd">
+        <label for="end" class="form-label fw-medium">End Date</label>
+        <input type="date" class="form-control shadow-sm" name="end" id="end" value="{{ request.args.get('end','') }}">
+      </div>
+
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100 shadow-sm">Get Statements</button>
+      </div>
+    </div>
+  </form>
+
+  {% if request.args and total_invoices > 0 %}
+  <div class="text-center mb-3">
+    <a class="btn btn-success shadow-sm" id="csvLink" href="#" target="_blank">Download CSV</a>
+  </div>
+  <div class="text-center mb-4">
+    <div class="muted">Range: <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong></div>
+    <div style="margin-top:6px;">Total invoices: <strong>{{ total_invoices }}</strong> | Total amount: <strong>{{ '%.2f'|format(total_amount) }}</strong></div>
+    {% if phone %}<div class="muted">Filtered by phone/ID: <code>{{ phone }}</code></div>{% endif %}
+  </div>
+
+  <h3 class="text-center mb-3">Per-company breakdown</h3>
+  <div class="table-responsive shadow-sm mb-4">
+    <table class="table">
+      <thead>
+        <tr><th>Company</th><th class="text-end">Count</th><th class="text-end">Amount</th></tr>
+      </thead>
+      <tbody>
+        {% for company, data in per_customer.items() %}
+        <tr>
+          <td>{{ company }}</td>
+          <td class="text-end">{{ data['count'] }}</td>
+          <td class="text-end">{{ '%.2f'|format(data['amount']) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="text-center mb-3">Invoices</h3>
+  <div class="table-responsive shadow-sm">
+    <table class="table">
+      <thead>
+        <tr><th>#</th><th>Invoice No</th><th>Date</th><th>Company</th><th>Phone/ID</th><th class="text-end">Total</th></tr>
+      </thead>
+      <tbody>
+        {% if inv_rows is defined and inv_rows %}
+          {% for row in inv_rows %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td><a href="{{ url_for('view_bill_locked', invoicenumber=row.invoice_no) }}">{{ row.invoice_no }}</a></td>
+            <td>{{ row.date }}</td>
+            <td>{{ row.company }}</td>
+            <td>{{ row.phone }}</td>
+            <td class="text-end">{{ '%.2f'|format(row.total) }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          {# Fallback for legacy context if inv_rows wasn't provided #}
+          {% for inv in invs %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoiceId) }}">{{ inv.invoiceId }}</a></td>
+            <td>{{ inv.createdAt.strftime('%Y-%m-%d') }}</td>
+            <td>{{ inv.customer.company if inv.customer and inv.customer.company else '(No Company)' }}</td>
+            <td>{{ inv.customer.phone if inv.customer else '' }}</td>
+            <td class="text-end">{{ '%.2f'|format(inv.totalAmount or 0) }}</td>
+          </tr>
+          {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 </div>
-{% endif %}
 
 <style>
-  .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-bottom: 12px; }
-  .field { display: flex; flex-direction: column; gap: 6px; }
-  .field label { font-size: 14px; color: #333; }
-  .field input, .field select { padding: 6px 8px; font-size: 14px; }
-  .btn { padding: 8px 12px; font-size: 14px; cursor: pointer; }
-  .btn.primary { background: #1f6feb; color: #fff; border: none; }
-  .btn.ghost { background: transparent; border: 1px solid #ccc; }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .button-group { display: flex; gap: 10px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #e5e5e5; padding: 8px; text-align: left; }
-  th { background: #f8f8f8; }
-  .right { text-align: right; }
   .muted { color: #666; }
   .hidden { display: none; }
+
+  td:nth-child(2),
+  td:nth-child(3),
+  th:nth-child(2),
+  th:nth-child(3) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .btn-sm {
+    height: calc(2.5rem + 2px); /* match Bootstrap form-select height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+  }
 </style>
-<form method="get" action="{{ url_for('statements') }}">
-  <div class="form-row">
-    <div class="field">
-      <label for="scope">Scope</label>
-      <select name="scope" id="scope">
-        <option value="month" {% if scope == 'month' %}selected{% endif %}>Month</option>
-        <option value="year" {% if scope == 'year' %}selected{% endif %}>Year</option>
-        <option value="custom" {% if scope == 'custom' %}selected{% endif %}>Custom</option>
-      </select>
-    </div>
-
-    <div class="field hidden" id="wrapYear">
-      <label for="year">Year</label>
-      <input type="number" name="year" id="year" min="2000" max="2100" value="{{ request.args.get('year','') }}" />
-    </div>
-
-    <div class="field hidden" id="wrapMonth">
-      <label for="month">Month</label>
-      <input type="number" name="month" id="month" min="1" max="12" value="{{ request.args.get('month','') }}" />
-    </div>
-
-    <div class="field hidden" id="wrapStart">
-      <label for="start">Start</label>
-      <input type="date" name="start" id="start" value="{{ request.args.get('start','') }}" />
-    </div>
-
-    <div class="field hidden" id="wrapEnd">
-      <label for="end">End</label>
-      <input type="date" name="end" id="end" value="{{ request.args.get('end','') }}" />
-    </div>
-
-    <div class="field">
-      <label for="phone">Phone/ID</label>
-      <input type="text" name="phone" id="phone" value="{{ request.args.get('phone','') }}" />
-    </div>
-
-    <div class="button-group">
-      <button type="submit" class="btn primary">Search</button>
-      <a class="btn ghost" href="{{ url_for('statements_blank') }}">Clear</a>
-      <a class="btn ghost" id="csvLink" href="#" target="_blank">Download CSV</a>
-    </div>
-  </div>
-</form>
-
-<div style="margin: 16px 0;">
-  <div class="muted">Range: <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong></div>
-  <div style="margin-top:6px;">Total invoices: <strong>{{ total_invoices }}</strong> | Total amount: <strong>{{ '%.2f'|format(total_amount) }}</strong></div>
-  {% if phone %}<div class="muted">Filtered by phone/ID: <code>{{ phone }}</code></div>{% endif %}
-</div>
-
-<h3>Per-company breakdown</h3>
-<table>
-  <thead>
-    <tr><th>Company</th><th class="right">Count</th><th class="right">Amount</th></tr>
-  </thead>
-  <tbody>
-    {% for company, data in per_customer.items() %}
-    <tr>
-      <td>{{ company }}</td>
-      <td class="right">{{ data['count'] }}</td>
-      <td class="right">{{ '%.2f'|format(data['amount']) }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-<h3 style="margin-top: 20px;">Invoices</h3>
-<table>
-  <thead>
-    <tr><th>#</th><th>Invoice No</th><th>Date</th><th>Company</th><th>Phone/ID</th><th class="right">Total</th></tr>
-  </thead>
-  <tbody>
-    {% if inv_rows is defined and inv_rows %}
-      {% for row in inv_rows %}
-      <tr>
-        <td>{{ loop.index }}</td>
-        <td><a href="{{ url_for('view_bill_locked', invoicenumber=row.invoice_no) }}">{{ row.invoice_no }}</a></td>
-        <td>{{ row.date }}</td>
-        <td>{{ row.company }}</td>
-        <td>{{ row.phone }}</td>
-        <td class="right">{{ '%.2f'|format(row.total) }}</td>
-      </tr>
-      {% endfor %}
-    {% else %}
-      {# Fallback for legacy context if inv_rows wasn't provided #}
-      {% for inv in invs %}
-      <tr>
-        <td>{{ loop.index }}</td>
-        <td><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoiceId) }}">{{ inv.invoiceId }}</a></td>
-        <td>{{ inv.createdAt.strftime('%Y-%m-%d') }}</td>
-        <td>{{ inv.customer.company if inv.customer and inv.customer.company else '(No Company)' }}</td>
-        <td>{{ inv.customer.phone if inv.customer else '' }}</td>
-        <td class="right">{{ '%.2f'|format(inv.totalAmount or 0) }}</td>
-      </tr>
-      {% endfor %}
-    {% endif %}
-  </tbody>
-</table>
 
 <script>
 (function() {
@@ -131,6 +140,19 @@
   const wrapStart = document.getElementById('wrapStart');
   const wrapEnd = document.getElementById('wrapEnd');
   const csvLink = document.getElementById('csvLink');
+
+  const today = new Date();
+  const yearEl = document.getElementById('year');
+  const monthEl = document.getElementById('month');
+  const startEl = document.getElementById('start');
+  const endEl = document.getElementById('end');
+
+  // Prefill with current date values
+  if (yearEl && !yearEl.value) yearEl.value = today.getFullYear();
+  if (monthEl && !monthEl.value) monthEl.value = today.getMonth() + 1;
+  const todayStr = today.toISOString().split('T')[0];
+  if (startEl && !startEl.value) startEl.value = todayStr;
+  if (endEl && !endEl.value) endEl.value = todayStr;
 
   function toggleByScope() {
     const scope = scopeEl.value;

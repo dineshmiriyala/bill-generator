@@ -1,0 +1,120 @@
+
+
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container py-4">
+  <h2 class="text-center fw-semibold mb-4">View Statements by Company</h2>
+
+  <form method="GET" action="/statements_company" class="mb-4">
+    <!-- Company / Phone -->
+    <div class="row justify-content-center align-items-end g-3">
+      <div class="col-md-5 col-lg-4 position-relative">
+        <label for="query" class="form-label fw-medium">Company / Phone</label>
+        <input type="text" class="form-control shadow-sm" id="query" name="query"
+               placeholder="Enter company name or phone/ID..." value="{{ request.args.get('query','') }}" required>
+        <div id="suggestionsList" class="list-group position-absolute w-100 shadow-sm" style="z-index: 1000; display: none;"></div>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100 shadow-sm">Get Statements</button>
+      </div>
+    </div>
+
+    <!-- Toggle -->
+    <div class="text-center my-4">
+      <button id="toggleDateFilter" type="button" class="btn btn-outline-secondary btn-sm px-4 py-2 shadow-sm">Add Time Filter</button>
+    </div>
+
+    <!-- Date Filter (same form so query persists) -->
+    <div id="dateFilter" class="mb-4 d-none">
+      <div class="row justify-content-center g-2">
+        <div class="col-md-3">
+          <label for="start" class="form-label fw-medium">From</label>
+          <input type="date" class="form-control" id="start" name="start" value="{{ request.args.get('start','') }}">
+        </div>
+        <div class="col-md-3">
+          <label for="end" class="form-label fw-medium">To</label>
+          <input type="date" class="form-control" id="end" name="end" value="{{ request.args.get('end','') }}">
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <button type="submit" class="btn btn-success w-100">Apply Filter</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+
+{% if total_invoices > 0 %}
+<div class="text-center mb-3">
+  <a class="btn btn-success shadow-sm"
+     href="{{ url_for('statements_company', format='csv', query=query, start=start_date, end=end_date) }}"
+     target="_blank">Download CSV</a>
+</div>
+<div class="table-responsive mt-4">
+  <table class="table table-bordered table-striped align-middle">
+    <thead class="table-light">
+      <tr class="text-center">
+        <th>Invoice No</th>
+        <th>Date</th>
+        <th>Company</th>
+        <th>Phone/ID</th>
+        <th class="text-end">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in inv_rows %}
+      <tr>
+        <td><a href="{{ url_for('view_bill_locked', invoicenumber=r.invoice_no) }}" target="_blank">{{ r.invoice_no }}</a></td>
+        <td>{{ r.date }}</td>
+        <td>{{ r.company }}</td>
+        <td>{{ r.phone }}</td>
+        <td class="text-end">{{ '%.2f'|format(r.total) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-center text-muted mt-4">No statements found for the selected company.</p>
+{% endif %}
+
+<script>
+  document.getElementById('toggleDateFilter').addEventListener('click', () => {
+    document.getElementById('dateFilter').classList.toggle('d-none');
+  });
+</script>
+
+<script>
+  const suggestions = {{ suggestions|tojson }};
+  const input = document.getElementById('query');
+  const list = document.getElementById('suggestionsList');
+
+  input.addEventListener('input', () => {
+    const val = input.value.toLowerCase();
+    list.innerHTML = '';
+    if (!val) {
+      list.style.display = 'none';
+      return;
+    }
+    const matches = suggestions.filter(s =>
+      (s.company || '').toLowerCase().includes(val) || (s.phone || '').toLowerCase().includes(val)
+    ).slice(0, 8);
+    matches.forEach(m => {
+      const item = document.createElement('a');
+      item.className = 'list-group-item list-group-item-action';
+      item.textContent = m.company ? `${m.company} (${m.phone})` : m.phone;
+      item.addEventListener('click', () => {
+        input.value = m.company || m.phone;
+        list.style.display = 'none';
+      });
+      list.appendChild(item);
+    });
+    list.style.display = matches.length ? 'block' : 'none';
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!list.contains(e.target) && e.target !== input) list.style.display = 'none';
+  });
+</script>
+{% endblock %}

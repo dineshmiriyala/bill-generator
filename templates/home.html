@@ -10,14 +10,8 @@
     <a href="/select_customer" class="btn btn-dark btn-lg">Create New Bill</a>
     <a href="/create_customers" class="btn btn-dark btn-lg">Add New Customer</a>
     <a href="/view_bills" class="btn btn-dark btn-lg">View Bills</a>
-    <a href="/analytics" class="btn btn-dark btn-lg d-flex justify-content-between align-items-center">
-      <span>Analytics</span>
-      <span class="badge-apple ms-2">NEW</span>
-    </a>
-    <a href="/test-pre-preview" class="btn btn-dark btn-lg d-flex justify-content-between align-items-center">
-      <span>Invoice Editor</span>
-      <span class="badge-apple ms-2">NEW</span>
-    </a>
+    <a href="/analytics" class="btn btn-dark btn-lg text-center">Analytics</a>
+    <a href="/test-pre-preview" class="btn btn-dark btn-lg text-center">Invoice Editor</a>
     <a href="/more" class="btn btn-dark btn-lg">More</a>
   </div>
 </div>
@@ -47,6 +41,7 @@
 </script>
 {% endif %}
 
+
 <style>
   .badge-apple {
     background-color: #e0e0e5;
@@ -57,6 +52,24 @@
     border-radius: 999px;
     letter-spacing: 0.5px;
     text-transform: uppercase;
+  }
+</style>
+
+<style>
+  .btn-dark.btn-lg {
+    width: 280px;
+    padding: 0.9rem 1.5rem;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  }
+  .btn-dark.btn-lg:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+    background-color: #212529;
   }
 </style>
 
