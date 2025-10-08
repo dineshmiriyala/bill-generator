@@ -117,6 +117,7 @@
             <button type="button" class="btn btn-info btn-sm me-1 round-zero">Round</button>
             <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
           </div>
+          <input type="hidden" name="rounded[]" value="0">
         </div>
         {% endfor %}
         <datalist id="inventoryList">{% for item in inventory %}<option value="{{ item.name }}">{% endfor %}</datalist>
@@ -136,6 +137,7 @@
             <button type="button" class="btn btn-info btn-sm me-1 round-zero">Round</button>
             <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
           </div>
+          <input type="hidden" name="rounded[]" value="0">
         </div>
         <datalist id="inventoryList">{% for item in inventory %}<option value="{{ item.name }}">{% endfor %}</datalist>
       {% endif %}
@@ -274,7 +276,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // Clear all inputs in the cloned row
     newRow.querySelectorAll('input').forEach(inp=>{
       inp.value = '';
-      // Make sure no readOnly state is carried over from a rounded row
       inp.readOnly = false;
       inp.classList.remove('bg-light');
     });
@@ -292,6 +293,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // Reset autofill marker on rate
     const newRate = newRow.querySelector('[name="rate[]"]');
     if (newRate) newRate.dataset.autofilled = "false";
+
+    // Ensure rounded[] hidden field exists
+    let roundedHidden = newRow.querySelector('input[type="hidden"][name="rounded[]"]');
+    if (!roundedHidden) {
+      roundedHidden = document.createElement('input');
+      roundedHidden.type = "hidden";
+      roundedHidden.name = "rounded[]";
+      roundedHidden.value = "0";
+      newRow.appendChild(roundedHidden);
+    } else {
+      roundedHidden.value = "0";
+    }
 
     // Append and rewire listeners
     document.getElementById('items').appendChild(newRow);
@@ -317,6 +330,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
       qtyInput.readOnly = true;
       qtyInput.classList.add("bg-light");
       row.dataset.lastEdited = 'total';
+      // Mark this row as rounded for backend
+      let roundedHidden = row.querySelector('input[type="hidden"][name="rounded[]"]');
+      if (roundedHidden) {
+        roundedHidden.value = "1";
+      }
     });
     calculateTotal();
   });
@@ -347,6 +365,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
       qtyInput.readOnly = true;
       qtyInput.classList.add("bg-light");
       row.dataset.lastEdited = 'total';
+      // Set the rounded[] hidden field to 1
+      let roundedHidden = row.querySelector('input[type="hidden"][name="rounded[]"]');
+      if (roundedHidden) {
+        roundedHidden.value = "1";
+      }
       calculateTotal();
     }
   });

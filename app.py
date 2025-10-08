@@ -105,10 +105,16 @@ migrate = Migrate(app, db)
 
 # add at top with other imports
 from sqlalchemy import inspect
+from decimal import Decimal, ROUND_HALF_UP
 
-def rounding_to_nearest_zero(number):
-    return number
-    # return round(number / 10) * 10
+def rounding_to_nearest_zero(amount):
+    """Rounding number to nearest zero"""
+    try:
+        d = Decimal(str(amount))
+    except Exception:
+        d = Decimal('0')
+    tens = (d / Decimal('10')).quantize(Decimal('1'), rounding = ROUND_HALF_UP)
+    return float(tens * Decimal('10'))
 
 def _ensure_db_initialized():
     """
@@ -1169,6 +1175,7 @@ def start_bill():
     quantities = request.form.getlist('quantity[]')
     rates = request.form.getlist('rate[]')
     dc_numbers = request.form.getlist('dc_no[]')  # may be [] if toggle off
+    rounded_flags = request.form.getlist('rounded[]')
 
     # Get exclusion flags
     exclude_phone = bool(request.form.get('exclude_phone'))
@@ -1186,7 +1193,9 @@ def start_bill():
         dc_val = ''
         if dc_numbers and i < len(dc_numbers) and dc_numbers[i]:
             dc_val = dc_numbers[i].strip()
-        line_total = rounding_to_nearest_zero(qty * rate)
+        rounded = (i < len(rounded_flags) and rounded_flags[i] == "1")
+        raw_total = qty * rate
+        line_total = rounding_to_nearest_zero(raw_total) if rounded else raw_total
         total += line_total
         item_rows.append([desc, qty, rate, line_total, dc_val])
 
@@ -1234,7 +1243,7 @@ def start_bill():
             rate=rate,
             discount=0,
             taxPercentage=0,
-            line_total=rounding_to_nearest_zero(line_total),
+            line_total=line_total,
             dcNo=(dc_val if dc_val else None)
         ))
 
@@ -1605,6 +1614,7 @@ def update_bill(invoicenumber):
     quantities = request.form.getlist('quantity[]')
     rates = request.form.getlist('rate[]')
     dc_numbers = request.form.getlist('dc_no[]')  # may be empty if toggle off
+    rounded_flags = request.form.getlist('rounded[]')
 
     # 3) Normalize rows + recompute totals
     rows = []
@@ -1617,8 +1627,9 @@ def update_bill(invoicenumber):
         qty = int(quantities[i]) if i < len(quantities) and quantities[i] else 0
         rate = float(rates[i]) if i < len(rates) and rates[i] else 0.0
         dc = (dc_numbers[i].strip() if i < len(dc_numbers) and dc_numbers[i] else None)
-
-        line_total = rounding_to_nearest_zero(qty * rate)
+        rounded = (i < len(rounded_flags) and rounded_flags[i] == "1")
+        raw_total = qty * rate
+        line_total = rounding_to_nearest_zero(raw_total) if rounded else raw_total
         total += line_total
         rows.append((desc, qty, rate, dc, line_total))
 
@@ -1643,7 +1654,7 @@ def update_bill(invoicenumber):
             rate=rate,
             discount=0,
             taxPercentage=0,
-            line_total=rounding_to_nearest_zero(line_total),
+            line_total=line_total,
             dcNo=dc if dc else None
         ))
 
