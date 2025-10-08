@@ -42,6 +42,44 @@ Bill Generator is a lightweight, local-first invoice generation tool designed to
 ---
 ---
 
+## Version 3.1 – Latest Release
+
+### Major Improvements
+- Added **rounding feature** for invoice line items:
+  - Round individual line totals to nearest 10 (half-up logic)
+  - “Round All” button to round all rows simultaneously
+  - Visual ✓ tick mark on rounded rows
+- Fixed backend rounding logic to exactly match frontend results
+- Added persistent hidden rounding flags (`rounded[]`) so that only manually rounded rows are affected
+- Updated edit mode behavior: totals are no longer recalculated automatically on page load, preserving rounded values
+- Updated "Create Bill" front-end with tick mark visual cues and better user feedback
+- Enhanced UI/UX:
+  - Wider and more aesthetically styled home page buttons with hover animations
+  - Centered text for Analytics and Invoice Editor buttons
+  - Added consistent Apple-style gradient buttons
+- Added role-based restrictions for editing/deleting invoices and customers (admin only)
+- Updated `.gitignore` for Flask + PyInstaller builds to avoid merge conflicts and remove unnecessary files
+- Improved EXE build process and PyInstaller command for Windows packaging
+
+### Bug Fixes
+- Fixed edit-bill issue where rounded totals reverted after reloading
+- Fixed minor alignment issues in buttons and navigation
+- Fixed display inconsistencies between PDF and on-screen invoice
+- Fixed “Round All” not setting flags for all items properly
+- Fixed rounding not being respected after saving and reopening invoices
+
+### Developer Notes
+- Frontend and backend rounding are now in full sync (Decimal + JS Math.round)
+- Added edit mode condition to prevent premature recalculations
+- `.gitignore` now excludes build, dist, and environment folders
+- EXE build instructions updated to match PyInstaller 6.x format
+
+## Version 2.1.1 - Latest Update
+- Fixed a bug where total filed can't be edited in create bill page.
+- Fixed dependency on Customer name and added option to use the company name as customer name while creating a new customer.
+
+---
+
 ## Version 2.1 
 
 ### Bug Fixes
@@ -62,10 +100,6 @@ Bill Generator is a lightweight, local-first invoice generation tool designed to
 - Added support to edit customer after creation.
 - Many quality of life upgrades.
 - added a new about me page which can display info about customer. 
-
-## Version 2.1.1 - Latest Update
-- Fixed a bug where total filed can't be edited in create bill page.
-- Fixed dependency on Customer name and added option to use the company name as customer name while creating a new customer.
 
 ---
 
