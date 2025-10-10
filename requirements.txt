@@ -15,3 +15,5 @@ alembic>=1.13,<2
 Flask-Migrate>=4.0,<5.0
 waitress>=3.0
 pywebview>=5.0
+
+segno

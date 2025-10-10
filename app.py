@@ -1,4 +1,6 @@
 from flask import Flask, render_template, render_template_string, request, Response, jsonify, redirect, url_for, flash
+
+import upi_qr
 from analytics import get_sales_trends, get_top_customers, get_customer_retention, get_day_wise_billing
 from datetime import datetime, timedelta, timezone
 from flask_migrate import Migrate
@@ -23,6 +25,7 @@ from migration import migrate_db
 from flask import send_file
 import io
 import json
+from upi_qr import UPIQRGenerator
 
 
 def _format_customer_id(n: int) -> str:
@@ -1504,6 +1507,10 @@ def bill_preview(invoicenumber):
 
     config = layoutConfig().get_or_create()
     current_sizes = config.get_sizes()
+
+    phone = 9848992207
+    
+    qr = upi_qr.UPIQRGenerator()
 
     return render_template(
         'bill_preview.html',
