@@ -515,6 +515,82 @@ def add_customers():
     # GET -> render blank form
     return render_template('add_customer.html')
 
+# --- TEMP TESTING FLOW FOR ONBOARDING (no DB needed) ---
+
+from flask import session
+@app.route('/onboarding', methods=['GET'])
+def onboarding():
+    """Render multi-step onboarding page (UI only)."""
+    return render_template('onboarding.html')
+
+
+@app.route('/onboarding/submit', methods=['POST'])
+def onboarding_submit():
+    """Simulate onboarding form submission (no DB)."""
+    # Collect all form fields, including optional bank details
+    data = {
+        # Stage 1 & 2
+        "business_name": request.form.get("business_name"),
+        "owner_name": request.form.get("owner_name"),
+        "phone": request.form.get("phone"),
+        "email": request.form.get("email"),
+        "address": request.form.get("address"),
+
+        # Stage 3: GST Details
+        "business_type": request.form.get("business_type"),
+        "gstin": request.form.get("gstin"),
+        "pan": request.form.get("pan"),
+
+        # Stage 4: Bank Details (may be skipped)
+        "bank_account_number": request.form.get("bank_account_number"),
+        "confirm_account_number": request.form.get("confirm_account_number"),
+        "ifsc": request.form.get("ifsc"),
+        "account_holder": request.form.get("account_holder"),
+        "branch": request.form.get("branch"),
+        "bank_name": request.form.get("bank_name"),
+
+        # Stage 4 optional skip flag
+        "skipped_bank": bool(request.form.get("skip_bank")),
+    }
+
+    # Validate account numbers if provided
+    if data["bank_account_number"] and data["confirm_account_number"]:
+        if data["bank_account_number"] != data["confirm_account_number"]:
+            flash("⚠️ Bank account numbers do not match. Please check again.", "warning")
+            return redirect(url_for('onboarding'))
+
+    # Store temporarily in session for mock persistence
+    session['onboarding_data'] = data
+
+    # Log to console for testing
+    print("\n--- ONBOARDING TEST DATA ---")
+    for k, v in data.items():
+        print(f"{k}: {v}")
+    print("----------------------------\n")
+
+    # Simulate successful save & redirect
+    flash("✅ Onboarding data captured successfully (test mode)", "success")
+    return redirect(url_for('onboarding_success'))
+
+
+@app.route('/onboarding/success')
+def onboarding_success():
+    """Temporary success page."""
+    data = session.get('onboarding_data', {})
+    return render_template_string("""
+        <html>
+        <head><title>Onboarding Success</title></head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; padding: 2rem;">
+            <h2>🎉 Onboarding Completed (Test Mode)</h2>
+            <p>Here’s what was captured:</p>
+            <pre style="text-align:left; display:inline-block; background:#f5f5f5; padding:1rem; border-radius:8px;">
+{{ data|tojson(indent=2) }}
+            </pre>
+            <br><br>
+            <a href="{{ url_for('onboarding') }}">← Back to Onboarding</a>
+        </body>
+        </html>
+    """, data=data)
 
 @app.route('/delete_customer/<int:cid>', methods=['GET', 'POST'])
 def delete_customer(cid):
