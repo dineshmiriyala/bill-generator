@@ -104,22 +104,23 @@
 
     <div class="container">
         <div class="masthead mb-2">
-          <h1 class="visually-hidden">Sri Lakshmi Offset Printers — ESTD: 1973</h1>
-          <img class="brand-logo" src="{{ url_for('static', filename='img/brand-wordmark.svg') }}" alt="Sri Lakshmi Offset Printers — ESTD: 1973">
-          <h2 class="bill-heading">Bill of Supply</h2>
+          <h1 class="visually-hidden">Miriyala Labs</h1>
+          <div class="text-center mb-2">
+              <h2 style="font-weight:700; margin-bottom:0; color:#000;">MIRIYALA LABS</h2>
+              <div style="font-size:0.9rem; color:#555;">Software &amp; Data Solutions</div>
+          </div>
+          <h2 class="bill-heading">Quotation</h2>
         </div>
 
         <div class="row mb-4 from-to-block">
             <div class="col-sm-6">
                 <h5>From:</h5>
                 <p class="fs-5">
-                    <strong class="fs-4">Sri Lakshmi Offset Printers</strong><br>
-                    PAMARRU, Krishna Dist - 521157<br>
-                    GST: 37AVEPM5991R3ZG<br>
-                    Cell: 9848992207<br>
-                    email: haripress@gmail.com<br>
+                    <strong class="fs-4">Dinesh Miriyala</strong><br>
+                    Andhra Pradesh<br>
+                    Cell: 7659909852<br>
+                    Email: hello@dineshmiriyala.com<br>
                 </p>
-                <small class="text-muted footer-note">Composition Taxable Person. Not eligible to collect Tax on supplies.</small>
             </div>
             <div class="col-sm-6 text-end">
                 <h5>To:</h5>
@@ -134,7 +135,6 @@
 
         <div class="row mb-3 invoice-info-block">
             <div class="col-sm-6">
-                <p class="text-dark"><strong>Invoice No:</strong> {{ invoice.invoiceId }}</p>
                 <p class="text-dark"><strong>Date:</strong> {{ invoice.createdAt.strftime('%d-%m-%Y') }}</p>
             </div>
         </div>
@@ -187,33 +187,29 @@
             {% endif %}
         </div>
 
+        <div class="mt-4 quotation-summary">
+          <p><strong>Advance Amount:</strong> ₹5,000</p>
+          <p><strong>Project Timelines & Deliverables:</strong> To be discussed and finalized upon project commencement.</p>
+        </div>
+
         <div class="mt-3 text-end">
           <small class="text-muted footer-note">Computer generated receipt – signature not required</small>
         </div>
 
         <div class="row mt-5">
-          <div class="col-12 payment-info border rounded p-3 bg-light-subtle">
-            <h6 class="mb-2">Payment Information</h6>
-            <div>
-              Account Name: <strong>Sri Lakshmi Offset Printers</strong><br>
-              Bank: <strong>State Bank of India, Pamarru</strong><br>
-              Account Number: <strong>38588014977</strong><br>
-              IFSC: <strong>SBIN0002776</strong><br>
-              PhonePe/GPay: <strong>9848992207</strong>
-            </div>
-          </div>
+          <!-- Bank information section temporarily removed -->
         </div>
 
         <hr class="my-3" style="border:0;border-top:2px solid #c8c8c8;" />
         <div class="services text-center mt-2">
           <small class="text-muted">
-            Services: Multi‑colour Offset Printing • Digital Printing • Brochures • Stickers • Invitations • Pamphlets • All Printing Works
+            Software Solutions • Web Applications • Data Engineering • AI/ML Integrations • Cloud Automation
           </small>
         </div>
 
         <div class="text-center mt-3">
           <small class="text-muted thanks-note">
-            Thank you for your business! For inquiries or bulk orders, reach us at <strong>9848992207</strong> or <strong>haripress@gmail.com</strong>.
+            Thank you for your business! For software or project inquiries, reach us at <strong>7659909852</strong> or <strong>hello@dineshmiriyala.com</strong>.
           </small>
         </div>
 
