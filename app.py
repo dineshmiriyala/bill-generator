@@ -1255,7 +1255,7 @@ def start_bill():
 
     # After successful creation, flash and redirect to locked preview page
     session['persistent_notice'] = f"Invoice {new_invoice.invoiceId} created successfully!"
-    return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId))
+    return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId, new_bill = True))
 
 
 @app.route('/view_customers', methods=['GET', 'POST'])
@@ -1394,7 +1394,6 @@ def view_bill_locked(invoicenumber):
         dcno=dcno,
         total=round(total, 2),
         invoice_no=current_invoice.invoiceId,
-        back_to_select_customer = True
     )
 
 
