@@ -1508,9 +1508,21 @@ def bill_preview(invoicenumber):
     config = layoutConfig().get_or_create()
     current_sizes = config.get_sizes()
 
-    phone = 9848992207
-    
-    qr = upi_qr.UPIQRGenerator()
+    #hard coded
+    upi_id = '9848992207@upi'
+    payee_name= 'Harinadhababu Miriyala'
+    currency = 'INR'
+    amount = current_invoice.totalAmount
+
+    qr = upi_qr.UPIQRGenerator(upi_id, payee_name, currency)
+
+    upi_link = qr.build_upi_url(amount)
+
+    upi_segno = qr.generate_segno(amount)
+
+    # logic to be written
+    qr_enabler = True
+
 
     return render_template(
         'bill_preview.html',
@@ -1520,7 +1532,11 @@ def bill_preview(invoicenumber):
         dcno=dcno,
         dc_numbers=dc_numbers,
         total_in_words=amount_to_words(current_invoice.totalAmount),
-        sizes=current_sizes
+        sizes=current_sizes,
+        upi_segno=upi_segno,
+        upi_id=upi_id,
+        payee_name=payee_name,
+        qr_enabler=qr_enabler
     )
 
 

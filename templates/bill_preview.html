@@ -191,16 +191,34 @@
           <small class="text-muted footer-note">Computer generated receipt – signature not required</small>
         </div>
 
-        <div class="row mt-5">
-          <div class="col-12 payment-info border rounded p-3 bg-light-subtle">
-            <h6 class="mb-2">Payment Information</h6>
-            <div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0 text-muted">Payment Section</h6>
+        </div>
+
+        <div class="payment-info border rounded p-3 bg-light-subtle mt-5">
+          <h6 class="mb-3">Payment Information</h6>
+          <div class="d-flex justify-content-between align-items-center flex-wrap">
+            <div class="text-start">
               Account Name: <strong>Sri Lakshmi Offset Printers</strong><br>
               Bank: <strong>State Bank of India, Pamarru</strong><br>
               Account Number: <strong>38588014977</strong><br>
               IFSC: <strong>SBIN0002776</strong><br>
               PhonePe/GPay: <strong>9848992207</strong>
             </div>
+
+            {% if qr_enabler and upi_segno %}
+            <div id="upiPaymentSection" class="d-flex align-items-center gap-3 mt-3 mt-md-0">
+              <div style="width:100px;height:100px;display:flex;align-items:center;justify-content:center;border:1px solid #ccc;background:#fff;flex-shrink:0;">
+                <img src="{{ upi_segno.svg_data_uri(scale=2) }}" alt="UPI QR Code" width="90" height="90" style="max-width:90px;max-height:90px;object-fit:contain;user-select:none;-webkit-user-drag:none;">
+              </div>
+              <div class="text-start text-muted" style="font-size: 0.9rem; line-height: 1.3;">
+                <h6 class="mb-2 text-dark">UPI Payment</h6>
+                <div><strong>Payee:</strong> {{ payee_name }}</div>
+                <div><strong>UPI ID:</strong> {{ upi_id }}</div>
+                <div><strong>Amount:</strong> ₹{{ "%.2f"|format(invoice.totalAmount or 0) }}</div>
+              </div>
+            </div>
+            {% endif %}
           </div>
         </div>
 
