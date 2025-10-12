@@ -1,6 +1,10 @@
 {% extends 'base.html' %}
 {% block content %}
-{% set back_to_select_customer = True %}
+{% if new_bill == True %}
+  {% set back_to_select_customer = True %}
+{% else %}
+  {% set back_to_select_customer = False %}
+{% endif %}
 <div class="container py-4 text-center">
   {% if session.persistent_notice %}
     <div style="background-color: #d1e7dd; border: 1px solid #badbcc; color: #0f5132; padding: 12px 16px; border-radius: 4px; position: relative; margin-bottom: 1rem;">
@@ -68,16 +72,16 @@
           {% if dcno %}
             <td>{{ dc_numbers[loop.index0] if dc_numbers is defined and dc_numbers|length > loop.index0 else '' }}</td>
           {% endif %}
-          <td>{{ qty }}</td>
-          <td>{{ rate }}</td>
-          <td class="text-end">{{ line_totals[loop.index0] }}</td>
+          <td>{{ '%.2f' | format(qty) }}</td>
+          <td>{{ '%.2f' | format(rate) }}</td>
+          <td class="text-end">{{ '%.2f' | format(line_totals[loop.index0]) }}</td>
         </tr>
         {% endfor %}
       </tbody>
       <tfoot>
         <tr>
           <th colspan="{% if dcno %}5{% else %}4{% endif %}" class="text-end">Total</th>
-          <th class="text-end">{{ total }}</th>
+          <th class="text-end">{{ '%.2f' | format(total) }}</th>
         </tr>
       </tfoot>
     </table>

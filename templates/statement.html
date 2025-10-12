@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container py-4">
-  <h2 class="text-center fw-semibold mb-4">Statements Overview</h2>
+  <h2 class="text-center fw-semibold mb-4">Date Wise Statements </h2>
   {% if error %}
   <div class="alert alert-warning" role="alert" style="margin: 12px 0;">
     {{ error }}
@@ -41,6 +41,11 @@
 
       <div class="col-md-2 d-flex align-items-end">
         <button type="submit" class="btn btn-primary w-100 shadow-sm">Get Statements</button>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <a href="{{ url_for('statements_company') }}" class="btn btn-outline-secondary w-100 shadow-sm" style="border-radius: 6px;">
+          Company Wise
+        </a>
       </div>
     </div>
   </form>

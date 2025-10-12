@@ -18,6 +18,11 @@
       <div class="col-md-2">
         <button type="submit" class="btn btn-primary w-100 shadow-sm">Get Statements</button>
       </div>
+      <div class="col-md-2">
+        <a href="{{ url_for('statements') }}" class="btn btn-outline-secondary w-100 shadow-sm">
+          Date Wise
+        </a>
+      </div>
     </div>
 
     <!-- Toggle -->
@@ -46,7 +51,7 @@
 
 
 {% if total_invoices > 0 %}
-<div class="text-center mb-3">
+<div class="text-center mb-3 d-flex justify-content-center gap-3 flex-wrap">
   <a class="btn btn-success shadow-sm"
      href="{{ url_for('statements_company', format='csv', query=query, start=start_date, end=end_date) }}"
      target="_blank">Download CSV</a>
