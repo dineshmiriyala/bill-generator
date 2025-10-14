@@ -1,0 +1,53 @@
+
+
+{
+  "business": {
+    "name": "Sri Lakshmi Offset Printers",
+    "owner": "Hari Nadh Babu Miriyala",
+    "address": "Pamarru, Andhra Pradesh, India",
+    "email": "haripress@gmail.com",
+    "phone": "9848992207",
+    "gstin": "37XXXXXXXXX1Z5",
+    "upi_id": "9848992207@upi"
+  },
+
+  "bank": {
+    "account_name": "Sri Lakshmi Offset Printers",
+    "bank_name": "State Bank of India",
+    "branch": "Pamarru",
+    "account_number": "38588014977",
+    "ifsc": "SBIN0002776"
+  },
+
+  "appearance": {
+    "currency_symbol": "₹",
+    "date_format": "%d %B %Y",
+    "font_family": "Inter, Helvetica, Arial, sans-serif",
+    "theme_color": "#0056b3"
+  },
+
+  "payment": {
+    "methods": ["UPI", "Bank Transfer"],
+    "upi_qr_enabled": true,
+    "qr_label": "Scan to Pay",
+    "terms": [
+      "Payment due within 7 days of invoice date.",
+      "Late payments may incur a 2% interest per month.",
+      "This is a computer-generated document, no signature required."
+    ]
+  },
+
+  "statement": {
+    "header_title": "Statement Summary",
+    "disclaimer": "This is a system-generated statement. No signature required."
+  },
+  "account_defaults": {
+    "start_date": "2025-09-01T00:00:00Z",
+    "timezone": "Asia/Kolkata"
+  },
+
+  "meta": {
+    "version": "3.1.2",
+    "created_on": "2025-10-14T00:00:00Z"
+  }
+}

@@ -41,7 +41,12 @@
 
     <div class="flex-grow-0 flex-shrink-0 d-flex align-items-center gap-2" style="flex-basis: 150px; min-width: 150px;">
       <button type="submit" class="btn btn-primary shadow-sm px-3 py-2 rounded-pill" style="font-weight: 600; font-size: 0.95rem; height: 38px;">Get</button>
-      <button type="reset" class="btn btn-outline-secondary shadow-sm px-3 py-2 rounded-pill" style="font-weight: 600; font-size: 0.95rem; height: 38px;">Clear</button>
+      <button type="button"
+              onclick="window.location='{{ url_for('statements') }}'"
+              class="btn btn-outline-secondary shadow-sm px-3 py-2 rounded-pill"
+              style="font-weight: 600; font-size: 0.95rem; height: 38px;">
+        Clear
+      </button>
     </div>
     <div class="flex-shrink-0" style="min-width: 140px;">
       <a href="{{ url_for('statements_company') }}" class="btn btn-outline-secondary shadow-sm px-3 py-2 rounded-pill w-100 text-nowrap" style="font-weight: 600; font-size: 0.95rem; height: 38px;">Company Wise</a>
@@ -122,24 +127,6 @@
       </tbody>
     </table>
   </div>
-
-  <div class="text-center mt-4 mb-3">
-    <div class="d-inline-flex flex-wrap justify-content-center gap-3">
-      <a class="btn btn-success rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2"
-         id="csvLink"
-         href="#"
-         target="_blank"
-         style="font-weight: 600; font-size: 1rem; min-width: 160px; box-shadow: 0 4px 8px rgba(0,122,255,0.3);">
-         ⬇️ Download CSV
-      </a>
-      <a class="btn btn-primary rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2"
-         href="{{ url_for('statements', format='pdf', scope=scope, year=request.args.get('year'), month=request.args.get('month'), start=request.args.get('start'), end=request.args.get('end')) }}"
-         target="_blank"
-         style="font-weight: 600; font-size: 1rem; min-width: 160px; box-shadow: 0 4px 8px rgba(0,122,255,0.3);">
-         🧾 Download PDF
-      </a>
-    </div>
-  </div>
   {% endif %}
 </div>
 
@@ -180,7 +167,6 @@
   const wrapMonth = document.getElementById('wrapMonth');
   const wrapStart = document.getElementById('wrapStart');
   const wrapEnd = document.getElementById('wrapEnd');
-  const csvLink = document.getElementById('csvLink');
 
   const today = new Date();
   const yearEl = document.getElementById('year');
@@ -214,16 +200,39 @@
     }
   }
 
-  function buildCsvHref() {
-    const url = new URL(window.location.href);
-    url.searchParams.set('format', 'csv');
-    csvLink.href = url.toString();
-  }
-
   scopeEl.addEventListener('change', toggleByScope);
   toggleByScope();
-  buildCsvHref();
 })();
 </script>
+
+<div id="infoPanel" class="position-fixed end-0 top-50 translate-middle-y me-4 p-4 rounded-4 shadow-sm bg-light border text-center"
+     style="width: 280px; font-weight: 500; font-size: 0.9rem; z-index: 1050; color: #333;">
+  <h6 class="fw-bold mb-3" style="color:#007aff;">ℹ️ File Format Info</h6>
+  <p class="mb-2">💡 <strong>XLSX</strong> — Modern, polished style format<br>(2 sheets: Summary &amp; Invoices)</p>
+  <p class="mb-3">📜 <strong>CSV</strong> — Legacy format (plain text, for compatibility)</p>
+  <div class="d-flex flex-column align-items-center gap-2 mt-3">
+    <a class="btn btn-success rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2 w-100 justify-content-center"
+       id="csvLink"
+       href="{{ url_for('statements', export='csv', scope=scope, year=request.args.get('year'), month=request.args.get('month'), start=request.args.get('start'), end=request.args.get('end')) }}"
+       target="_blank"
+       title="Download CSV (legacy format)"
+       style="font-weight: 600; font-size: 0.95rem; box-shadow: 0 4px 8px rgba(0,122,255,0.3);">
+       ⬇️ Download CSV
+    </a>
+    <a class="btn btn-info rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2 w-100 justify-content-center"
+       href="{{ url_for('statements', export='xlsx', scope=scope, year=request.args.get('year'), month=request.args.get('month'), start=request.args.get('start'), end=request.args.get('end')) }}"
+       target="_blank"
+       title="Download XLSX (modern format)"
+       style="font-weight: 600; font-size: 0.95rem; box-shadow: 0 4px 8px rgba(0,122,255,0.3);">
+       📘 Download XLSX
+    </a>
+  </div>
+</div>
+
+<style>
+  .container {
+    margin-right: 340px; /* ensures content doesn't overlap floating panel */
+  }
+</style>
 
 {% endblock %}

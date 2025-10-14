@@ -24,6 +24,18 @@ from flask import send_file
 import io
 import json
 from api import api_bp
+import json
+from dateutil import tz
+
+with open(os.path.join(os.path.dirname(__file__), 'db', 'info.json'),'r', encoding='utf-8') as f:
+    APP_INFO = json.load(f)
+
+def get_default_statement_start():
+    """Return default statement start date from info.json"""
+    tzinfo = tz.gettz(APP_INFO['account_defaults']['timezone'])
+    return datetime.strptime(
+        APP_INFO['account_defaults']['start_date'], '%Y-%m-%dT%H:%M:%SZ'
+    ).replace(tzinfo=tzinfo)
 
 def _format_customer_id(n: int) -> str:
     return f"ID-{n:06d}"
@@ -1571,11 +1583,10 @@ app.jinja_env.globals.update(zip=zip)
 
 
 
-# --- /statements route (customer statements with export options) ---
 @app.route('/statements', methods=['GET'])
 def statements():
     """
-    Render customer statements for a date range or customer, with export (HTML, CSV, PDF).
+    Render customer statements for a date range or customer, with export (HTML, CSV, PDF/Print).
     Query params:
       - scope: 'year'/'month'/'custom'
       - year/month/start/end
@@ -1585,7 +1596,11 @@ def statements():
     scope = (request.args.get('scope') or 'custom').lower()
     phone = request.args.get('phone')
     export = (request.args.get('export') or '').lower()
+
     today = datetime.now().date()
+    min_allowed_start = get_default_statement_start().date()  # 🔹 Lower limit from info.json
+
+    # 🔸 Resolve start/end based on scope
     if scope == 'year':
         year = int(request.args.get('year') or today.year)
         start_date = datetime(year, 1, 1).date()
@@ -1595,34 +1610,45 @@ def statements():
         month = int(request.args.get('month') or today.month)
         start_date = datetime(year, month, 1).date()
         end_date = datetime(year, 12, 31).date() if month == 12 else (
-                datetime(year, month + 1, 1).date() - timedelta(days=1))
+            datetime(year, month + 1, 1).date() - timedelta(days=1))
     else:
         start_date = _parse_date(request.args.get('start'))
         end_date = _parse_date(request.args.get('end'))
-        # fallback: default to current month
+        # Fallback: default to current month
         if not (start_date and end_date):
             start_date = today.replace(day=1)
             end_date = today
 
+    # 🔸 Enforce lower date limit
+    if start_date < min_allowed_start:
+        start_date = min_allowed_start
+
+    # Normalize datetimes
     start_dt = datetime.combine(start_date, datetime.min.time())
     end_dt = datetime.combine(end_date, datetime.max.time())
 
-    # Query invoices within range, eager-load customer
-    q = (invoice.query
-         .options(joinedload(invoice.customer))
-         .join(customer, invoice.customerId == customer.id)
-         .filter(invoice.isDeleted == False,
-                 customer.isDeleted == False,
-                 invoice.createdAt >= start_dt,
-                 invoice.createdAt <= end_dt))
+    # 🔹 Query invoices
+    q = (
+        invoice.query
+        .options(joinedload(invoice.customer))
+        .join(customer, invoice.customerId == customer.id)
+        .filter(
+            invoice.isDeleted == False,
+            customer.isDeleted == False,
+            invoice.createdAt >= start_dt,
+            invoice.createdAt <= end_dt,
+        )
+    )
     if phone:
         q = q.filter(customer.phone == phone)
+
     invs = q.order_by(invoice.createdAt.asc()).all()
 
-    # Compute totals and per-customer summary
+    # 🔹 Aggregations
     total_invoices = len(invs)
     total_amount = round(sum((inv.totalAmount or 0) for inv in invs), 2)
     per_customer = defaultdict(lambda: {"count": 0, "amount": 0.0, "company": None, "phone": None})
+
     for inv in invs:
         cust = inv.customer
         if cust:
@@ -1635,53 +1661,227 @@ def statements():
             per_customer["Unknown"]["count"] += 1
             per_customer["Unknown"]["amount"] += (inv.totalAmount or 0)
 
-    # Ensure per_customer is always defined as a dict (never Undefined)
     if not per_customer:
         per_customer = {}
 
-    # Export CSV
+    # 🔸 Export CSV
     if export == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["Invoice No", "Date", "Customer", "Company", "Phone", "Amount"])
+
+        biz = APP_INFO.get("business", {})
+        bank = APP_INFO.get("bank", {})
+        statement_meta = APP_INFO.get("statement", {})
+
+        writer.writerow([f"{biz.get('name', 'Business Name')} - {statement_meta.get('header_title', 'Statement Summary')}"])
+        writer.writerow(["Generated On", datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+        writer.writerow(["Period", f"{start_date.strftime('%d %B %Y')} to {end_date.strftime('%d %B %Y')}"])
+        writer.writerow([])
+
+        writer.writerow(["Invoice No", "Date", "Company", "Phone", "Amount (₹)"])
         for inv in invs:
             cust = inv.customer
             writer.writerow([
                 inv.invoiceId,
-                inv.createdAt.strftime('%Y-%m-%d'),
-                cust.name if cust else 'Unknown',
+                inv.createdAt.strftime('%d %B %Y'),
                 cust.company if cust else '',
                 cust.phone if cust else '',
-                f"{inv.totalAmount:,.2f}"
+                f"₹{inv.totalAmount:,.2f}"
             ])
-        csv_val = output.getvalue()
+
+        writer.writerow([])
+        writer.writerow(["Summary"])
+        writer.writerow(["Total Invoices", total_invoices])
+        writer.writerow(["Total Amount (₹)", f"₹{total_amount:,.2f}"])
+        writer.writerow([])
+
+        if per_customer:
+            writer.writerow(["Per Customer Summary"])
+            writer.writerow(["Phone", "Company", "Invoice Count", "Total Amount (₹)"])
+            for key, val in per_customer.items():
+                writer.writerow([
+                    val.get("phone", key),
+                    val.get("company", ""),
+                    val.get("count", 0),
+                    f"₹{val.get('amount', 0):,.2f}"
+                ])
+            writer.writerow([])
+
+        writer.writerow(["Payment Information"])
+        writer.writerow(["Account Name", bank.get("account_name", "")])
+        writer.writerow(["Bank", f"{bank.get('bank_name', '')}, {bank.get('branch', '')}"])
+        writer.writerow(["Account Number", bank.get("account_number", "")])
+        writer.writerow(["IFSC", bank.get("ifsc", "")])
+        writer.writerow(["PhonePe/GPay", biz.get("upi_id", "")])
+        writer.writerow([])
+
+        writer.writerow(["Disclaimer", statement_meta.get("disclaimer", "This is a system-generated statement.")])
+
         return Response(
-            csv_val,
+            output.getvalue(),
             mimetype="text/csv",
             headers={"Content-Disposition": f"attachment;filename=statements_{start_date}_{end_date}.csv"}
         )
 
-    # Export PDF (if PDF export is available; placeholder, as actual PDF code may differ)
-    if export == "pdf":
-        try:
-            from flask_weasyprint import render_pdf
-            # Render HTML first
-            html = render_template(
-                'statement.html',
-                start_date=start_date,
-                end_date=end_date,
-                total_invoices=total_invoices,
-                total_amount=total_amount,
-                phone=phone,
-                per_customer=per_customer,
-                invs=invs,
-                scope=scope,
-            )
-            return render_pdf(html, download_filename=f"statements_{start_date}_{end_date}.pdf")
-        except ImportError:
-            return "PDF export requires flask-weasyprint", 501
+    # 🔸 Export XLSX
+    if export == "xlsx":
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill, NamedStyle, numbers
+        from openpyxl.utils import get_column_letter
+        from io import BytesIO
 
-    # Default: HTML view
+        wb = openpyxl.Workbook()
+        ws_inv = wb.active
+        ws_inv.title = "Invoices"
+
+        # Header row
+        headers = ["Invoice No", "Date", "Company", "Phone", "Amount (₹)"]
+        header_font = Font(bold=True)
+        header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+        header_align = Alignment(horizontal="center", vertical="center")
+        for col_num, col_name in enumerate(headers, 1):
+            cell = ws_inv.cell(row=1, column=col_num, value=col_name)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_align
+
+        # Data rows
+        currency_fmt = u'₹#,##0.00'
+        for row_num, inv in enumerate(invs, 2):
+            cust = inv.customer
+            ws_inv.cell(row=row_num, column=1, value=inv.invoiceId)
+            ws_inv.cell(row=row_num, column=2, value=inv.createdAt.strftime('%d %B %Y'))
+            ws_inv.cell(row=row_num, column=3, value=cust.company if cust else '')
+            ws_inv.cell(row=row_num, column=4, value=cust.phone if cust else '')
+            amt_cell = ws_inv.cell(row=row_num, column=5, value=round(inv.totalAmount or 0, 2))
+            amt_cell.number_format = currency_fmt
+            amt_cell.alignment = Alignment(horizontal="right")
+
+        # Auto-size columns for "Invoices"
+        for col in ws_inv.columns:
+            max_length = 0
+            col_letter = get_column_letter(col[0].column)
+            for cell in col:
+                try:
+                    val = str(cell.value) if cell.value is not None else ""
+                    max_length = max(max_length, len(val))
+                except Exception:
+                    pass
+            ws_inv.column_dimensions[col_letter].width = min(max_length + 2, 40)
+
+        # Add "Summary" sheet
+        ws_sum = wb.create_sheet("Summary")
+        row = 1
+        bold = Font(bold=True)
+        # Title
+        biz = APP_INFO.get("business", {})
+        bank = APP_INFO.get("bank", {})
+        statement_meta = APP_INFO.get("statement", {})
+        ws_sum.cell(row=row, column=1, value=f"{biz.get('name', 'Business Name')} - {statement_meta.get('header_title', 'Statement Summary')}").font = bold
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Generated On")
+        ws_sum.cell(row=row, column=2, value=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Period")
+        ws_sum.cell(row=row, column=2, value=f"{start_date.strftime('%d %B %Y')} to {end_date.strftime('%d %B %Y')}")
+        row += 2
+        ws_sum.cell(row=row, column=1, value="Summary").font = bold
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Total Invoices")
+        ws_sum.cell(row=row, column=2, value=total_invoices)
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Total Amount (₹)")
+        amt_cell = ws_sum.cell(row=row, column=2, value=total_amount)
+        amt_cell.number_format = currency_fmt
+        row += 2
+
+        # Per-customer summary
+        if per_customer:
+            ws_sum.cell(row=row, column=1, value="Per Customer Summary").font = bold
+            row += 1
+            ws_sum.cell(row=row, column=1, value="Phone").font = bold
+            ws_sum.cell(row=row, column=2, value="Company").font = bold
+            ws_sum.cell(row=row, column=3, value="Invoice Count").font = bold
+            ws_sum.cell(row=row, column=4, value="Total Amount (₹)").font = bold
+            row += 1
+            for key, val in per_customer.items():
+                ws_sum.cell(row=row, column=1, value=val.get("phone", key))
+                ws_sum.cell(row=row, column=2, value=val.get("company", ""))
+                ws_sum.cell(row=row, column=3, value=val.get("count", 0))
+                amt_cell = ws_sum.cell(row=row, column=4, value=round(val.get("amount", 0), 2))
+                amt_cell.number_format = currency_fmt
+                row += 1
+            row += 1
+
+        # Payment Information
+        ws_sum.cell(row=row, column=1, value="Payment Information").font = bold
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Account Name")
+        ws_sum.cell(row=row, column=2, value=bank.get("account_name", ""))
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Bank")
+        ws_sum.cell(row=row, column=2, value=f"{bank.get('bank_name', '')}, {bank.get('branch', '')}")
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Account Number")
+        ws_sum.cell(row=row, column=2, value=bank.get("account_number", ""))
+        row += 1
+        ws_sum.cell(row=row, column=1, value="IFSC")
+        ws_sum.cell(row=row, column=2, value=bank.get("ifsc", ""))
+        row += 1
+        ws_sum.cell(row=row, column=1, value="PhonePe/GPay")
+        ws_sum.cell(row=row, column=2, value=biz.get("upi_id", ""))
+        row += 2
+        ws_sum.cell(row=row, column=1, value="Disclaimer")
+        ws_sum.cell(row=row, column=2, value=statement_meta.get("disclaimer", "This is a system-generated statement."))
+
+        # Auto-size columns for "Summary"
+        for col in ws_sum.columns:
+            max_length = 0
+            col_letter = get_column_letter(col[0].column)
+            for cell in col:
+                try:
+                    val = str(cell.value) if cell.value is not None else ""
+                    max_length = max(max_length, len(val))
+                except Exception:
+                    pass
+            ws_sum.column_dimensions[col_letter].width = min(max_length + 2, 50)
+
+        # --- Reorder sheets: Summary first, Invoices second ---
+        wb._sheets = [ws_sum, ws_inv]
+
+        # Write to BytesIO and return as response
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f"statements_{start_date}_{end_date}.xlsx"
+        return Response(
+            output.getvalue(),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment;filename={filename}"}
+        )
+
+    # 🔸 Export PDF (Flask HTML version, consistent with company statements)
+    if export == "pdf":
+        return render_template(
+            'print_statement.html',
+            start_date=start_date,
+            end_date=end_date,
+            total_invoices=total_invoices,
+            total_amount=round(total_amount, 2),
+            inv_rows=[
+                {
+                    "invoice_no": inv.invoiceId,
+                    "date": inv.createdAt.strftime('%Y-%m-%d'),
+                    "total": float(inv.totalAmount or 0),
+                }
+                for inv in invs
+            ],
+            per_customer=per_customer,
+            phone=phone,
+            date_wise=True,
+        )
+
+    # 🔸 Default: HTML View
     return render_template(
         'statement.html',
         start_date=start_date,
@@ -1708,9 +1908,11 @@ def statements_company():
 
     # --- Query params ---
     query = (request.args.get('query') or '').strip()
-    fmt = (request.args.get('format') or 'html').lower()
+    # Support both legacy 'fmt' and new 'format' param for export type
+    fmt = (request.args.get('format') or request.args.get('fmt') or 'html').lower()
     start = request.args.get('start')
     end = request.args.get('end')
+    phone = (request.args.get('phone') or '').strip()
 
     today = datetime.now(timezone.utc).date()
     start_dt = datetime(today.year, 1, 1, tzinfo=timezone.utc)
@@ -1721,8 +1923,14 @@ def statements_company():
         try:
             start_dt = datetime.strptime(start, '%Y-%m-%d').replace(tzinfo=timezone.utc)
             end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(seconds=1)
+            # 🔹 Enforce lower limit from info.json
+            min_allowed_start = get_default_statement_start()
+            if start_dt < min_allowed_start:
+                start_dt = min_allowed_start
         except Exception:
-            flash("Invalid date format. Expected YYYY-MM-DD.", "warning")
+            pass
+    else:
+        start_dt = get_default_statement_start()
 
     # --- Suggestions for autocomplete ---
     suggestions = []
@@ -1740,7 +1948,25 @@ def statements_company():
     total_amount = 0.0
 
     # --- Query invoices if search provided ---
-    if query:
+    if phone:
+        # If phone is provided, search by exact phone
+        q = (
+            invoice.query
+            .options(joinedload(invoice.customer))
+            .join(customer, invoice.customerId == customer.id)
+            .filter(
+                invoice.isDeleted == False,
+                customer.isDeleted == False,
+                invoice.createdAt >= start_dt,
+                invoice.createdAt <= end_dt,
+                customer.phone == phone
+            )
+        )
+        invs = q.order_by(invoice.createdAt.desc()).all()
+        total_invoices = len(invs)
+        total_amount = sum(float(inv.totalAmount or 0) for inv in invs)
+    elif query:
+        # Fallback: fuzzy search by company or phone (legacy)
         q = (
             invoice.query
             .options(joinedload(invoice.customer))
@@ -1756,20 +1982,19 @@ def statements_company():
                 )
             )
         )
-
         invs = q.order_by(invoice.createdAt.desc()).all()
         total_invoices = len(invs)
         total_amount = sum(float(inv.totalAmount or 0) for inv in invs)
 
     # --- CSV Export ---
-    if fmt == 'csv' and query:
+    if fmt == 'csv' and (phone or query):
         buf = io.StringIO()
         writer = csv.writer(buf)
 
         # Header
         writer.writerow(["Sri Lakshmi Offset Printers - Customer Statement"])
         writer.writerow(["Generated On", datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
-        writer.writerow(["Customer/Company", query])
+        writer.writerow(["Customer/Company", phone or query])
         writer.writerow(["Period", f"{start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}"])
         writer.writerow([])
 
@@ -1800,7 +2025,7 @@ def statements_company():
 
         writer.writerow(["Disclaimer", "This is a system-generated statement. No signature required."])
 
-        safe_name = (query or "company").replace(" ", "_").replace("/", "_")
+        safe_name = ((phone or query) or "company").replace(" ", "_").replace("/", "_")
         filename = f"{safe_name}_statement_{datetime.now().strftime('%Y-%m-%d')}.csv"
 
         return Response(
@@ -1809,11 +2034,127 @@ def statements_company():
             headers={'Content-Disposition': f'attachment; filename={filename}'}
         )
 
+    # --- XLSX Export ---
+    if fmt == 'xlsx' and (phone or query):
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, PatternFill
+        from openpyxl.utils import get_column_letter
+        from io import BytesIO
+
+        wb = openpyxl.Workbook()
+        ws_sum = wb.active
+        ws_sum.title = "Summary"
+        ws_inv = wb.create_sheet("Invoices")
+
+        biz = APP_INFO.get("business", {})
+        bank = APP_INFO.get("bank", {})
+        statement_meta = APP_INFO.get("statement", {})
+
+        # --- Summary Sheet ---
+        bold = Font(bold=True)
+        currency_fmt = u'₹#,##0.00'
+        row = 1
+        ws_sum.cell(row=row, column=1, value=f"{biz.get('name', 'Business')} - {statement_meta.get('header_title', 'Customer Statement')}").font = bold
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Generated On")
+        ws_sum.cell(row=row, column=2, value=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Customer/Company")
+        ws_sum.cell(row=row, column=2, value=phone or query)
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Period")
+        ws_sum.cell(row=row, column=2, value=f"{start_dt.strftime('%d %B %Y')} to {end_dt.strftime('%d %B %Y')}")
+        row += 2
+        ws_sum.cell(row=row, column=1, value="Summary").font = bold
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Total Invoices")
+        ws_sum.cell(row=row, column=2, value=total_invoices)
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Total Amount (₹)")
+        amt_cell = ws_sum.cell(row=row, column=2, value=round(total_amount, 2))
+        amt_cell.number_format = currency_fmt
+        row += 2
+        ws_sum.cell(row=row, column=1, value="Payment Information").font = bold
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Account Name")
+        ws_sum.cell(row=row, column=2, value=bank.get("account_name", ""))
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Bank")
+        ws_sum.cell(row=row, column=2, value=f"{bank.get('bank_name', '')}, {bank.get('branch', '')}")
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Account Number")
+        ws_sum.cell(row=row, column=2, value=bank.get("account_number", ""))
+        row += 1
+        ws_sum.cell(row=row, column=1, value="IFSC")
+        ws_sum.cell(row=row, column=2, value=bank.get("ifsc", ""))
+        row += 1
+        ws_sum.cell(row=row, column=1, value="PhonePe/GPay")
+        ws_sum.cell(row=row, column=2, value=biz.get("upi_id", ""))
+        row += 2
+        ws_sum.cell(row=row, column=1, value="Disclaimer")
+        ws_sum.cell(row=row, column=2, value=statement_meta.get("disclaimer", "This is a system-generated statement."))
+
+        # Auto-size columns for summary
+        for col in ws_sum.columns:
+            max_len = 0
+            col_letter = get_column_letter(col[0].column)
+            for cell in col:
+                val = str(cell.value) if cell.value else ""
+                max_len = max(max_len, len(val))
+            ws_sum.column_dimensions[col_letter].width = min(max_len + 2, 50)
+
+        # --- Invoices Sheet ---
+        headers = ["Invoice No", "Date", "Total (₹)"]
+        header_font = Font(bold=True)
+        header_fill = PatternFill(start_color="E8E8E8", end_color="E8E8E8", fill_type="solid")
+        header_align = Alignment(horizontal="center", vertical="center")
+
+        for col_num, col_name in enumerate(headers, 1):
+            c = ws_inv.cell(row=1, column=col_num, value=col_name)
+            c.font = header_font
+            c.fill = header_fill
+            c.alignment = header_align
+
+        for row_num, inv in enumerate(invs, 2):
+            ws_inv.cell(row=row_num, column=1, value=inv.invoiceId)
+            ws_inv.cell(row=row_num, column=2, value=inv.createdAt.strftime('%d %B %Y'))
+            amt_cell = ws_inv.cell(row=row_num, column=3, value=round(inv.totalAmount or 0, 2))
+            amt_cell.number_format = currency_fmt
+            amt_cell.alignment = Alignment(horizontal="right")
+
+        for col in ws_inv.columns:
+            max_len = 0
+            col_letter = get_column_letter(col[0].column)
+            for cell in col:
+                val = str(cell.value) if cell.value else ""
+                max_len = max(max_len, len(val))
+            ws_inv.column_dimensions[col_letter].width = min(max_len + 2, 40)
+
+        # Set sheet order
+        wb._sheets = [ws_sum, ws_inv]
+
+        # Output response
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        filename = f"{(phone or query).replace(' ', '_')}_statement_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        return Response(
+            buf.getvalue(),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+
+    customer_company = ''
+    customer_phone = ''
+    if invs and invs[0].customer:
+        customer_company = invs[0].customer.company or ''
+        customer_phone = invs[0].customer.phone or ''
+
     # --- PDF Export ---
-    if fmt == 'pdf' and query:
+    if fmt == 'pdf' and (phone or query):
         # Use print-friendly HTML template for print preview
         return render_template(
-            'statements_company_print.html',
+            'print_statement.html',
             query=query,
             start_date=start_dt.date(),
             end_date=end_dt.date(),
@@ -1831,7 +2172,8 @@ def statements_company():
             request=request,
             customer_company=customer_company,
             customer_phone=customer_phone,
-            company_wise=True
+            company_wise=True,
+            APP_INFO=APP_INFO,
         )
 
     # --- Build rows for HTML template ---
@@ -1842,13 +2184,6 @@ def statements_company():
             "date": inv.createdAt.strftime('%Y-%m-%d'),
             "total": float(inv.totalAmount or 0),
         })
-
-    customer_company = ''
-    customer_phone = ''
-
-    if invs and invs[0].customer:
-        customer_company = invs[0].customer.company or ''
-        customer_phone = invs[0].customer.phone or ''
 
     print(f"Customer Company : {customer_company}")
     # --- Render HTML ---
@@ -1864,7 +2199,6 @@ def statements_company():
         request=request,
         customer_company=customer_company,
         customer_phone=customer_phone,
-        company_wise=False
     )
 
 if __name__ == '__main__':

@@ -5,25 +5,61 @@
   <h2 class="text-center fw-semibold mb-4">View Statements by Company</h2>
 
   {# Minimal, Apple-like info card for selected company, below header and above form #}
-{% if customer_company or customer_phone %}
-<div class="d-flex justify-content-center align-items-center flex-wrap gap-4 mb-4">
-  <div class="rounded-4 shadow-sm px-4 py-3 bg-light text-center" style="max-width: 360px;">
-    {% if customer_company %}
-      <h5 class="fw-semibold text-dark mb-1">{{ customer_company }}</h5>
-    {% endif %}
-    {% if customer_phone %}
-      <p class="text-muted mb-0">📞 {{ customer_phone }}</p>
-    {% endif %}
-  </div>
-  <div class="rounded-4 shadow-sm bg-light px-4 py-3 text-center" style="min-width: 240px;">
+
+{% if total_invoices > 0 or customer_company or customer_phone %}
+<div id="infoPanel" class="position-fixed end-0 top-50 translate-middle-y me-4 rounded-4 shadow-sm bg-light border text-center"
+     style="width: 340px; padding: 2rem; font-weight: 500; font-size: 0.9rem; z-index: 1050; color: #333;">
+  {% if customer_company %}
+    <h5 class="fw-semibold text-dark mb-1">{{ customer_company }}</h5>
+  {% endif %}
+  {% if customer_phone %}
+    <p class="text-muted mb-2">📞 {{ customer_phone }}</p>
+  {% endif %}
+  <div class="rounded-4 bg-white py-2 px-3 shadow-sm mb-3">
     <h6 class="fw-semibold text-dark mb-1">Summary</h6>
     <p class="mb-0 text-muted">
-      🧾 <strong class="text-dark">{{ total_invoices }}</strong> invoices
-      &nbsp;&nbsp;|&nbsp;&nbsp;
+      🧾 <strong class="text-dark">{{ total_invoices }}</strong> invoices<br>
       💰 <strong class="text-dark">₹{{ '%.2f'|format(total_amount) }}</strong>
     </p>
   </div>
+  <div class="d-flex flex-column align-items-center gap-2 mt-3">
+    <a class="btn btn-success rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2 w-100 justify-content-center"
+       href="{{ url_for('statements_company', format='csv', phone=customer_phone, start=start_date, end=end_date) }}"
+       target="_blank" title="Download CSV — Legacy format (basic compatibility)">
+       📄 Download CSV
+    </a>
+    <a class="btn btn-info rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2 w-100 justify-content-center"
+       href="{{ url_for('statements_company', format='xlsx', phone=customer_phone, start=start_date, end=end_date) }}"
+       target="_blank" title="Download XLSX — Modern format (recommended)">
+       📘 Download XLSX
+    </a>
+    <a class="btn btn-primary rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2 w-100 justify-content-center"
+       href="{{ url_for('statements_company', format='pdf', phone=customer_phone, start=start_date, end=end_date) }}"
+       target="_blank" title="Save or Print PDF version">
+       🧾 Save/Print PDF
+    </a>
+    <div class="mt-3 small text-muted" style="font-size: 0.85rem;">
+      💡 <strong>XLSX</strong> — Modern, polished format (includes Summary + Invoices).<br>
+      📜 <strong>CSV</strong> — Legacy plain text format for universal compatibility.
+    </div>
+  </div>
 </div>
+
+<style>
+  .container {
+    margin-right: 400px;
+  }
+
+  #infoPanel {
+    width: 340px;
+    padding: 2rem;
+  }
+
+  table.table td, table.table th {
+    font-size: 0.9rem;
+    padding: 0.6rem;
+  }
+</style>
 {% endif %}
 
   <form method="GET" action="/statements_company" class="mb-4">
@@ -92,20 +128,6 @@
       {% endfor %}
     </tbody>
   </table>
-  <div class="text-center mt-4 mb-5">
-    <div class="d-inline-flex flex-wrap justify-content-center gap-3">
-      <a class="btn btn-success rounded-pill shadow-sm px-4 py-2"
-         href="{{ url_for('statements_company', format='csv', query=query, start=start_date, end=end_date) }}"
-         target="_blank">
-         ⬇️ Download CSV
-      </a>
-      <a class="btn btn-primary rounded-pill shadow-sm px-4 py-2"
-         href="{{ url_for('statements_company', format='pdf', query=query, start=start_date, end=end_date) }}"
-         target="_blank">
-         🧾 Print Statement
-      </a>
-    </div>
-  </div>
 </div>
 {% else %}
 <p class="text-center text-muted mt-4">No statements found for the selected company.</p>
