@@ -1,236 +1,203 @@
 {% extends 'base.html' %}
 
 {% block content %}
-{% if not request.args %}
-<div class="d-flex justify-content-center py-5">
-  <div class="text-center">
-    <h2 class="fw-semibold mb-4">View Statements by Date</h2>
+<div class="py-4">
+  <div class="container" style="max-width: 1080px;">
+    <h2 class="text-center fw-semibold mb-4">View Statements by Date</h2>
 
-    {# Filter Form (Date-wise) #}
-    <form method="GET" action="{{ url_for('statements') }}" class="mb-4">
-      <div class="row justify-content-center align-items-end g-3">
-        <div class="col-md-3 col-lg-2">
-          <label for="scope" class="form-label fw-medium">Scope</label>
-          <select name="scope" id="scope" class="form-select shadow-sm">
-            <option value="month"  {% if scope == 'month'  %}selected{% endif %}>Month</option>
-            <option value="year"   {% if scope == 'year'   %}selected{% endif %}>Year</option>
-            <option value="custom" {% if scope == 'custom' %}selected{% endif %}>Custom</option>
-          </select>
-        </div>
+    <!-- ===== Simple, Reliable Search Bar ===== -->
+    <form id="stmts-form" method="GET" action="{{ url_for('statements') }}">
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body">
+          <div class="row g-3 align-items-end">
 
-        <div id="wrapYear" class="col-md-2 d-none">
-          <label for="year" class="form-label fw-medium">Year</label>
-          <input type="number" min="2000" max="2100" class="form-control shadow-sm" id="year" name="year"
-                 value="{{ request.args.get('year','') }}">
-        </div>
+            <!-- Scope -->
+            <div class="col-12 col-md-3">
+              <label for="scope" class="form-label fw-medium">Scope</label>
+              <select id="scope" name="scope" class="form-select">
+                <option value="month"  {% if scope == 'month'  %}selected{% endif %}>Month</option>
+                <option value="year"   {% if scope == 'year'   %}selected{% endif %}>Year</option>
+                <option value="custom" {% if scope == 'custom' %}selected{% endif %}>Custom</option>
+              </select>
+            </div>
 
-        <div id="wrapMonth" class="col-md-2 d-none">
-          <label for="month" class="form-label fw-medium">Month</label>
-          <input type="number" min="1" max="12" class="form-control shadow-sm" id="month" name="month"
-                 value="{{ request.args.get('month','') }}">
-        </div>
+            <!-- Year -->
+            <div class="col-6 col-md-2" id="wrapYear">
+              <label for="year" class="form-label fw-medium">Year</label>
+              <input type="number" class="form-control" id="year" name="year"
+                     min="2000" max="2100" value="{{ request.args.get('year','') }}">
+            </div>
 
-        <div id="wrapStart" class="col-md-3 d-none">
-          <label for="start" class="form-label fw-medium">From</label>
-          <input type="date" class="form-control shadow-sm" id="start" name="start" value="{{ request.args.get('start','') }}">
-        </div>
+            <!-- Month -->
+            <div class="col-6 col-md-2" id="wrapMonth">
+              <label for="month" class="form-label fw-medium">Month</label>
+              <input type="number" class="form-control" id="month" name="month"
+                     min="1" max="12" value="{{ request.args.get('month','') }}">
+            </div>
 
-        <div id="wrapEnd" class="col-md-3 d-none">
-          <label for="end" class="form-label fw-medium">To</label>
-          <input type="date" class="form-control shadow-sm" id="end" name="end" value="{{ request.args.get('end','') }}">
-        </div>
+            <!-- Start -->
+            <div class="col-6 col-md-3" id="wrapStart">
+              <label for="start" class="form-label fw-medium">From</label>
+              <input type="date" class="form-control" id="start" name="start" value="{{ request.args.get('start','') }}">
+            </div>
 
-        <div class="col-md-2 d-flex gap-2 justify-content-center">
-          <button type="submit" class="btn btn-primary shadow-sm px-3 py-2">Get</button>
-          <a href="{{ url_for('statements') }}" class="btn btn-outline-danger shadow-sm px-3 py-2">Clear</a>
-        </div>
-        <div class="col-md-3 d-flex justify-content-center">
-          <a href="{{ url_for('statements_company') }}" class="btn btn-outline-secondary shadow-sm w-100 px-3 py-2">Company Wise</a>
+            <!-- End -->
+            <div class="col-6 col-md-3" id="wrapEnd">
+              <label for="end" class="form-label fw-medium">To</label>
+              <input type="date" class="form-control" id="end" name="end" value="{{ request.args.get('end','') }}">
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap justify-content-center gap-2 mt-3">
+            <button type="submit" class="btn btn-primary px-4">Get</button>
+            <a href="{{ url_for('statements') }}" class="btn btn-outline-danger px-4">Clear</a>
+            <a href="{{ url_for('statements_company') }}" class="btn btn-outline-secondary px-4">Company Wise</a>
+          </div>
         </div>
       </div>
     </form>
-  </div>
-</div>
-{% else %}
-<div id="stmts-container" class="container py-4">
-  <h2 class="text-center fw-semibold mb-4">View Statements by Date</h2>
 
-  {# Minimal, Apple-like info card for summary + downloads #}
-  {% if request.args and (total_invoices is defined) %}
-  <div id="infoPanel" class="position-fixed end-0 top-50 translate-middle-y me-4 rounded-4 shadow-sm bg-light border text-center"
-       style="width: 340px; padding: 2rem; font-weight: 500; font-size: 0.9rem; z-index: 1050; color: #333;">
-    <h5 class="fw-semibold text-dark mb-1">Summary</h5>
-    <p class="mb-2 text-muted">
-      🧾 <strong class="text-dark">{{ total_invoices or 0 }}</strong> invoices<br>
-      💰 <strong class="text-dark">₹{{ '%.2f'|format(total_amount or 0) }}</strong>
-    </p>
-    {% if start_date and end_date %}
-    <div class="rounded-4 bg-white py-2 px-3 shadow-sm mb-3 small">
-      <span class="text-muted">Range:</span><br>
-      <strong class="text-dark">{{ start_date.strftime('%d %B %Y') }}</strong> —
-      <strong class="text-dark">{{ end_date.strftime('%d %B %Y') }}</strong>
-    </div>
-    {% endif %}
-    <div class="d-flex flex-column align-items-center gap-2 mt-2">
-      <a class="btn btn-success rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2 w-100 justify-content-center"
-         href="{{ url_for('statements', export='csv', scope=scope, year=request.args.get('year'), month=request.args.get('month'), start=request.args.get('start'), end=request.args.get('end')) }}"
-         target="_blank" title="Download CSV — Legacy format (basic compatibility)">
-         📄 Download CSV
-      </a>
-      <a class="btn btn-info rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2 w-100 justify-content-center"
-         href="{{ url_for('statements', export='xlsx', scope=scope, year=request.args.get('year'), month=request.args.get('month'), start=request.args.get('start'), end=request.args.get('end')) }}"
-         target="_blank" title="Download XLSX — Modern format (recommended)">
-         📘 Download XLSX
-      </a>
-      <a class="btn btn-primary rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2 w-100 justify-content-center"
-         href="{{ url_for('statements', export='pdf', scope=scope, year=request.args.get('year'), month=request.args.get('month'), start=request.args.get('start'), end=request.args.get('end')) }}"
-         target="_blank" title="Save or Print PDF version">
-         🧾 Save/Print PDF
-      </a>
-      <div class="mt-3 small text-muted" style="font-size: 0.85rem;">
-        💡 <strong>XLSX</strong> — Modern, polished format (includes Summary + Invoices).<br>
-        📜 <strong>CSV</strong> — Legacy plain text format for universal compatibility.
-      </div>
-    </div>
-  </div>
-  {% endif %}
-
-  <style>
-    #stmts-container {
-      margin-right: 400px;
-      padding-right: 12rem;
-    }
-    #infoPanel { width: 340px; padding: 2rem; }
-    #stmts-container table.table td,
-    #stmts-container table.table th { font-size: 0.9rem; padding: 0.6rem; }
-    select.form-select:focus, input.form-control:focus {
-      border-color: #007aff; box-shadow: 0 0 0 0.2rem rgba(0,122,255,.25); outline: none;
-    }
-  </style>
-
-  {# Filter Form (Date-wise) #}
-  <form method="GET" action="{{ url_for('statements') }}" class="mb-4">
-    <div class="row justify-content-center align-items-end g-3">
-      <div class="col-md-3 col-lg-2">
-        <label for="scope" class="form-label fw-medium">Scope</label>
-        <select name="scope" id="scope" class="form-select shadow-sm">
-          <option value="month"  {% if scope == 'month'  %}selected{% endif %}>Month</option>
-          <option value="year"   {% if scope == 'year'   %}selected{% endif %}>Year</option>
-          <option value="custom" {% if scope == 'custom' %}selected{% endif %}>Custom</option>
-        </select>
-      </div>
-
-      <div id="wrapYear" class="col-md-2 d-none">
-        <label for="year" class="form-label fw-medium">Year</label>
-        <input type="number" min="2000" max="2100" class="form-control shadow-sm" id="year" name="year"
-               value="{{ request.args.get('year','') }}">
-      </div>
-
-      <div id="wrapMonth" class="col-md-2 d-none">
-        <label for="month" class="form-label fw-medium">Month</label>
-        <input type="number" min="1" max="12" class="form-control shadow-sm" id="month" name="month"
-               value="{{ request.args.get('month','') }}">
-      </div>
-
-      <div id="wrapStart" class="col-md-3 d-none">
-        <label for="start" class="form-label fw-medium">From</label>
-        <input type="date" class="form-control shadow-sm" id="start" name="start" value="{{ request.args.get('start','') }}">
-      </div>
-
-      <div id="wrapEnd" class="col-md-3 d-none">
-        <label for="end" class="form-label fw-medium">To</label>
-        <input type="date" class="form-control shadow-sm" id="end" name="end" value="{{ request.args.get('end','') }}">
-      </div>
-
-      <div class="col-md-2 d-flex gap-2 justify-content-center">
-        <button type="submit" class="btn btn-primary shadow-sm px-3 py-2">Get</button>
-        <a href="{{ url_for('statements') }}" class="btn btn-outline-danger shadow-sm px-3 py-2">Clear</a>
-      </div>
-      <div class="col-md-3 d-flex justify-content-center">
-        <a href="{{ url_for('statements_company') }}" class="btn btn-outline-secondary shadow-sm w-100 px-3 py-2">Company Wise</a>
-      </div>
-    </div>
-  </form>
-
-  {# Results #}
-  {% if request.args %}
-    {% if total_invoices > 0 %}
-    <div class="table-responsive mt-4">
-      <table class="table table-bordered table-striped align-middle">
-        <thead class="table-light">
-          <tr class="text-center">
-            <th style="width: 48px;">#</th>
-            <th>Invoice No</th>
-            <th>Date</th>
-            <th>Company</th>
-            <th>Phone/ID</th>
-            <th class="text-end">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% if inv_rows is defined and inv_rows %}
-            {% for r in inv_rows %}
-            <tr>
-              <td class="text-center">{{ loop.index }}</td>
-              <td><a href="{{ url_for('view_bill_locked', invoicenumber=r.invoice_no) }}">{{ r.invoice_no }}</a></td>
-              <td>{{ r.date.strftime('%d %B %Y') if r.date is not string else r.date }}</td>
-              <td>{{ r.company }}</td>
-              <td>{{ r.phone }}</td>
-              <td class="text-end">₹{{ '%.2f'|format(r.total) }}</td>
-            </tr>
-            {% endfor %}
-          {% else %}
-            {# Back-compat (legacy structure) #}
-            {% for inv in invs %}
-            <tr>
-              <td class="text-center">{{ loop.index }}</td>
-              <td><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoiceId) }}">{{ inv.invoiceId }}</a></td>
-              <td>{{ inv.createdAt.strftime('%d %B %Y') }}</td>
-              <td>{{ inv.customer.company if inv.customer and inv.customer.company else '(No Company)' }}</td>
-              <td>{{ inv.customer.phone if inv.customer else '' }}</td>
-              <td class="text-end">₹{{ '%.2f'|format(inv.totalAmount or 0) }}</td>
-            </tr>
-            {% endfor %}
+    <!-- ===== Summary Card BELOW the search bar ===== -->
+    {% if request.args and (total_invoices is defined) %}
+    <div class="card border-0 rounded-4 shadow-sm mt-3">
+      <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+          <div class="fw-semibold">Summary</div>
+          <div class="text-muted small">
+            Invoices: <span class="fw-semibold text-dark">{{ total_invoices or 0 }}</span><br>
+            Total Amount: <span class="fw-semibold text-dark">₹{{ '%.2f'|format(total_amount or 0) }}</span>
+          </div>
+          {% if start_date and end_date %}
+          <div class="small mt-1">
+            Range: <span class="fw-semibold text-dark">{{ start_date.strftime('%d %B %Y') }}</span> —
+            <span class="fw-semibold text-dark">{{ end_date.strftime('%d %B %Y') }}</span>
+          </div>
           {% endif %}
-        </tbody>
-      </table>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <a class="btn btn-success rounded-pill px-4"
+             href="{{ url_for('statements', export='csv',
+                              scope=request.args.get('scope','custom'),
+                              year=request.args.get('year'),
+                              month=request.args.get('month'),
+                              start=request.args.get('start'),
+                              end=request.args.get('end')) }}"
+             target="_blank" title="Download CSV">
+             Download CSV
+          </a>
+          <a class="btn btn-info rounded-pill px-4"
+             href="{{ url_for('statements', export='xlsx',
+                              scope=request.args.get('scope','custom'),
+                              year=request.args.get('year'),
+                              month=request.args.get('month'),
+                              start=request.args.get('start'),
+                              end=request.args.get('end')) }}"
+             target="_blank" title="Download XLSX">
+             Download XLSX
+          </a>
+          <a class="btn btn-primary rounded-pill px-4"
+             href="{{ url_for('statements', export='pdf',
+                              scope=request.args.get('scope','custom'),
+                              year=request.args.get('year'),
+                              month=request.args.get('month'),
+                              start=request.args.get('start'),
+                              end=request.args.get('end')) }}"
+             target="_blank" title="Save or Print PDF">
+             Save/Print PDF
+          </a>
+        </div>
+      </div>
     </div>
-    {% else %}
-      <p class="text-center text-muted mt-4">No statements found for the selected dates.</p>
     {% endif %}
-  {% endif %}
+
+    <!-- ===== Results Table ===== -->
+    {% if request.args %}
+      {% if total_invoices > 0 %}
+      <div class="table-responsive mt-4">
+        <table class="table table-bordered table-striped align-middle">
+          <thead class="table-light">
+            <tr class="text-center">
+              <th style="width: 48px;">#</th>
+              <th>Invoice No</th>
+              <th>Date</th>
+              <th>Company</th>
+              <th>Phone/ID</th>
+              <th class="text-end">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if inv_rows is defined and inv_rows %}
+              {% for r in inv_rows %}
+              <tr>
+                <td class="text-center">{{ loop.index }}</td>
+                <td><a href="{{ url_for('view_bill_locked', invoicenumber=r.invoice_no) }}">{{ r.invoice_no }}</a></td>
+                <td>{{ r.date.strftime('%d %B %Y') if r.date is not string else r.date }}</td>
+                <td>{{ r.company }}</td>
+                <td>{{ r.phone }}</td>
+                <td class="text-end">₹{{ '%.2f'|format(r.total) }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              {% for inv in invs %}
+              <tr>
+                <td class="text-center">{{ loop.index }}</td>
+                <td><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoiceId) }}">{{ inv.invoiceId }}</a></td>
+                <td>{{ inv.createdAt.strftime('%d %B %Y') }}</td>
+                <td>{{ inv.customer.company if inv.customer and inv.customer.company else '(No Company)' }}</td>
+                <td>{{ inv.customer.phone if inv.customer else '' }}</td>
+                <td class="text-end">₹{{ '%.2f'|format(inv.totalAmount or 0) }}</td>
+              </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="text-center text-muted mt-4">No statements found for the selected dates.</p>
+      {% endif %}
+    {% endif %}
+  </div>
 </div>
-{% endif %}
+
+<style>
+  /* Minimal, stable styling */
+  #stmts-form .form-control, #stmts-form .form-select { height: 44px; }
+  #stmts-form .btn { height: 44px; white-space: nowrap; }
+  table.table td, table.table th { font-size: 0.92rem; padding: 0.6rem; }
+  a { text-decoration: none; }
+  .form-control:focus, .form-select:focus {
+    border-color: #007aff;
+    box-shadow: 0 0 0 0.2rem rgba(0,122,255,.25);
+    outline: none;
+  }
+</style>
 
 <script>
+// Robust, no-frills toggle logic (no animations)
 (function() {
   const scopeEl  = document.getElementById('scope');
   const wrapYear = document.getElementById('wrapYear');
   const wrapMonth= document.getElementById('wrapMonth');
   const wrapStart= document.getElementById('wrapStart');
   const wrapEnd  = document.getElementById('wrapEnd');
-
-  const yearEl = document.getElementById('year');
-  const monthEl= document.getElementById('month');
-  const startEl= document.getElementById('start');
-  const endEl  = document.getElementById('end');
+  const yearEl   = document.getElementById('year');
+  const monthEl  = document.getElementById('month');
+  const startEl  = document.getElementById('start');
+  const endEl    = document.getElementById('end');
 
   function setDefaultsIfEmpty() {
     const today = new Date();
-    if (yearEl && !yearEl.value) yearEl.value = today.getFullYear();
-    if (monthEl && !monthEl.value) monthEl.value = String(today.getMonth() + 1);
+    if (!yearEl.value)  yearEl.value  = today.getFullYear();
+    if (!monthEl.value) monthEl.value = String(today.getMonth() + 1);
     const todayStr = today.toISOString().split('T')[0];
-    if (startEl && !startEl.value) startEl.value = todayStr;
-    if (endEl && !endEl.value)   endEl.value   = todayStr;
+    if (!startEl.value) startEl.value = todayStr;
+    if (!endEl.value)   endEl.value   = todayStr;
   }
 
   function toggleByScope() {
     const scope = scopeEl.value;
-    wrapYear.classList.add('d-none');
-    wrapMonth.classList.add('d-none');
-    wrapStart.classList.add('d-none');
-    wrapEnd.classList.add('d-none');
-
+    // Hide all by default
+    [wrapYear, wrapMonth, wrapStart, wrapEnd].forEach(el => el.classList.add('d-none'));
     if (scope === 'year') {
       wrapYear.classList.remove('d-none');
     } else if (scope === 'month') {

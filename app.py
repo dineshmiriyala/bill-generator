@@ -1873,6 +1873,8 @@ def statements():
                     "invoice_no": inv.invoiceId,
                     "date": inv.createdAt.strftime('%Y-%m-%d'),
                     "total": float(inv.totalAmount or 0),
+                    "company": inv.customer.company if inv.customer else "(No Company)",
+                    "phone": inv.customer.phone if inv.customer else "(No Phone)",
                 }
                 for inv in invs
             ],
@@ -1992,10 +1994,18 @@ def statements_company():
         buf = io.StringIO()
         writer = csv.writer(buf)
 
+        # Prepare header values
+        customer_company = ''
+        customer_phone = ''
+        if invs and invs[0].customer:
+            customer_company = invs[0].customer.company or ''
+            customer_phone = invs[0].customer.phone or ''
+
         # Header
         writer.writerow(["Sri Lakshmi Offset Printers - Customer Statement"])
         writer.writerow(["Generated On", datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
-        writer.writerow(["Customer/Company", phone or query])
+        writer.writerow(["Customer Name", customer_company])
+        writer.writerow(["Customer Phone", customer_phone])
         writer.writerow(["Period", f"{start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}"])
         writer.writerow([])
 
@@ -2026,8 +2036,8 @@ def statements_company():
 
         writer.writerow(["Disclaimer", "This is a system-generated statement. No signature required."])
 
-        safe_name = ((phone or query) or "company").replace(" ", "_").replace("/", "_")
-        filename = f"{safe_name}_statement_{datetime.now().strftime('%Y-%m-%d')}.csv"
+        safe_company = (customer_company or "company").replace(" ", "_").replace("/", "_")
+        filename = f"{safe_company}_{datetime.now().strftime('%Y-%m-%d')}_statement.csv"
 
         return Response(
             buf.getvalue(),
@@ -2051,6 +2061,13 @@ def statements_company():
         bank = APP_INFO.get("bank", {})
         statement_meta = APP_INFO.get("statement", {})
 
+        # Prepare header values
+        customer_company = ''
+        customer_phone = ''
+        if invs and invs[0].customer:
+            customer_company = invs[0].customer.company or ''
+            customer_phone = invs[0].customer.phone or ''
+
         # --- Summary Sheet ---
         bold = Font(bold=True)
         currency_fmt = u'₹#,##0.00'
@@ -2060,11 +2077,14 @@ def statements_company():
         ws_sum.cell(row=row, column=1, value="Generated On")
         ws_sum.cell(row=row, column=2, value=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         row += 1
-        ws_sum.cell(row=row, column=1, value="Customer/Company")
-        ws_sum.cell(row=row, column=2, value=phone or query)
+        ws_sum.cell(row=row, column=1, value="Customer Name")
+        ws_sum.cell(row=row, column=2, value=customer_company)
+        row += 1
+        ws_sum.cell(row=row, column=1, value="Customer Phone")
+        ws_sum.cell(row=row, column=2, value=customer_phone)
         row += 1
         ws_sum.cell(row=row, column=1, value="Period")
-        ws_sum.cell(row=row, column=2, value=f"{start_dt.strftime('%d %B %Y')} to {end_dt.strftime('%d %B %Y')}")
+        ws_sum.cell(row=row, column=2, value=f"{start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}")
         row += 2
         ws_sum.cell(row=row, column=1, value="Summary").font = bold
         row += 1
@@ -2118,7 +2138,7 @@ def statements_company():
 
         for row_num, inv in enumerate(invs, 2):
             ws_inv.cell(row=row_num, column=1, value=inv.invoiceId)
-            ws_inv.cell(row=row_num, column=2, value=inv.createdAt.strftime('%d %B %Y'))
+            ws_inv.cell(row=row_num, column=2, value=inv.createdAt.strftime('%Y-%m-%d'))
             amt_cell = ws_inv.cell(row=row_num, column=3, value=round(inv.totalAmount or 0, 2))
             amt_cell.number_format = currency_fmt
             amt_cell.alignment = Alignment(horizontal="right")
@@ -2138,7 +2158,8 @@ def statements_company():
         buf = BytesIO()
         wb.save(buf)
         buf.seek(0)
-        filename = f"{(phone or query).replace(' ', '_')}_statement_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        safe_company = (customer_company or "company").replace(" ", "_").replace("/", "_")
+        filename = f"{safe_company}_{datetime.now().strftime('%Y-%m-%d')}_statement.xlsx"
         return Response(
             buf.getvalue(),
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
