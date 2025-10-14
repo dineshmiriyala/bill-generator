@@ -123,7 +123,7 @@
     <tbody>
       {% for r in inv_rows %}
       <tr>
-        <td><a href="{{ url_for('view_bill_locked', invoicenumber=r.invoice_no) }}" target="_blank">{{ r.invoice_no }}</a></td>
+        <td><a href="{{ url_for('view_bill_locked', invoicenumber=r.invoice_no) }}">{{ r.invoice_no }}</a></td>
         <td>{{ r.date | datetimeformat }}</td>
         <td class="text-end">₹{{ '%.2f'|format(r.total) }}</td>
       </tr>

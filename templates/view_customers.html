@@ -45,7 +45,11 @@
             <td>{{ c.gst }}</td>
             <td>{{ c.address }}</td>
             <td class="text-nowrap">{{ c.createdAt.strftime('%d %b %Y, %I:%M %p') if c.createdAt else '' }}</td>
-            <td><a href="{{ url_for('view_bills') }}?phone={{ c.phone }}">View Bills</a></td>
+            <td>
+              <a href="{{ url_for('statements_company', query=c.phone, start='start', end='end') }}">
+                Statement
+              </a>
+            </td>
             <td>
               <a class="btn btn-sm btn-outline-info rounded-pill px-3 shadow-sm" href="{{ url_for('about_user') }}?customer_id={{ c.id }}">
                 About

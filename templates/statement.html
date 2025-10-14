@@ -172,7 +172,7 @@
             {% for r in inv_rows %}
             <tr>
               <td class="text-center">{{ loop.index }}</td>
-              <td><a href="{{ url_for('view_bill_locked', invoicenumber=r.invoice_no) }}" target="_blank">{{ r.invoice_no }}</a></td>
+              <td><a href="{{ url_for('view_bill_locked', invoicenumber=r.invoice_no) }}">{{ r.invoice_no }}</a></td>
               <td>{{ r.date.strftime('%d %B %Y') if r.date is not string else r.date }}</td>
               <td>{{ r.company }}</td>
               <td>{{ r.phone }}</td>
@@ -184,7 +184,7 @@
             {% for inv in invs %}
             <tr>
               <td class="text-center">{{ loop.index }}</td>
-              <td><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoiceId) }}" target="_blank">{{ inv.invoiceId }}</a></td>
+              <td><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoiceId) }}">{{ inv.invoiceId }}</a></td>
               <td>{{ inv.createdAt.strftime('%d %B %Y') }}</td>
               <td>{{ inv.customer.company if inv.customer and inv.customer.company else '(No Company)' }}</td>
               <td>{{ inv.customer.phone if inv.customer else '' }}</td>
