@@ -1,123 +1,155 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="container py-4">
-  <h2 class="text-center fw-semibold mb-4">Date Wise Statements </h2>
+<div class="container py-4" style="max-width: 900px;">
+  <h2 class="text-center fw-semibold mb-4" style="font-weight: 600; font-size: 1.75rem;">Date Wise Statements</h2>
+
   {% if error %}
-  <div class="alert alert-warning" role="alert" style="margin: 12px 0;">
+  <div class="alert alert-warning rounded-3 shadow-sm py-2 px-3 mb-4" role="alert" style="margin: 12px 0;">
     {{ error }}
   </div>
   {% endif %}
 
-  <form method="get" action="{{ url_for('statements') }}" class="mb-4">
-    <div class="row justify-content-center align-items-end g-3">
-      <div class="col-md-5 col-lg-4">
-        <label for="scope" class="form-label fw-medium">Select Scope</label>
-        <select name="scope" id="scope" class="form-select shadow-sm">
-          <option value="month" {% if scope == 'month' %}selected{% endif %}>Month</option>
-          <option value="year" {% if scope == 'year' %}selected{% endif %}>Year</option>
-          <option value="custom" {% if scope == 'custom' %}selected{% endif %}>Custom</option>
-        </select>
-      </div>
+  <form method="get" action="{{ url_for('statements') }}" class="d-flex flex-wrap align-items-end justify-content-center gap-3 mb-4">
+    <div class="flex-grow-0 flex-shrink-0" style="flex-basis: 150px; min-width: 150px;">
+      <label for="scope" class="form-label fw-medium mb-1" style="font-weight: 500; font-size: 0.9rem;">Select Scope</label>
+      <select name="scope" id="scope" class="form-select shadow-sm rounded-pill px-3 py-2" style="font-size: 1rem; height: 40px;">
+        <option value="month" {% if scope == 'month' %}selected{% endif %}>Month</option>
+        <option value="year" {% if scope == 'year' %}selected{% endif %}>Year</option>
+        <option value="custom" {% if scope == 'custom' %}selected{% endif %}>Custom</option>
+      </select>
+    </div>
 
-      <div class="col-md-2 hidden" id="wrapYear">
-        <label for="year" class="form-label fw-medium">Year</label>
-        <input type="number" class="form-control shadow-sm" name="year" id="year" min="2000" max="2100" value="{{ request.args.get('year','') }}">
-      </div>
+    <div class="flex-grow-0 flex-shrink-0 hidden" id="wrapYear" style="flex-basis: 150px; min-width: 150px;">
+      <label for="year" class="form-label fw-medium mb-1" style="font-weight: 500; font-size: 0.9rem;">Year</label>
+      <input type="number" class="form-control shadow-sm rounded-pill px-3 py-2" name="year" id="year" min="2000" max="2100" value="{{ request.args.get('year','') }}" style="height: 40px; font-size: 1rem;">
+    </div>
 
-      <div class="col-md-2 hidden" id="wrapMonth">
-        <label for="month" class="form-label fw-medium">Month</label>
-        <input type="number" class="form-control shadow-sm" name="month" id="month" min="1" max="12" value="{{ request.args.get('month','') }}">
-      </div>
+    <div class="flex-grow-0 flex-shrink-0 hidden" id="wrapMonth" style="flex-basis: 150px; min-width: 150px;">
+      <label for="month" class="form-label fw-medium mb-1" style="font-weight: 500; font-size: 0.9rem;">Month</label>
+      <input type="number" class="form-control shadow-sm rounded-pill px-3 py-2" name="month" id="month" min="1" max="12" value="{{ request.args.get('month','') }}" style="height: 40px; font-size: 1rem;">
+    </div>
 
-      <div class="col-md-2 hidden" id="wrapStart">
-        <label for="start" class="form-label fw-medium">Start Date</label>
-        <input type="date" class="form-control shadow-sm" name="start" id="start" value="{{ request.args.get('start','') }}">
-      </div>
+    <div class="flex-grow-0 flex-shrink-0 hidden" id="wrapStart" style="flex-basis: 150px; min-width: 150px;">
+      <label for="start" class="form-label fw-medium mb-1" style="font-weight: 500; font-size: 0.9rem;">Start Date</label>
+      <input type="date" class="form-control shadow-sm rounded-pill px-3 py-2" name="start" id="start" value="{{ request.args.get('start','') }}" style="height: 40px; font-size: 1rem;">
+    </div>
 
-      <div class="col-md-2 hidden" id="wrapEnd">
-        <label for="end" class="form-label fw-medium">End Date</label>
-        <input type="date" class="form-control shadow-sm" name="end" id="end" value="{{ request.args.get('end','') }}">
-      </div>
+    <div class="flex-grow-0 flex-shrink-0 hidden" id="wrapEnd" style="flex-basis: 150px; min-width: 150px;">
+      <label for="end" class="form-label fw-medium mb-1" style="font-weight: 500; font-size: 0.9rem;">End Date</label>
+      <input type="date" class="form-control shadow-sm rounded-pill px-3 py-2" name="end" id="end" value="{{ request.args.get('end','') }}" style="height: 40px; font-size: 1rem;">
+    </div>
 
-      <div class="col-md-2 d-flex align-items-end">
-        <button type="submit" class="btn btn-primary w-100 shadow-sm">Get Statements</button>
-      </div>
-      <div class="col-md-2 d-flex align-items-end">
-        <a href="{{ url_for('statements_company') }}" class="btn btn-outline-secondary w-100 shadow-sm" style="border-radius: 6px;">
-          Company Wise
-        </a>
-      </div>
+    <div class="flex-grow-0 flex-shrink-0 d-flex align-items-center gap-2" style="flex-basis: 150px; min-width: 150px;">
+      <button type="submit" class="btn btn-primary shadow-sm px-3 py-2 rounded-pill" style="font-weight: 600; font-size: 0.95rem; height: 38px;">Get</button>
+      <button type="reset" class="btn btn-outline-secondary shadow-sm px-3 py-2 rounded-pill" style="font-weight: 600; font-size: 0.95rem; height: 38px;">Clear</button>
+    </div>
+    <div class="flex-shrink-0" style="min-width: 140px;">
+      <a href="{{ url_for('statements_company') }}" class="btn btn-outline-secondary shadow-sm px-3 py-2 rounded-pill w-100 text-nowrap" style="font-weight: 600; font-size: 0.95rem; height: 38px;">Company Wise</a>
     </div>
   </form>
 
   {% if request.args and total_invoices > 0 %}
-  <div class="text-center mb-3">
-    <a class="btn btn-success shadow-sm" id="csvLink" href="#" target="_blank">Download CSV</a>
-  </div>
-  <div class="text-center mb-4">
-    <div class="muted">Range: <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong></div>
-    <div style="margin-top:6px;">Total invoices: <strong>{{ total_invoices }}</strong> | Total amount: <strong>{{ '%.2f'|format(total_amount) }}</strong></div>
-    {% if phone %}<div class="muted">Filtered by phone/ID: <code>{{ phone }}</code></div>{% endif %}
+  <div class="mx-auto mb-4 shadow-sm rounded-4 p-3 text-center" style="max-width: 500px; background: #f5f5f7; color: #333;">
+    <div style="font-weight: 600; font-size: 1.1rem; margin-bottom: 0.25rem;">
+      Total invoices: <span>{{ total_invoices }}</span> &nbsp;&nbsp;|&nbsp;&nbsp; Total amount: <span>₹{{ '%.2f'|format(total_amount) }}</span>
+    </div>
+    <div class="text-muted" style="font-size: 0.9rem;">
+      Range: <strong>{{ start_date.strftime('%d %B %Y') }}</strong> to <strong>{{ end_date.strftime('%d %B %Y') }}</strong>
+    </div>
+    {% if phone %}<div class="text-muted mt-1" style="font-size: 0.85rem;">Filtered by phone/ID: <code>{{ phone }}</code></div>{% endif %}
   </div>
 
-  <h3 class="text-center mb-3">Per-company breakdown</h3>
-  <div class="table-responsive shadow-sm mb-4">
-    <table class="table">
+  <h3 class="text-center mb-3" style="font-weight: 600; font-size: 1.3rem;">Per-company breakdown</h3>
+  <div class="table-responsive shadow-sm mb-4 rounded-4 overflow-hidden" style="background: white;">
+    <table class="table mb-0" style="border-collapse: separate; border-spacing: 0;">
       <thead>
-        <tr><th>Company</th><th class="text-end">Count</th><th class="text-end">Amount</th></tr>
+        <tr style="background: #f0f0f5; font-weight: 600; font-size: 0.95rem;">
+          <th class="ps-4">Company</th>
+          <th class="text-end pe-4">Count</th>
+          <th class="text-end pe-4">Amount</th>
+        </tr>
       </thead>
       <tbody>
         {% for company, data in per_customer.items() %}
-        <tr>
-          <td>{{ company }}</td>
-          <td class="text-end">{{ data['count'] }}</td>
-          <td class="text-end">{{ '%.2f'|format(data['amount']) }}</td>
+        <tr style="border-top: 1px solid #e0e0e5;">
+          <td class="ps-4 py-2">{{ company }}</td>
+          <td class="text-end pe-4 py-2">{{ data['count'] }}</td>
+          <td class="text-end pe-4 py-2">₹{{ '%.2f'|format(data['amount']) }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 
-  <h3 class="text-center mb-3">Invoices</h3>
-  <div class="table-responsive shadow-sm">
-    <table class="table">
+  <h3 class="text-center mb-3" style="font-weight: 600; font-size: 1.3rem;">Invoices</h3>
+  <div class="table-responsive shadow-sm rounded-4 overflow-hidden mb-3" style="background: white;">
+    <table class="table mb-0" style="border-collapse: separate; border-spacing: 0;">
       <thead>
-        <tr><th>#</th><th>Invoice No</th><th>Date</th><th>Company</th><th>Phone/ID</th><th class="text-end">Total</th></tr>
+        <tr style="background: #f0f0f5; font-weight: 600; font-size: 0.95rem;">
+          <th class="ps-4" style="width: 40px;">#</th>
+          <th>Invoice No</th>
+          <th>Date</th>
+          <th>Company</th>
+          <th>Phone/ID</th>
+          <th class="text-end pe-4">Total</th>
+        </tr>
       </thead>
       <tbody>
         {% if inv_rows is defined and inv_rows %}
           {% for row in inv_rows %}
-          <tr>
-            <td>{{ loop.index }}</td>
-            <td><a href="{{ url_for('view_bill_locked', invoicenumber=row.invoice_no) }}">{{ row.invoice_no }}</a></td>
-            <td>{{ row.date }}</td>
-            <td>{{ row.company }}</td>
-            <td>{{ row.phone }}</td>
-            <td class="text-end">{{ '%.2f'|format(row.total) }}</td>
+          <tr style="border-top: 1px solid #e0e0e5;">
+            <td class="ps-4 py-2" style="width: 40px;">{{ loop.index }}</td>
+            <td class="py-2"><a href="{{ url_for('view_bill_locked', invoicenumber=row.invoice_no) }}" style="color: #007aff; text-decoration: none;">{{ row.invoice_no }}</a></td>
+            <td class="py-2">{{ row.date.strftime('%d %B %Y') if row.date is not string else row.date }}</td>
+            <td class="py-2">{{ row.company }}</td>
+            <td class="py-2">{{ row.phone }}</td>
+            <td class="text-end pe-4 py-2">₹{{ '%.2f'|format(row.total) }}</td>
           </tr>
           {% endfor %}
         {% else %}
           {# Fallback for legacy context if inv_rows wasn't provided #}
           {% for inv in invs %}
-          <tr>
-            <td>{{ loop.index }}</td>
-            <td><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoiceId) }}">{{ inv.invoiceId }}</a></td>
-            <td>{{ inv.createdAt.strftime('%Y-%m-%d') }}</td>
-            <td>{{ inv.customer.company if inv.customer and inv.customer.company else '(No Company)' }}</td>
-            <td>{{ inv.customer.phone if inv.customer else '' }}</td>
-            <td class="text-end">{{ '%.2f'|format(inv.totalAmount or 0) }}</td>
+          <tr style="border-top: 1px solid #e0e0e5;">
+            <td class="ps-4 py-2" style="width: 40px;">{{ loop.index }}</td>
+            <td class="py-2"><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoiceId) }}" style="color: #007aff; text-decoration: none;">{{ inv.invoiceId }}</a></td>
+            <td class="py-2">{{ inv.createdAt.strftime('%d %B %Y') }}</td>
+            <td class="py-2">{{ inv.customer.company if inv.customer and inv.customer.company else '(No Company)' }}</td>
+            <td class="py-2">{{ inv.customer.phone if inv.customer else '' }}</td>
+            <td class="text-end pe-4 py-2">₹{{ '%.2f'|format(inv.totalAmount or 0) }}</td>
           </tr>
           {% endfor %}
         {% endif %}
       </tbody>
     </table>
   </div>
+
+  <div class="text-center mt-4 mb-3">
+    <div class="d-inline-flex flex-wrap justify-content-center gap-3">
+      <a class="btn btn-success rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2"
+         id="csvLink"
+         href="#"
+         target="_blank"
+         style="font-weight: 600; font-size: 1rem; min-width: 160px; box-shadow: 0 4px 8px rgba(0,122,255,0.3);">
+         ⬇️ Download CSV
+      </a>
+      <a class="btn btn-primary rounded-pill shadow-sm px-4 py-2 d-flex align-items-center gap-2"
+         href="{{ url_for('statements', format='pdf', scope=scope, year=request.args.get('year'), month=request.args.get('month'), start=request.args.get('start'), end=request.args.get('end')) }}"
+         target="_blank"
+         style="font-weight: 600; font-size: 1rem; min-width: 160px; box-shadow: 0 4px 8px rgba(0,122,255,0.3);">
+         🧾 Download PDF
+      </a>
+    </div>
+  </div>
   {% endif %}
 </div>
 
 <style>
   .muted { color: #666; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
+
+  table th, table td {
+    vertical-align: middle !important;
+  }
 
   td:nth-child(2),
   td:nth-child(3),
@@ -128,12 +160,16 @@
     text-overflow: ellipsis;
   }
 
-  .btn-sm {
-    height: calc(2.5rem + 2px); /* match Bootstrap form-select height */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.9rem;
+  a:hover {
+    text-decoration: underline;
+  }
+
+  /* Override default form-select focus for consistent style */
+  select.form-select:focus,
+  input.form-control:focus {
+    border-color: #007aff;
+    box-shadow: 0 0 0 0.2rem rgba(0,122,255,.25);
+    outline: none;
   }
 </style>
 

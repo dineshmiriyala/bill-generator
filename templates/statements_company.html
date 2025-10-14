@@ -20,7 +20,7 @@
     <p class="mb-0 text-muted">
       🧾 <strong class="text-dark">{{ total_invoices }}</strong> invoices
       &nbsp;&nbsp;|&nbsp;&nbsp;
-      💰 <strong class="text-dark">{{ '%.2f'|format(total_amount) }}</strong>
+      💰 <strong class="text-dark">₹{{ '%.2f'|format(total_amount) }}</strong>
     </p>
   </div>
 </div>
@@ -86,8 +86,8 @@
       {% for r in inv_rows %}
       <tr>
         <td><a href="{{ url_for('view_bill_locked', invoicenumber=r.invoice_no) }}" target="_blank">{{ r.invoice_no }}</a></td>
-        <td>{{ r.date }}</td>
-        <td class="text-end">{{ '%.2f'|format(r.total) }}</td>
+        <td>{{ r.date | datetimeformat }}</td>
+        <td class="text-end">₹{{ '%.2f'|format(r.total) }}</td>
       </tr>
       {% endfor %}
     </tbody>

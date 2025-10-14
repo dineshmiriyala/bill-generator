@@ -398,17 +398,24 @@ def about_user():
     )
 
 
-# Custom Jinja filter to format dates as DD-MM-YYYY
+# Custom Jinja filter to format dates as DD Month YYYY (e.g., '14 October 2025')
 @app.template_filter('datetimeformat')
-def datetimeformat(value, format='%d-%m-%Y'):
+def datetimeformat(value, format='%d %B %Y'):
+    """Safely format a date string or datetime into a readable form (e.g., '14 October 2025')."""
     if not value:
         return ''
     try:
         if isinstance(value, str):
-            value = datetime.strptime(value, '%Y-%m-%d')
+            # Try parsing both full and simple date formats
+            for fmt in ('%Y-%m-%d', '%Y-%m-%d %H:%M:%S'):
+                try:
+                    value = datetime.strptime(value, fmt)
+                    break
+                except ValueError:
+                    continue
         return value.strftime(format)
     except Exception:
-        return value
+        return str(value)
 
 
 @app.route('/_flash_test')
@@ -1089,6 +1096,8 @@ def view_bill_locked(invoicenumber):
     edit_bill = request.args.get('edit_bill', '').lower() in ('yes', 'true', '1')
     back_two_pages = edit_bill
 
+    invoice_date = current_invoice.createdAt
+
     return render_template(
         'view_bill_locked.html',
         customer=current_customer,
@@ -1104,6 +1113,7 @@ def view_bill_locked(invoicenumber):
         back_to_select_customer=back_to_select_customer,
         customer_id=cur_cust.id,
         back_two_pages=back_two_pages,
+        invoice_date=invoice_date,
     )
 
 
