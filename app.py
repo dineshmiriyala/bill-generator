@@ -23,6 +23,7 @@ from migration import migrate_db
 from flask import send_file
 import io
 import json
+from api import api_bp
 
 
 def _format_customer_id(n: int) -> str:
@@ -62,6 +63,7 @@ USER_PROFILE = {
 app = Flask(__name__)
 basedir = Path(__file__).parent.resolve()
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret')
+app.register_blueprint(api_bp)
 
 
 def _desktop_data_dir(app_name: str) -> Path:
@@ -1255,7 +1257,7 @@ def start_bill():
 
     # After successful creation, flash and redirect to locked preview page
     session['persistent_notice'] = f"Invoice {new_invoice.invoiceId} created successfully!"
-    return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId, new_bill = True))
+    return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId, new_bill = 'True'))
 
 
 @app.route('/view_customers', methods=['GET', 'POST'])
@@ -1286,67 +1288,75 @@ def view_customers():
 
 @app.route('/view_bills')
 def view_bills():
+    """Render all bills with filtering, search, and sorting."""
+
+    # ---- 1️⃣ Extract filters from query params ----
     query = (request.args.get('q') or '').lower()
     phone = request.args.get('phone')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
-    q = (invoice.query
-         .options(joinedload(invoice.customer))
-         .join(customer, invoice.customerId == customer.id)
-         .filter(invoice.isDeleted == False,
-                 customer.isDeleted == False))
+    # ---- 2️⃣ Base query with eager loading ----
+    q = (
+        invoice.query
+        .options(joinedload(invoice.customer))
+        .join(customer, invoice.customerId == customer.id)
+        .filter(invoice.isDeleted == False, customer.isDeleted == False)
+    )
 
-    # sorting controls
+    # ---- 3️⃣ Sorting ----
     sort_key = (request.args.get('sort') or 'date').lower()
     sort_dir = (request.args.get('dir') or 'desc').lower()
-
-    def order(col):
-        return col.desc() if sort_dir == 'desc' else col.asc()
+    def order(col): return col.desc() if sort_dir == 'desc' else col.asc()
 
     if sort_key == 'total':
         q = q.order_by(order(invoice.totalAmount))
     elif sort_key == 'invoice':
         q = q.order_by(order(invoice.invoiceId))
     elif sort_key == 'customer':
-        q = (q.join(customer, invoice.customerId == customer.id)
-             .order_by(order(customer.name)))
+        q = q.order_by(order(customer.name))
     else:
-        # default: sort by date
         q = q.order_by(order(invoice.createdAt))
 
-    # Apply date range if provided (YYYY-MM-DD)
+    # ---- 4️⃣ Optional date range filter ----
     try:
         if start_date and end_date:
             start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)  # inclusive
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
             q = q.filter(invoice.createdAt >= start_dt, invoice.createdAt < end_dt)
     except Exception:
         pass
 
+    # ---- 5️⃣ Execute main query ----
     invoices = q.all()
 
-    results = []
+    # ---- 6️⃣ Transform for template ----
+    bills = []
     for inv in invoices:
         cust = inv.customer
-        results.append({
+        bills.append({
             "invoice_no": inv.invoiceId,
-            "date": inv.createdAt.strftime('%m/%d/%Y'),
+            "date": inv.createdAt.strftime('%d-%b-%Y'),
             "customer_name": cust.name if cust else 'Unknown',
             "phone": cust.phone if cust else '',
-            "total": f"{inv.totalAmount: ,.2f}",
+            "total": f"{inv.totalAmount:,.2f}",
             "filename": f"{inv.invoiceId}.pdf",
-            "customer_company": cust.company if cust else 'Unknown',
+            "customer_company": cust.company if cust else 'Unknown'
         })
 
-    bills = results
+    # ---- 7️⃣ Apply search filters ----
     if phone:
         bills = [b for b in bills if b['phone'] == phone]
     elif query:
-        bills = [b for b in bills if query in b['customer_name'].lower()
-                 or query in b.get('phone', '')
-                 or query in b['invoice_no']]
+        bills = [
+            b for b in bills
+            if query in b['customer_name'].lower()
+            or query in b.get('phone', '')
+            or query in b['invoice_no'].lower()
+            or query in (b.get('customer_company') or '').lower()
+        ]
 
+    # ---- 8️⃣ Render ----
     return render_template('view_bills.html', bills=bills)
 
 
@@ -1383,6 +1393,11 @@ def view_bill_locked(invoicenumber):
     # Determine whether to show DC column
     dcno = any((x or '').strip() for x in dc_numbers)
 
+    new_bill = request.args.get('new_bill', '').lower() in ('yes', 'true', '1')
+    back_to_select_customer = new_bill
+    edit_bill = request.args.get('edit_bill', '').lower() in ('yes', 'true', '1')
+    back_two_pages = edit_bill
+
     return render_template(
         'view_bill_locked.html',
         customer=current_customer,
@@ -1394,6 +1409,10 @@ def view_bill_locked(invoicenumber):
         dcno=dcno,
         total=round(total, 2),
         invoice_no=current_invoice.invoiceId,
+        new_bill=new_bill,
+        back_to_select_customer=back_to_select_customer,
+        customer_id=cur_cust.id,
+        back_two_pages=back_two_pages,
     )
 
 
@@ -1556,7 +1575,7 @@ def edit_bill(invoicenumber):
         current_invoice.exclude_addr = request.form.get('exclude_addr') in ('on', 'true', '1')
         db.session.commit()
         # add alert - Not needed funcionally
-        return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId))
+        return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill = 'true'))
 
     # Render the same template as create_bill.html but pre-filled
     return render_template(
@@ -1578,7 +1597,7 @@ def edit_bill(invoicenumber):
         exclude_phone=exclude_phone,
         exclude_gst=exclude_gst,
         exclude_addr=exclude_addr,
-        line_totals=line_totals
+        line_totals=line_totals,
     )
 
 
@@ -1671,7 +1690,7 @@ def update_bill(invoicenumber):
     # 6) Redirect to locked preview after update
     session['persistent_notice'] = f"Old invoice {current_invoice.invoiceId} updated successfully!"
 
-    return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId))
+    return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill = 'true'))
 
 
 @app.route('/bill_preview/latest')

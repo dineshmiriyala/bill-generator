@@ -36,6 +36,8 @@
     <div class="d-flex align-items-center">
       {% if back_to_select_customer %}
         <a href="{{ url_for('select_customer') }}" class="btn btn-sm me-2" style="background-color: #30363d; color: #f0f6fc; border: 1px solid #484f58;">←</a>
+      {% elif back_two_pages %}
+        <button class="btn btn-sm me-2" onclick="history.go(-3)" style="background-color: #30363d; color: #f0f6fc; border: 1px solid #484f58;">←</button>
       {% else %}
         <button class="btn btn-sm me-2" onclick="history.back()" style="background-color: #30363d; color: #f0f6fc; border: 1px solid #484f58;">←</button>
       {% endif %}

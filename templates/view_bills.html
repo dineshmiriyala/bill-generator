@@ -1,20 +1,20 @@
 {% extends 'base.html' %}
 {% block content %}
-{% set back_to_select_customer = True %}
-<div class="container py-4">
+<div class="page-container py-4">
   <h2 class="mb-4 text-center">Generated Bills</h2>
 
-  <form id="billsFilterForm" method="GET" action="{{ url_for('view_bills') }}" class="row g-1 mb-4 justify-content-center align-items-end">
-    <div class="col-auto">
-      <input type="text" name="q" class="form-control shadow-sm" style="min-width: 360px;" placeholder="Search by invoice, phone/ID, name or company" value="{{ request.args.get('q', '') }}">
+  <!-- Filters -->
+  <form id="billsFilterForm" method="GET" action="{{ url_for('view_bills') }}" class="filters-row row g-2 mb-4 justify-content-center align-items-end">
+    <div class="col-12 col-md-auto">
+      <input type="text" name="q" class="form-control shadow-sm" placeholder="Search by invoice, phone/ID, name or company" value="{{ request.args.get('q', '') }}">
     </div>
-    <div class="col-auto">
-      <input type="date" name="start_date" class="form-control shadow-sm" style="min-width: 150px;" value="{{ request.args.get('start_date', '') | datetimeformat('%Y-%m-%d') }}">
+    <div class="col-6 col-md-auto">
+      <input type="date" name="start_date" class="form-control shadow-sm" value="{{ request.args.get('start_date', '') }}">
     </div>
-    <div class="col-auto">
-      <input type="date" name="end_date" class="form-control shadow-sm" style="min-width: 150px;" value="{{ request.args.get('end_date', '') | datetimeformat('%Y-%m-%d') }}">
+    <div class="col-6 col-md-auto">
+      <input type="date" name="end_date" class="form-control shadow-sm" value="{{ request.args.get('end_date', '') }}">
     </div>
-    <div class="col-auto">
+    <div class="col-6 col-md-auto">
       <select id="sortSelect" name="sort" class="form-select shadow-sm">
         <option value="date" {{ 'selected' if request.args.get('sort','date') == 'date' else '' }}>Sort by Date</option>
         <option value="total" {{ 'selected' if request.args.get('sort') == 'total' else '' }}>Sort by Total</option>
@@ -22,57 +22,128 @@
         <option value="customer" {{ 'selected' if request.args.get('sort') == 'customer' else '' }}>Sort by Customer</option>
       </select>
     </div>
-    <div class="col-auto">
+    <div class="col-6 col-md-auto">
       <select id="dirSelect" name="dir" class="form-select shadow-sm">
         <option value="desc" {{ 'selected' if request.args.get('dir','desc') == 'desc' else '' }}>Descending</option>
         <option value="asc"  {{ 'selected' if request.args.get('dir') == 'asc' else '' }}>Ascending</option>
       </select>
     </div>
-    <div class="col-auto">
-      <button type="submit" class="btn btn-primary">Search</button>
+    <div class="col-6 col-md-auto d-grid">
+      <button type="submit" class="btn btn-primary shadow-sm">Search</button>
     </div>
-    <div class="col-auto">
-      <a href="{{ url_for('view_bills') }}" class="btn btn-danger">Clear</a>
+    <div class="col-6 col-md-auto d-grid">
+      <a href="{{ url_for('view_bills') }}" class="btn btn-outline-secondary shadow-sm">Clear</a>
     </div>
   </form>
 
   {% if bills %}
-    <div class="table-responsive">
-      <table class="table table-striped table-bordered align-middle text-start">
-        <thead class="table-light">
-          <tr>
-            <th>Invoice No</th>
-            <th>Date</th>
-            <th>
-              <div class="fw-semibold">Company</div>
-              <div class="text-muted small">Customer</div>
-            </th>
-            <th>Total (INR)</th>
-            <th>View</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for bill in bills %}
-          <tr>
-            <td>{{ bill.invoice_no }}</td>
-            <td>{{ bill.date | datetimeformat }}</td>
-            <td>
-              <div class="fw-semibold">{{ bill.customer_company or bill.company or '—' }}</div>
-              {% if bill.customer_name %}
-                <div class="text-muted small">{{ bill.customer_name }}</div>
-              {% endif %}
-            </td>
-            <td>{{ bill.total }}</td>
-            <td><a href="{{ url_for('view_bill_locked', invoicenumber=bill.invoice_no) }}">View Bill</a></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <div class="card shadow-sm border-0 rounded-3 overflow-hidden w-100">
+    <div class="card-body p-0">
+      <div class="table-responsive" style="overflow-x:hidden;">
+        <table class="table table-hover align-middle mb-0 w-100" style="table-layout:fixed;">
+          <colgroup>
+            <col style="width: 42px;">   <!-- caret -->
+            <col style="width: 150px;">  <!-- invoice -->
+            <col style="width: 140px;">  <!-- date -->
+            <col style="width: auto;">   <!-- customer -->
+            <col style="width: 140px;">  <!-- total -->
+            <col style="width: 110px;">  <!-- view -->
+          </colgroup>
+          <thead class="table-light border-bottom">
+            <tr class="fw-semibold text-secondary">
+              <th class="text-center"></th>
+              <th>Invoice No</th>
+              <th>Date</th>
+              <th>Customer</th>
+              <th class="text-end">Total (₹)</th>
+              <th class="text-center">View</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for bill in bills %}
+            <tr class="bill-row" data-invoice="{{ bill.invoice_no }}" data-target="#bill-{{ bill.invoice_no }}">
+              <td class="text-center align-middle">
+                <button class="btn btn-sm btn-light caret-toggle collapsed" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#bill-{{ bill.invoice_no }}"
+                        aria-expanded="false" aria-controls="bill-{{ bill.invoice_no }}">
+                  <span class="caret-icon">▸</span>
+                </button>
+              </td>
+              <td class="fw-semibold text-wrap bill-toggle" data-bs-toggle="collapse" data-bs-target="#bill-{{ bill.invoice_no }}">{{ bill.invoice_no }}</td>
+              <td class="text-wrap bill-toggle" data-bs-toggle="collapse" data-bs-target="#bill-{{ bill.invoice_no }}">{{ bill.date | datetimeformat }}</td>
+              <td class="text-wrap bill-toggle" data-bs-toggle="collapse" data-bs-target="#bill-{{ bill.invoice_no }}">
+                <div class="fw-semibold">{{ bill.customer_company or bill.company or '—' }}</div>
+                {% if bill.customer_name %}<div class="text-muted small">{{ bill.customer_name }}</div>{% endif %}
+              </td>
+              <td class="text-end text-nowrap bill-toggle" data-bs-toggle="collapse" data-bs-target="#bill-{{ bill.invoice_no }}">₹{{ bill.total }}</td>
+              <td class="text-center">
+                <a href="{{ url_for('view_bill_locked', invoicenumber=bill.invoice_no) }}"
+                   class="text-primary fw-semibold text-decoration-none">View →</a>
+              </td>
+            </tr>
+            <tr class="collapse collapse-row" id="bill-{{ bill.invoice_no }}">
+              <td colspan="6" class="p-3 bg-light">
+                <div class="table-responsive" style="overflow-x:hidden;">
+                  <table class="table table-sm table-borderless mb-0 text-muted w-100" style="table-layout:auto;">
+                    <thead>
+                      <tr class="fw-semibold text-dark border-bottom">
+                        <th>Item</th>
+                        <th class="text-center">Qty</th>
+                        <th class="text-center">Rate</th>
+                        <th class="text-end">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody id="items-body-{{ bill.invoice_no }}">
+                      <tr><td colspan="4" class="text-center text-muted">Expand to load items…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
+  </div>
   {% else %}
     <p class="text-center text-muted">No bills have been generated yet.</p>
   {% endif %}
 </div>
+
+<style>
+  /* Layout */
+  div.page-container { display:flex; flex-direction:column; align-items:center; width:100%; }
+  .card { width:100%; max-width:1500px; }
+
+  /* Filters styling */
+  .filters-row { display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-end; gap:0.75rem; background-color:#f3f4f6; padding:1rem; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:1.5rem; }
+  .filters-row input[type="date"],
+  .filters-row input[type="text"],
+  .filters-row .form-select { background-color:#e5e7eb !important; border:1px solid #9ca3af !important; border-radius:6px; font-weight:500; color:#111827; height:38px; min-width:180px; }
+  .filters-row input[type="date"]:focus,
+  .filters-row input[type="text"]:focus,
+  .filters-row .form-select:focus { border-color:#6b7280 !important; box-shadow:none !important; background-color:#e5e7eb !important; }
+  input[type="date"]::-webkit-calendar-picker-indicator { opacity:1; filter:invert(0.2); }
+  input[type="date"] { -webkit-appearance:none; appearance:none; line-height:normal; }
+
+  /* Table */
+  .card > .card-body .table-responsive { overflow-x:hidden; }
+  @media (max-width: 992px) { .card > .card-body .table-responsive { overflow-x:auto; } }
+  table.table { width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; }
+  table.table th, table.table td { vertical-align:middle; white-space:normal; word-break:break-word; padding:0.65rem 0.75rem; }
+
+  .bill-row { background-color:#fff; }
+  .bill-row:hover { background-color:#f3f6f9 !important; cursor:pointer; }
+  .collapse-row td { background-color:#f8f9fb !important; border-top:1px solid #e5e7eb; }
+
+  /* Caret button */
+  .caret-toggle { width:26px; height:26px; padding:0; display:inline-flex; align-items:center; justify-content:center; border-radius:4px; border:1px solid #e5e7eb; background-color:#f9fafb; transition:background-color .2s ease-in-out; }
+  .caret-toggle:hover { background-color:#e5e7eb; }
+  .caret-toggle .caret-icon { display:inline-block; font-weight:700; font-size:0.85rem; transition:transform .2s ease-in-out; }
+  .caret-toggle[aria-expanded="true"] .caret-icon { transform:rotate(90deg); }
+</style>
+
 <script>
   (function(){
     const form = document.getElementById('billsFilterForm');
@@ -81,5 +152,61 @@
     if (form && sortSel) sortSel.addEventListener('change', () => form.submit());
     if (form && dirSel)  dirSel.addEventListener('change',  () => form.submit());
   })();
+
+  // One true loader that works no matter how the row is expanded (caret or row click)
+  document.addEventListener('DOMContentLoaded', () => {
+    const loaded = new Set();
+
+    function loadItems(invoiceNo){
+      if (!invoiceNo || loaded.has(invoiceNo)) return;
+      const tbody = document.getElementById(`items-body-${invoiceNo}`);
+      if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>';
+
+      fetch(`/api/bill_items/${encodeURIComponent(invoiceNo)}`)
+        .then(res => res.ok ? res.json() : Promise.reject(res.statusText))
+        .then(data => {
+          if (data && data.items && Array.isArray(data.items) && data.items.length){
+            const rows = data.items.map(i => `
+              <tr>
+                <td>${i.name ?? ''}</td>
+                <td class="text-center">${i.quantity ?? ''}</td>
+                <td class="text-center">₹${Number(i.rate || 0).toFixed(2)}</td>
+                <td class="text-end">₹${Number(i.amount || 0).toFixed(2)}</td>
+              </tr>
+            `).join('');
+            tbody.innerHTML = rows;
+          } else {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No items found.</td></tr>';
+          }
+          loaded.add(invoiceNo);
+        })
+        .catch(() => {
+          tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading items</td></tr>';
+        });
+    }
+
+    // Bind to Bootstrap collapse show event for all rows
+    document.querySelectorAll('.collapse-row').forEach(row => {
+      const invoiceNo = row.id.replace('bill-','');
+      row.addEventListener('shown.bs.collapse', () => loadItems(invoiceNo), { once: false });
+    });
+
+    // Also support clicking anywhere on the row (already has data-bs-toggle on cells)
+    document.querySelectorAll('.bill-row').forEach(tr => {
+      tr.addEventListener('click', () => {
+        const targetSel = tr.getAttribute('data-target');
+        const invoiceNo = tr.getAttribute('data-invoice');
+        const target = targetSel ? document.querySelector(targetSel) : null;
+        if (target) {
+          // Use Bootstrap Collapse API to toggle
+          const collapse = bootstrap.Collapse.getOrCreateInstance(target, { toggle: false });
+          collapse.toggle();
+          // Ensure items load immediately when user toggles via row click
+          loadItems(invoiceNo);
+        }
+      });
+    });
+  });
 </script>
 {% endblock %}
