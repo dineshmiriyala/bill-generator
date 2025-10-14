@@ -1,27 +1,48 @@
-
-
 {% extends 'base.html' %}
 
 {% block content %}
 <div class="container py-4">
   <h2 class="text-center fw-semibold mb-4">View Statements by Company</h2>
 
+  {# Minimal, Apple-like info card for selected company, below header and above form #}
+{% if customer_company or customer_phone %}
+<div class="d-flex justify-content-center align-items-center flex-wrap gap-4 mb-4">
+  <div class="rounded-4 shadow-sm px-4 py-3 bg-light text-center" style="max-width: 360px;">
+    {% if customer_company %}
+      <h5 class="fw-semibold text-dark mb-1">{{ customer_company }}</h5>
+    {% endif %}
+    {% if customer_phone %}
+      <p class="text-muted mb-0">📞 {{ customer_phone }}</p>
+    {% endif %}
+  </div>
+  <div class="rounded-4 shadow-sm bg-light px-4 py-3 text-center" style="min-width: 240px;">
+    <h6 class="fw-semibold text-dark mb-1">Summary</h6>
+    <p class="mb-0 text-muted">
+      🧾 <strong class="text-dark">{{ total_invoices }}</strong> invoices
+      &nbsp;&nbsp;|&nbsp;&nbsp;
+      💰 <strong class="text-dark">{{ '%.2f'|format(total_amount) }}</strong>
+    </p>
+  </div>
+</div>
+{% endif %}
+
   <form method="GET" action="/statements_company" class="mb-4">
     <!-- Company / Phone -->
     <div class="row justify-content-center align-items-end g-3">
       <div class="col-md-5 col-lg-4 position-relative">
         <label for="query" class="form-label fw-medium">Company / Phone</label>
-        <input type="text" class="form-control shadow-sm" id="query" name="query"
-               placeholder="Enter company name or phone/ID..." value="{{ request.args.get('query','') }}" required>
+        <div class="input-group shadow-sm">
+          <input type="text" class="form-control" id="query" name="query"
+                 placeholder="Enter company name or phone/ID..." value="{{ request.args.get('query','') }}" required>
+          <button type="submit" class="btn btn-primary px-3" style="font-size: 0.96em;">Get</button>
+        </div>
         <div id="suggestionsList" class="list-group position-absolute w-100 shadow-sm" style="z-index: 1000; display: none;"></div>
       </div>
-      <div class="col-md-2">
-        <button type="submit" class="btn btn-primary w-100 shadow-sm">Get Statements</button>
+      <div class="col-md-2 d-flex flex-wrap gap-2 justify-content-center">
+        <a href="{{ url_for('statements_company') }}" class="btn btn-outline-danger shadow-sm flex-grow-1 px-3 py-2">Clear</a>
       </div>
-      <div class="col-md-2">
-        <a href="{{ url_for('statements') }}" class="btn btn-outline-secondary w-100 shadow-sm">
-          Date Wise
-        </a>
+      <div class="col-md-3 d-flex flex-wrap gap-2 justify-content-center">
+        <a href="{{ url_for('statements') }}" class="btn btn-outline-secondary shadow-sm flex-grow-1 px-3 py-2">Date Wise</a>
       </div>
     </div>
 
@@ -44,26 +65,20 @@
         <div class="col-md-2 d-flex align-items-end">
           <button type="submit" class="btn btn-success w-100">Apply Filter</button>
         </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <a href="{{ url_for('statements_company', query=request.args.get('query','')) }}" class="btn btn-outline-danger w-100">Clear Dates</a>
+        </div>
       </div>
     </div>
   </form>
-</div>
-
 
 {% if total_invoices > 0 %}
-<div class="text-center mb-3 d-flex justify-content-center gap-3 flex-wrap">
-  <a class="btn btn-success shadow-sm"
-     href="{{ url_for('statements_company', format='csv', query=query, start=start_date, end=end_date) }}"
-     target="_blank">Download CSV</a>
-</div>
 <div class="table-responsive mt-4">
   <table class="table table-bordered table-striped align-middle">
     <thead class="table-light">
       <tr class="text-center">
         <th>Invoice No</th>
         <th>Date</th>
-        <th>Company</th>
-        <th>Phone/ID</th>
         <th class="text-end">Total</th>
       </tr>
     </thead>
@@ -72,13 +87,25 @@
       <tr>
         <td><a href="{{ url_for('view_bill_locked', invoicenumber=r.invoice_no) }}" target="_blank">{{ r.invoice_no }}</a></td>
         <td>{{ r.date }}</td>
-        <td>{{ r.company }}</td>
-        <td>{{ r.phone }}</td>
         <td class="text-end">{{ '%.2f'|format(r.total) }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  <div class="text-center mt-4 mb-5">
+    <div class="d-inline-flex flex-wrap justify-content-center gap-3">
+      <a class="btn btn-success rounded-pill shadow-sm px-4 py-2"
+         href="{{ url_for('statements_company', format='csv', query=query, start=start_date, end=end_date) }}"
+         target="_blank">
+         ⬇️ Download CSV
+      </a>
+      <a class="btn btn-primary rounded-pill shadow-sm px-4 py-2"
+         href="{{ url_for('statements_company', format='pdf', query=query, start=start_date, end=end_date) }}"
+         target="_blank">
+         🧾 Print Statement
+      </a>
+    </div>
+  </div>
 </div>
 {% else %}
 <p class="text-center text-muted mt-4">No statements found for the selected company.</p>
@@ -87,7 +114,16 @@
 <script>
   document.getElementById('toggleDateFilter').addEventListener('click', () => {
     document.getElementById('dateFilter').classList.toggle('d-none');
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('start') || params.get('end')) {
+      document.getElementById('dateFilter').classList.remove('d-none');
+    }
   });
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('start') || params.get('end')) {
+    document.getElementById('dateFilter').classList.remove('d-none');
+  }
 </script>
 
 <script>

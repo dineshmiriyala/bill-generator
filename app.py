@@ -25,7 +25,6 @@ import io
 import json
 from api import api_bp
 
-
 def _format_customer_id(n: int) -> str:
     return f"ID-{n:06d}"
 
@@ -673,314 +672,6 @@ def view_inventory():
     return render_template('view_inventory.html', inventory=inventory)
 
 
-@app.route('/statements', methods=['GET'])
-def statements():
-    """HTML/CSV Statement for month/year/custom.
-    Query params:
-      - scope: 'month' | 'year' | 'custom' (default: current year when absent)
-      - year, month (when scope requires it)
-      - start, end in YYYY-MM-DD (custom)
-      - format: 'html' (default) or 'csv'
-    """
-    scope = (request.args.get('scope') or '').lower()
-    fmt = (request.args.get('format') or 'html').lower()
-    # phone = request.args.get('phone')  # removed phone search for now
-
-    # Default: if no scope supplied, go to current year
-    if not scope:
-        return redirect(url_for('statements_blank'))
-
-    # Resolve date range
-    today = datetime.now(timezone.utc).date()
-    start_dt = end_dt = None
-    try:
-        if scope == 'year':
-            year = int(request.args.get('year') or today.year)
-            start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
-            end_dt = datetime(year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
-        elif scope == 'month':
-            year = int(request.args.get('year') or today.year)
-            month = int(request.args.get('month') or today.month)
-            start_dt = datetime(year, month, 1, tzinfo=timezone.utc)
-            if month == 12:
-                end_dt = datetime(year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
-            else:
-                end_dt = datetime(year, month + 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
-        elif scope == 'custom':
-            start = request.args.get('start')
-            end = request.args.get('end')
-            if not (start and end):
-                # Render friendly page instead of 400
-                return render_template(
-                    'statement.html',
-                    start_date=None,
-                    end_date=None,
-                    total_invoices=0,
-                    total_amount=0,
-                    per_customer={},
-                    invs=[],
-                    inv_rows=[],
-                    scope='custom',
-                    error='Please choose a date range to view custom statements.'
-                )
-            start_dt = datetime.strptime(start, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(seconds=1)
-        else:
-            return redirect(url_for('statements', scope='year', year=today.year))
-    except Exception:
-        return redirect(url_for('statements', scope='year', year=today.year))
-
-    # Base query: exclude soft-deleted; within range
-    q = (invoice.query
-         .options(joinedload(invoice.customer))
-         .filter(invoice.isDeleted == False,
-                 invoice.createdAt >= start_dt,
-                 invoice.createdAt <= end_dt))
-
-    # if phone:
-    #     q = q.join(customer, invoice.customerId == customer.id).filter(
-    #         customer.isDeleted == False,
-    #         customer.phone == phone
-    #     )
-
-    invs = q.order_by(invoice.createdAt.desc()).all()
-
-    # Aggregations
-    total_invoices = len(invs)
-    total_amount = sum(float(inv.totalAmount or 0) for inv in invs)
-
-    # ---- Group by Company (not customer name) ----
-    per_company = defaultdict(lambda: {"count": 0, "amount": 0.0})
-    for inv in invs:
-        cust = inv.customer
-        company_label = (cust.company or '').strip() if cust else ''
-        if not company_label:
-            company_label = '(No Company)'
-        per_company[company_label]["count"] += 1
-        per_company[company_label]["amount"] += float(inv.totalAmount or 0)
-
-    # ---- CSV Export ----
-    if fmt == 'csv':
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-
-        # ---- Header Section ----
-        writer.writerow(["Sri Lakshmi Offset Printers - Statement"])
-        writer.writerow(["Generated On", datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
-        writer.writerow(["Statement Period", f"{start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}"])
-        writer.writerow([])
-
-        # ---- Table Header ----
-        writer.writerow(["Invoice No", "Date", "Company", "Phone", "Total Amount (INR)"])
-
-        # ---- Table Data ----
-        for inv in invs:
-            cust = inv.customer
-            company_label = (cust.company or '').strip() if cust else '(No Company)'
-            phone_val = cust.phone if cust else ''
-            total_val = float(inv.totalAmount or 0)
-            writer.writerow([
-                inv.invoiceId,
-                inv.createdAt.strftime('%Y-%m-%d'),
-                company_label,
-                phone_val,
-                f"{total_val:.2f}"
-            ])
-
-        # ---- Summary Section ----
-        writer.writerow([])
-        writer.writerow(["Summary"])
-        writer.writerow(["Total Invoices", total_invoices])
-        writer.writerow(["Total Amount (INR)", f"{total_amount:.2f}"])
-        if total_invoices > 0:
-            avg_invoice = total_amount / total_invoices
-            writer.writerow(["Average Invoice Value (INR)", f"{avg_invoice:.2f}"])
-        max_invoice = max([float(inv.totalAmount or 0) for inv in invs], default=0.0)
-        writer.writerow(["Highest Invoice Value (INR)", f"{max_invoice:.2f}"])
-        min_invoice = min([float(inv.totalAmount or 0) for inv in invs], default=0.0)
-        writer.writerow(["Lowest Invoice Value (INR)", f"{min_invoice:.2f}"])
-        writer.writerow([])
-
-        # ---- Disclaimer ----
-        writer.writerow(["Disclaimer", "This is a system-generated statement. No signature required."])
-
-        # ---- Filename ----
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        filename = f"statement_{today_str}.csv"
-
-        return Response(
-            buf.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename={filename}'}
-        )
-
-    # ---- Build rows for HTML (Company only) ----
-    inv_rows = []
-    for inv in invs:
-        cust = inv.customer
-        company_label = (cust.company or '').strip() if cust else ''
-        if not company_label:
-            company_label = '(No Company)'
-
-        inv_rows.append({
-            "invoice_no": inv.invoiceId,
-            "date": inv.createdAt.strftime('%Y-%m-%d'),
-            "company": company_label,
-            "phone": cust.phone if cust else '',
-            "total": float(inv.totalAmount or 0),
-        })
-
-    return render_template(
-        'statement.html',
-        start_date=start_dt.date(),
-        end_date=end_dt.date(),
-        total_invoices=total_invoices,
-        total_amount=round(total_amount, 2),
-        per_customer=per_company,
-        invs=invs,
-        inv_rows=inv_rows,
-        scope=scope,
-        request=request,
-    )
-
-@app.route('/statements_company', methods=['GET', 'POST'])
-def statements_company():
-    """Generate HTML/CSV statements filtered by company name or phone/ID."""
-    query = (request.args.get('query') or '').strip()
-    fmt = (request.args.get('format') or 'html').lower()
-    start = request.args.get('start')
-    end = request.args.get('end')
-
-    today = datetime.now(timezone.utc).date()
-    start_dt, end_dt = datetime(2000, 1, 1, tzinfo=timezone.utc), datetime.now(timezone.utc)
-
-    if start and end:
-        try:
-            start_dt = datetime.strptime(start, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(seconds=1)
-        except Exception:
-            pass
-
-    # 🔹 Suggestions only (no invoice query yet)
-    suggestions = []
-    try:
-        suggestions = [
-            {"company": c.company or "", "phone": c.phone}
-            for c in customer.query.filter(customer.isDeleted == False).all()
-            if (c.company or c.phone)
-        ]
-    except Exception as e:
-        print("Suggestion load failed:", e)
-
-    invs = []
-    total_invoices = 0
-    total_amount = 0.0
-
-    # 🔹 Only query invoices when there's a search term
-    if query:
-        q = (invoice.query
-             .options(joinedload(invoice.customer))
-             .filter(invoice.isDeleted == False,
-                     invoice.createdAt >= start_dt,
-                     invoice.createdAt <= end_dt)
-             .join(customer, invoice.customerId == customer.id)
-             .filter(customer.isDeleted == False,
-                     or_(
-                         func.lower(customer.company).like(f"%{query.lower()}%"),
-                         customer.phone == query
-                     )))
-
-        invs = q.order_by(invoice.createdAt.desc()).all()
-        total_invoices = len(invs)
-        total_amount = sum(float(inv.totalAmount or 0) for inv in invs)
-
-    # 🔹 CSV Export
-    if fmt == 'csv' and query:
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-
-        # ---- Header Section ----
-        writer.writerow(["Sri Lakshmi Offset Printers - Customer Statement"])
-        writer.writerow(["Generated On", datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
-        writer.writerow(["Customer Name", query])
-        writer.writerow(["Statement Period", f"{start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}"])
-        writer.writerow([])
-
-        # ---- Table Header ----
-        writer.writerow(["Invoice No", "Date", "Company", "Phone", "Total Amount (INR)"])
-
-        # ---- Table Data ----
-        for inv in invs:
-            cust = inv.customer
-            company_label = (cust.company or '').strip() if cust else '(No Company)'
-            phone_val = cust.phone if cust else ''
-            total_val = float(inv.totalAmount or 0)
-            writer.writerow([
-                inv.invoiceId,
-                inv.createdAt.strftime('%Y-%m-%d'),
-                company_label,
-                phone_val,
-                f"{total_val:.2f}"
-            ])
-
-        # ---- Summary Section ----
-        writer.writerow([])
-        writer.writerow(["Summary"])
-        writer.writerow(["Total Invoices", total_invoices])
-        writer.writerow(["Total Amount (INR)", f"{total_amount:.2f}"])
-        if total_invoices > 0:
-            avg_invoice = total_amount / total_invoices
-            writer.writerow(["Average Invoice Value (INR)", f"{avg_invoice:.2f}"])
-        max_invoice = max([float(inv.totalAmount or 0) for inv in invs], default=0.0)
-        writer.writerow(["Highest Invoice Value (INR)", f"{max_invoice:.2f}"])
-        writer.writerow([])
-
-        # ---- Payment Information ----
-        writer.writerow(["Payment Information"])
-        writer.writerow(["Account Name", "Sri Lakshmi Offset Printers"])
-        writer.writerow(["Bank", "State Bank of India, Pamarru"])
-        writer.writerow(["Account Number", "38588014977"])
-        writer.writerow(["IFSC", "SBIN0002776"])
-        writer.writerow(["PhonePe/GPay", "9848992207"])
-        writer.writerow([])
-
-        # ---- Disclaimer ----
-        writer.writerow(["Disclaimer", "This is a system-generated statement. No signature required."])
-
-        # ---- Filename ----
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        safe_name = (query or "company").replace(" ", "_").replace("/", "_")
-        filename = f"{safe_name}_statement_{today_str}.csv"
-
-        return Response(
-            buf.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename={filename}'}
-        )
-    # 🔹 Build rows for HTML
-    inv_rows = []
-    for inv in invs:
-        cust = inv.customer
-        company_label = (cust.company or '').strip() if cust else '(No Company)'
-        inv_rows.append({
-            "invoice_no": inv.invoiceId,
-            "date": inv.createdAt.strftime('%Y-%m-%d'),
-            "company": company_label,
-            "phone": cust.phone if cust else '',
-            "total": float(inv.totalAmount or 0),
-        })
-
-    return render_template(
-        'statements_company.html',
-        query=query,
-        start_date=start_dt.date(),
-        end_date=end_dt.date(),
-        total_invoices=total_invoices,
-        total_amount=round(total_amount, 2),
-        inv_rows=inv_rows,
-        request=request,
-        suggestions=suggestions,
-    )
 
 @app.route('/api/statements', methods=['GET'])
 def api_statements_summary():
@@ -1866,6 +1557,305 @@ def reset_layout():
     return render_template("pre-preview-bill.html", **ctx)
 
 app.jinja_env.globals.update(zip=zip)
+
+
+
+
+# --- /statements route (customer statements with export options) ---
+@app.route('/statements', methods=['GET'])
+def statements():
+    """
+    Render customer statements for a date range or customer, with export (HTML, CSV, PDF).
+    Query params:
+      - scope: 'year'/'month'/'custom'
+      - year/month/start/end
+      - phone: filter by customer phone
+      - export: 'csv' or 'pdf' (default: html)
+    """
+    scope = (request.args.get('scope') or 'custom').lower()
+    phone = request.args.get('phone')
+    export = (request.args.get('export') or '').lower()
+    today = datetime.now().date()
+    if scope == 'year':
+        year = int(request.args.get('year') or today.year)
+        start_date = datetime(year, 1, 1).date()
+        end_date = datetime(year, 12, 31).date()
+    elif scope == 'month':
+        year = int(request.args.get('year') or today.year)
+        month = int(request.args.get('month') or today.month)
+        start_date = datetime(year, month, 1).date()
+        end_date = datetime(year, 12, 31).date() if month == 12 else (
+                datetime(year, month + 1, 1).date() - timedelta(days=1))
+    else:
+        start_date = _parse_date(request.args.get('start'))
+        end_date = _parse_date(request.args.get('end'))
+        # fallback: default to current month
+        if not (start_date and end_date):
+            start_date = today.replace(day=1)
+            end_date = today
+
+    start_dt = datetime.combine(start_date, datetime.min.time())
+    end_dt = datetime.combine(end_date, datetime.max.time())
+
+    # Query invoices within range, eager-load customer
+    q = (invoice.query
+         .options(joinedload(invoice.customer))
+         .join(customer, invoice.customerId == customer.id)
+         .filter(invoice.isDeleted == False,
+                 customer.isDeleted == False,
+                 invoice.createdAt >= start_dt,
+                 invoice.createdAt <= end_dt))
+    if phone:
+        q = q.filter(customer.phone == phone)
+    invs = q.order_by(invoice.createdAt.asc()).all()
+
+    # Compute totals and per-customer summary
+    total_invoices = len(invs)
+    total_amount = round(sum((inv.totalAmount or 0) for inv in invs), 2)
+    per_customer = defaultdict(lambda: {"count": 0, "amount": 0.0, "company": None, "phone": None})
+    for inv in invs:
+        cust = inv.customer
+        if cust:
+            key = cust.phone
+            per_customer[key]["count"] += 1
+            per_customer[key]["amount"] += (inv.totalAmount or 0)
+            per_customer[key]["company"] = cust.company
+            per_customer[key]["phone"] = cust.phone
+        else:
+            per_customer["Unknown"]["count"] += 1
+            per_customer["Unknown"]["amount"] += (inv.totalAmount or 0)
+
+    # Ensure per_customer is always defined as a dict (never Undefined)
+    if not per_customer:
+        per_customer = {}
+
+    # Export CSV
+    if export == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Invoice No", "Date", "Customer", "Company", "Phone", "Amount"])
+        for inv in invs:
+            cust = inv.customer
+            writer.writerow([
+                inv.invoiceId,
+                inv.createdAt.strftime('%Y-%m-%d'),
+                cust.name if cust else 'Unknown',
+                cust.company if cust else '',
+                cust.phone if cust else '',
+                f"{inv.totalAmount:,.2f}"
+            ])
+        csv_val = output.getvalue()
+        return Response(
+            csv_val,
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment;filename=statements_{start_date}_{end_date}.csv"}
+        )
+
+    # Export PDF (if PDF export is available; placeholder, as actual PDF code may differ)
+    if export == "pdf":
+        try:
+            from flask_weasyprint import render_pdf
+            # Render HTML first
+            html = render_template(
+                'statement.html',
+                start_date=start_date,
+                end_date=end_date,
+                total_invoices=total_invoices,
+                total_amount=total_amount,
+                phone=phone,
+                per_customer=per_customer,
+                invs=invs,
+                scope=scope,
+            )
+            return render_pdf(html, download_filename=f"statements_{start_date}_{end_date}.pdf")
+        except ImportError:
+            return "PDF export requires flask-weasyprint", 501
+
+    # Default: HTML view
+    return render_template(
+        'statement.html',
+        start_date=start_date,
+        end_date=end_date,
+        total_invoices=total_invoices,
+        total_amount=total_amount,
+        phone=phone,
+        per_customer=per_customer,
+        invs=invs,
+        scope=scope,
+    )
+
+@app.route('/statements_company', methods=['GET', 'POST'])
+def statements_company():
+    """
+    Generate HTML/CSV statements filtered by company name or phone number.
+    Enhancements:
+    - Unified date range parsing (with safe defaults)
+    - Uses joinedload for performance
+    - Adds graceful handling when no results or invalid input
+    - Consistent CSV formatting with per-company totals
+    - Improved suggestions list
+    """
+
+    # --- Query params ---
+    query = (request.args.get('query') or '').strip()
+    fmt = (request.args.get('format') or 'html').lower()
+    start = request.args.get('start')
+    end = request.args.get('end')
+
+    today = datetime.now(timezone.utc).date()
+    start_dt = datetime(today.year, 1, 1, tzinfo=timezone.utc)
+    end_dt = datetime.now(timezone.utc)
+
+    # --- Parse date range if provided ---
+    if start and end:
+        try:
+            start_dt = datetime.strptime(start, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(seconds=1)
+        except Exception:
+            flash("Invalid date format. Expected YYYY-MM-DD.", "warning")
+
+    # --- Suggestions for autocomplete ---
+    suggestions = []
+    try:
+        suggestions = [
+            {"company": c.company or "", "phone": c.phone}
+            for c in customer.query.filter(customer.isDeleted == False).all()
+            if (c.company or c.phone)
+        ]
+    except Exception as e:
+        print("[warn] Failed to load suggestions:", e)
+
+    invs = []
+    total_invoices = 0
+    total_amount = 0.0
+
+    # --- Query invoices if search provided ---
+    if query:
+        q = (
+            invoice.query
+            .options(joinedload(invoice.customer))
+            .join(customer, invoice.customerId == customer.id)
+            .filter(
+                invoice.isDeleted == False,
+                customer.isDeleted == False,
+                invoice.createdAt >= start_dt,
+                invoice.createdAt <= end_dt,
+                or_(
+                    func.lower(customer.company).like(f"%{query.lower()}%"),
+                    customer.phone == query
+                )
+            )
+        )
+
+        invs = q.order_by(invoice.createdAt.desc()).all()
+        total_invoices = len(invs)
+        total_amount = sum(float(inv.totalAmount or 0) for inv in invs)
+
+    # --- CSV Export ---
+    if fmt == 'csv' and query:
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+
+        # Header
+        writer.writerow(["Sri Lakshmi Offset Printers - Customer Statement"])
+        writer.writerow(["Generated On", datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+        writer.writerow(["Customer/Company", query])
+        writer.writerow(["Period", f"{start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}"])
+        writer.writerow([])
+
+        # Table (remove Company and Phone columns; they are shown in header)
+        writer.writerow(["Invoice No", "Date", "Total (INR)"])
+        for inv in invs:
+            writer.writerow([
+                inv.invoiceId,
+                inv.createdAt.strftime('%Y-%m-%d'),
+                f"{float(inv.totalAmount or 0):.2f}"
+            ])
+
+        # Summary
+        writer.writerow([])
+        writer.writerow(["Summary"])
+        writer.writerow(["Total Invoices", total_invoices])
+        writer.writerow(["Total Amount (INR)", f"{total_amount:.2f}"])
+        writer.writerow([])
+
+        # Payment Info (static for now)
+        writer.writerow(["Payment Information"])
+        writer.writerow(["Account Name", USER_PROFILE["bank"]["accountName"]])
+        writer.writerow(["Bank", f"{USER_PROFILE['bank']['bankName']}, {USER_PROFILE['bank']['branch']}"])
+        writer.writerow(["Account Number", USER_PROFILE["bank"]["accountNumber"]])
+        writer.writerow(["IFSC", USER_PROFILE["bank"]["ifsc"]])
+        writer.writerow(["PhonePe/GPay", USER_PROFILE["bank"]["PhonePe/GPay"]])
+        writer.writerow([])
+
+        writer.writerow(["Disclaimer", "This is a system-generated statement. No signature required."])
+
+        safe_name = (query or "company").replace(" ", "_").replace("/", "_")
+        filename = f"{safe_name}_statement_{datetime.now().strftime('%Y-%m-%d')}.csv"
+
+        return Response(
+            buf.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+
+    # --- PDF Export ---
+    if fmt == 'pdf' and query:
+        # Use print-friendly HTML template for print preview
+        return render_template(
+            'statements_company_print.html',
+            query=query,
+            start_date=start_dt.date(),
+            end_date=end_dt.date(),
+            total_invoices=total_invoices,
+            total_amount=round(total_amount, 2),
+            inv_rows=[
+                {
+                    "invoice_no": inv.invoiceId,
+                    "date": inv.createdAt.strftime('%Y-%m-%d'),
+                    "total": float(inv.totalAmount or 0),
+                }
+                for inv in invs
+            ],
+            suggestions=suggestions,
+            request=request,
+            customer_company=customer_company,
+            customer_phone=customer_phone,
+            company_wise=True
+        )
+
+    # --- Build rows for HTML template ---
+    inv_rows = []
+    for inv in invs:
+        inv_rows.append({
+            "invoice_no": inv.invoiceId,
+            "date": inv.createdAt.strftime('%Y-%m-%d'),
+            "total": float(inv.totalAmount or 0),
+        })
+
+    customer_company = ''
+    customer_phone = ''
+
+    if invs and invs[0].customer:
+        customer_company = invs[0].customer.company or ''
+        customer_phone = invs[0].customer.phone or ''
+
+    print(f"Customer Company : {customer_company}")
+    # --- Render HTML ---
+    return render_template(
+        'statements_company.html',
+        query=query,
+        start_date=start_dt.date(),
+        end_date=end_dt.date(),
+        total_invoices=total_invoices,
+        total_amount=round(total_amount, 2),
+        inv_rows=inv_rows,
+        suggestions=suggestions,
+        request=request,
+        customer_company=customer_company,
+        customer_phone=customer_phone,
+        company_wise=False
+    )
 
 if __name__ == '__main__':
     app.run(debug=True)
