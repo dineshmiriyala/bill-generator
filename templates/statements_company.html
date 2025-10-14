@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container py-4">
+<div id="stmts-container" class="container py-4">
   <h2 class="text-center fw-semibold mb-4">View Statements by Company</h2>
 
   {# Minimal, Apple-like info card for selected company, below header and above form #}
@@ -46,8 +46,9 @@
 </div>
 
 <style>
-  .container {
+  #stmts-container {
     margin-right: 400px;
+    padding-right: 12rem;
   }
 
   #infoPanel {
@@ -55,7 +56,8 @@
     padding: 2rem;
   }
 
-  table.table td, table.table th {
+  #stmts-container table.table td,
+  #stmts-container table.table th {
     font-size: 0.9rem;
     padding: 0.6rem;
   }

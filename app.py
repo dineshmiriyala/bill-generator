@@ -1879,6 +1879,7 @@ def statements():
             per_customer=per_customer,
             phone=phone,
             date_wise=True,
+            APP_INFO=APP_INFO,
         )
 
     # 🔸 Default: HTML View
