@@ -37,7 +37,7 @@
             <th class="fw-semibold" style="width:140px;">Invoice No</th>
             <th class="fw-semibold" style="width:130px;">Date</th>
             <th class="fw-semibold">Customer</th>
-            <th class="fw-semibold text-end" style="width:120px;">Total (₹)</th>
+            <th class="fw-semibold text-end" style="width:120px;">Total (INR)</th>
             <th class="fw-semibold text-center" style="width:110px;">Items</th>
             <th class="fw-semibold text-center" style="width:90px;">View</th>
           </tr>
@@ -51,7 +51,7 @@
               <div class="fw-semibold" style="color:#222;">{{ bill.customer_company or bill.company or '—' }}</div>
               {% if bill.customer_name %}<div class="small" style="color:#666;">{{ bill.customer_name }}</div>{% endif %}
             </td>
-            <td class="text-end fw-semibold" style="white-space: nowrap;">₹{{ bill.total }}</td>
+            <td class="text-end fw-semibold" style="white-space: nowrap;">{{ bill.total }}</td>
             <td class="text-center">
               <button type="button" class="btn btn-sm btn-items rounded-pill shadow-none" data-invoice="{{ bill.invoice_no }}" style="background: linear-gradient(135deg, #007aff, #0056d6); color: #fff; border:none; font-weight:600; padding: 0.25rem 1rem; font-size:0.9rem; user-select:none; transition: background 0.3s ease;">
                 View Items
@@ -69,8 +69,8 @@
                     <tr>
                       <th style="width:50%;">Item</th>
                       <th class="text-center" style="width:15%;">Qty</th>
-                      <th class="text-center" style="width:15%;">Rate</th>
-                      <th class="text-end" style="width:20%;">Amount</th>
+                      <th class="text-center" style="width:15%;">Rate (INR)</th>
+                      <th class="text-end" style="width:20%;">Amount (INR)</th>
                     </tr>
                   </thead>
                   <tbody id="items-body-{{ bill.invoice_no }}">
@@ -277,8 +277,8 @@ table.table tbody tr:hover {
         <tr>
           <td>${name}</td>
           <td class="text-center">${qty}</td>
-          <td class="text-center">₹${rate}</td>
-          <td class="text-end">₹${amount}</td>
+          <td class="text-center">${rate}</td>
+          <td class="text-end">${amount}</td>
         </tr>
       `;
     }

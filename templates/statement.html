@@ -65,7 +65,7 @@
           <div class="fw-semibold">Summary</div>
           <div class="text-muted small">
             Invoices: <span class="fw-semibold text-dark">{{ total_invoices or 0 }}</span><br>
-            Total Amount: <span class="fw-semibold text-dark">₹{{ '%.2f'|format(total_amount or 0) }}</span>
+            Total Amount: <span class="fw-semibold text-dark">INR: {{ '%.2f'|format(total_amount or 0) }}</span>
           </div>
           {% if start_date and end_date %}
           <div class="small mt-1">
@@ -134,7 +134,7 @@
                 <td>{{ r.date.strftime('%d %B %Y') if r.date is not string else r.date }}</td>
                 <td>{{ r.company }}</td>
                 <td>{{ r.phone }}</td>
-                <td class="text-end">₹{{ '%.2f'|format(r.total) }}</td>
+                <td class="text-end">INR: {{ '%.2f'|format(r.total) }}</td>
               </tr>
               {% endfor %}
             {% else %}
@@ -145,7 +145,7 @@
                 <td>{{ inv.createdAt.strftime('%d %B %Y') }}</td>
                 <td>{{ inv.customer.company if inv.customer and inv.customer.company else '(No Company)' }}</td>
                 <td>{{ inv.customer.phone if inv.customer else '' }}</td>
-                <td class="text-end">₹{{ '%.2f'|format(inv.totalAmount or 0) }}</td>
+                <td class="text-end">{{ '%.2f'|format(inv.totalAmount or 0) }}</td>
               </tr>
               {% endfor %}
             {% endif %}
