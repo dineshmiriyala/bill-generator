@@ -1678,7 +1678,7 @@ def statements():
         writer.writerow(["Period", f"{start_date.strftime('%d %B %Y')} to {end_date.strftime('%d %B %Y')}"])
         writer.writerow([])
 
-        writer.writerow(["Invoice No", "Date", "Company", "Phone", "Amount (₹)"])
+        writer.writerow(["Invoice No", "Date", "Company", "Phone", "Amount (INR)"])
         for inv in invs:
             cust = inv.customer
             writer.writerow([
@@ -1686,24 +1686,24 @@ def statements():
                 inv.createdAt.strftime('%d %B %Y'),
                 cust.company if cust else '',
                 cust.phone if cust else '',
-                f"₹{inv.totalAmount:,.2f}"
+                f"{inv.totalAmount:,.2f}"
             ])
 
         writer.writerow([])
         writer.writerow(["Summary"])
         writer.writerow(["Total Invoices", total_invoices])
-        writer.writerow(["Total Amount (₹)", f"₹{total_amount:,.2f}"])
+        writer.writerow(["Total Amount (INR)", f"{total_amount:,.2f}"])
         writer.writerow([])
 
         if per_customer:
             writer.writerow(["Per Customer Summary"])
-            writer.writerow(["Phone", "Company", "Invoice Count", "Total Amount (₹)"])
+            writer.writerow(["Phone", "Company", "Invoice Count", "Total Amount (INR)"])
             for key, val in per_customer.items():
                 writer.writerow([
                     val.get("phone", key),
                     val.get("company", ""),
                     val.get("count", 0),
-                    f"₹{val.get('amount', 0):,.2f}"
+                    f"{val.get('amount', 0):,.2f}"
                 ])
             writer.writerow([])
 
@@ -1735,7 +1735,7 @@ def statements():
         ws_inv.title = "Invoices"
 
         # Header row
-        headers = ["Invoice No", "Date", "Company", "Phone", "Amount (₹)"]
+        headers = ["Invoice No", "Date", "Company", "Phone", "Amount (INR)"]
         header_font = Font(bold=True)
         header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
         header_align = Alignment(horizontal="center", vertical="center")
@@ -1746,7 +1746,7 @@ def statements():
             cell.alignment = header_align
 
         # Data rows
-        currency_fmt = u'₹#,##0.00'
+        currency_fmt = u'INR #,##0.00'
         for row_num, inv in enumerate(invs, 2):
             cust = inv.customer
             ws_inv.cell(row=row_num, column=1, value=inv.invoiceId)
@@ -1790,7 +1790,7 @@ def statements():
         ws_sum.cell(row=row, column=1, value="Total Invoices")
         ws_sum.cell(row=row, column=2, value=total_invoices)
         row += 1
-        ws_sum.cell(row=row, column=1, value="Total Amount (₹)")
+        ws_sum.cell(row=row, column=1, value="Total Amount (INR)")
         amt_cell = ws_sum.cell(row=row, column=2, value=total_amount)
         amt_cell.number_format = currency_fmt
         row += 2
@@ -1802,7 +1802,7 @@ def statements():
             ws_sum.cell(row=row, column=1, value="Phone").font = bold
             ws_sum.cell(row=row, column=2, value="Company").font = bold
             ws_sum.cell(row=row, column=3, value="Invoice Count").font = bold
-            ws_sum.cell(row=row, column=4, value="Total Amount (₹)").font = bold
+            ws_sum.cell(row=row, column=4, value="Total Amount (INR)").font = bold
             row += 1
             for key, val in per_customer.items():
                 ws_sum.cell(row=row, column=1, value=val.get("phone", key))
@@ -2070,7 +2070,7 @@ def statements_company():
 
         # --- Summary Sheet ---
         bold = Font(bold=True)
-        currency_fmt = u'₹#,##0.00'
+        currency_fmt = u'INR #,##0.00'
         row = 1
         ws_sum.cell(row=row, column=1, value=f"{biz.get('name', 'Business')} - {statement_meta.get('header_title', 'Customer Statement')}").font = bold
         row += 1
@@ -2091,7 +2091,7 @@ def statements_company():
         ws_sum.cell(row=row, column=1, value="Total Invoices")
         ws_sum.cell(row=row, column=2, value=total_invoices)
         row += 1
-        ws_sum.cell(row=row, column=1, value="Total Amount (₹)")
+        ws_sum.cell(row=row, column=1, value="Total Amount (INR)")
         amt_cell = ws_sum.cell(row=row, column=2, value=round(total_amount, 2))
         amt_cell.number_format = currency_fmt
         row += 2
@@ -2125,7 +2125,7 @@ def statements_company():
             ws_sum.column_dimensions[col_letter].width = min(max_len + 2, 50)
 
         # --- Invoices Sheet ---
-        headers = ["Invoice No", "Date", "Total (₹)"]
+        headers = ["Invoice No", "Date", "Total (INR)"]
         header_font = Font(bold=True)
         header_fill = PatternFill(start_color="E8E8E8", end_color="E8E8E8", fill_type="solid")
         header_align = Alignment(horizontal="center", vertical="center")

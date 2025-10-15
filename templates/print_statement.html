@@ -17,7 +17,7 @@
   <!-- Summary -->
   <div class="rounded-4 bg-white border p-4 shadow-sm mb-4 text-center">
     <p class="fw-semibold text-dark mb-1">Total Invoices: {{ total_invoices }}</p>
-    <p class="fw-bold text-success mb-0" style="font-size: 1.4rem;">Total: ₹{{ '%.2f'|format(total_amount) }}</p>
+    <p class="fw-bold text-success mb-0" style="font-size: 1.4rem;">Total: INR: {{ '%.2f'|format(total_amount) }}</p>
   </div>
 {% else %}
   <!-- Header for Company-wise Statements -->
@@ -39,24 +39,24 @@
       </div>
       <div class="col-md-6 text-md-end text-muted">
         <p class="fw-semibold text-dark mb-1">Total Invoices: {{ total_invoices }}</p>
-        <p class="fw-bold text-success mb-0" style="font-size: 1.4rem;">Total: ₹{{ '%.2f'|format(total_amount) }}</p>
+        <p class="fw-bold text-success mb-0" style="font-size: 1.4rem;">Total: INR: {{ '%.2f'|format(total_amount) }}</p>
       </div>
     </div>
   </div>
 {% endif %}
 
   <!-- Table -->
-  <div class="table-responsive rounded-4 shadow-sm">
-    <table class="table table-bordered table-striped align-middle text-center mb-0">
-      <thead class="table-light border-0 align-middle">
-        <tr class="fw-semibold">
+  <div class="table-responsive mt-4">
+    <table class="table table-bordered table-striped align-middle">
+      <thead class="table-light">
+        <tr class="text-center">
           <th>Invoice No</th>
           <th>Date</th>
           {% if date_wise %}
           <th>Company</th>
           <th>Phone</th>
           {% endif %}
-          <th class="text-end">Total (₹)</th>
+          <th class="text-end">Total (INR)</th>
         </tr>
       </thead>
       <tbody>
@@ -68,18 +68,18 @@
           <td>{{ r.company or r.customer_company or '(No Company)' }}</td>
           <td>{{ r.phone or r.customer_phone or '(No Phone)' }}</td>
           {% endif %}
-          <td class="text-end fw-semibold">₹{{ '%.2f'|format(r.total) }}</td>
+          <td class="text-end">{{ '%.2f'|format(r.total) }}</td>
         </tr>
         {% endfor %}
       </tbody>
-      <tfoot class="table-light">
+      <tfoot>
         <tr>
           {% if date_wise %}
           <td colspan="4" class="text-end fw-semibold">Total</td>
           {% else %}
           <td colspan="2" class="text-end fw-semibold">Total</td>
           {% endif %}
-          <td class="text-end fw-semibold">₹{{ '%.2f'|format(total_amount) }}</td>
+          <td class="text-end fw-bold">{{ '%.2f'|format(total_amount) }}</td>
         </tr>
       </tfoot>
     </table>
@@ -117,13 +117,38 @@
 </script>
 {% endblock %}
 <style>
-  table.table td, table.table th {
-    padding: 0.65rem 0.75rem !important;
-    vertical-align: middle !important;
-    text-align: center;
+  /* Unified Bootstrap Table Styling */
+  table.table td,
+  table.table th {
+    font-size: 0.9rem;
+    padding: 0.6rem;
+    vertical-align: middle;
   }
-  table.table th.text-end,
-  table.table td.text-end {
-    text-align: right !important;
+
+  table.table thead th {
+    font-weight: 600;
+  }
+
+  table.table tbody tr:hover {
+    background-color: #f5f8ff;
+  }
+
+  .table-responsive {
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #dee2e6;
+  }
+
+  @media print {
+    .table {
+      border: 1px solid #000 !important;
+    }
+    .table th, .table td {
+      border: 1px solid #000 !important;
+      color: #000 !important;
+    }
+    .table tbody tr:hover {
+      background: #fff !important;
+    }
   }
 </style>

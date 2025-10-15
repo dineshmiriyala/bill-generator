@@ -62,7 +62,7 @@
       {% endif %}
       <div class="fw-medium text-muted small">
         Total Invoices: <strong class="text-dark">{{ total_invoices }}</strong><br>
-        Total Amount: <strong class="text-dark fs-6">₹{{ '%.2f'|format(total_amount) }}</strong>
+        Total Amount: <strong class="text-dark fs-6">INR: {{ '%.2f'|format(total_amount) }}</strong>
       </div>
     </div>
 
@@ -94,7 +94,7 @@
       <tr class="text-center">
         <th>Invoice No</th>
         <th>Date</th>
-        <th class="text-end">Total</th>
+        <th class="text-end">Total (INR)</th>
       </tr>
     </thead>
     <tbody>
@@ -102,7 +102,7 @@
       <tr>
         <td><a href="{{ url_for('view_bill_locked', invoicenumber=r.invoice_no) }}">{{ r.invoice_no }}</a></td>
         <td>{{ r.date | datetimeformat }}</td>
-        <td class="text-end">₹{{ '%.2f'|format(r.total) }}</td>
+        <td class="text-end">{{ '%.2f'|format(r.total) }}</td>
       </tr>
       {% endfor %}
     </tbody>
