@@ -49,5 +49,11 @@
   "meta": {
     "version": "3.1.2",
     "created_on": "2025-10-14T00:00:00Z"
+  },
+
+  "upi_info": {
+    "upi_id": "9848992207@upi",
+    "currency": "INR",
+    "upi_name": "Harinadha Babu Miriyala"
   }
 }

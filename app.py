@@ -26,6 +26,7 @@ import json
 from api import api_bp
 import json
 from dateutil import tz
+import requests
 
 with open(os.path.join(os.path.dirname(__file__), 'db', 'info.json'),'r', encoding='utf-8') as f:
     APP_INFO = json.load(f)
@@ -2221,6 +2222,57 @@ def statements_company():
         request=request,
         customer_company=customer_company,
         customer_phone=customer_phone,
+    )
+
+
+@app.route('/qr_code', methods=['GET', 'POST'])
+def qr_code():
+    return render_template('QR_code.html',
+                           upi_id = APP_INFO['upi_info']['upi_id'],
+                           upi_name = APP_INFO['upi_info']['upi_name'],
+                           qr_image = False)
+
+
+@app.route('/generate_qr', methods=['GET', 'POST'])
+def generate_qr():
+    if request.method == 'POST':
+        amount = request.form.get('amount')
+        upi_id = request.form.get('upi_id') or APP_INFO['business']['upi_id']
+        upi_name = request.form.get('upi_name') or APP_INFO['business']['upi_name']
+    else:
+        amount = request.args.get('amount')
+        upi_id = request.args.get('upi_id') or APP_INFO['business']['upi_id']
+        upi_name = request.args.get('upi_name') or APP_INFO['business']['upi_name']
+
+    company_name = APP_INFO['business']['name']
+
+    api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
+    params = {"upi_id": upi_id, "amount": amount, "company_name": company_name}
+
+    try:
+        resp = requests.get(api_url, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            qr_svg_base64 = data.get('qr_svg_base64')
+            upi_url = data.get('upi_url')
+        else:
+            qr_svg_base64 = None
+            upi_url = None
+    except Exception as e:
+        print(f"[ERROR] failed to fetch QR: {e}")
+        qr_svg_base64 = None
+        upi_url = None
+
+    return render_template(
+        'qr_display.html',
+        upi_id=upi_id,
+        qr_image=True,
+        amount=amount,
+        upi_name=upi_name,
+        qr_code=qr_svg_base64,
+        upi_url=upi_url,
+        business_name=APP_INFO['business']['name'],
+        amount_to_words=amount_to_words(amount)
     )
 
 if __name__ == '__main__':
