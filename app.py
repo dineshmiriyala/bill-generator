@@ -28,8 +28,9 @@ import json
 from dateutil import tz
 import requests
 
-with open(os.path.join(os.path.dirname(__file__), 'db', 'info.json'),'r', encoding='utf-8') as f:
+with open(os.path.join(os.path.dirname(__file__), 'db', 'info.json'), 'r', encoding='utf-8') as f:
     APP_INFO = json.load(f)
+
 
 def get_default_statement_start():
     """Return default statement start date from info.json"""
@@ -37,6 +38,7 @@ def get_default_statement_start():
     return datetime.strptime(
         APP_INFO['account_defaults']['start_date'], '%Y-%m-%dT%H:%M:%SZ'
     ).replace(tzinfo=tzinfo)
+
 
 def _format_customer_id(n: int) -> str:
     return f"ID-{n:06d}"
@@ -121,14 +123,16 @@ migrate = Migrate(app, db)
 from sqlalchemy import inspect
 from decimal import Decimal, ROUND_HALF_UP
 
+
 def rounding_to_nearest_zero(amount):
     """Rounding number to nearest zero"""
     try:
         d = Decimal(str(amount))
     except Exception:
         d = Decimal('0')
-    tens = (d / Decimal('10')).quantize(Decimal('1'), rounding = ROUND_HALF_UP)
+    tens = (d / Decimal('10')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
     return float(tens * Decimal('10'))
+
 
 def _ensure_db_initialized():
     """
@@ -202,11 +206,13 @@ def recover_customer(id):
     flash('Customer recovered successfully.', 'success')
     return redirect(url_for('recover_page'))
 
+
 @app.route('/more')
 def more():
     return render_template(
         'more.html'
     )
+
 
 @app.route('/analytics')
 def analytics():
@@ -692,7 +698,6 @@ def view_inventory():
     return render_template('view_inventory.html', inventory=inventory)
 
 
-
 @app.route('/api/statements', methods=['GET'])
 def api_statements_summary():
     """JSON summary for dashboards.
@@ -968,7 +973,7 @@ def start_bill():
 
     # After successful creation, flash and redirect to locked preview page
     session['persistent_notice'] = f"Invoice {new_invoice.invoiceId} created successfully!"
-    return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId, new_bill = 'True'))
+    return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId, new_bill='True'))
 
 
 @app.route('/view_customers', methods=['GET', 'POST'])
@@ -1018,7 +1023,9 @@ def view_bills():
     # ---- 3️⃣ Sorting ----
     sort_key = (request.args.get('sort') or 'date').lower()
     sort_dir = (request.args.get('dir') or 'desc').lower()
-    def order(col): return col.desc() if sort_dir == 'desc' else col.asc()
+
+    def order(col):
+        return col.desc() if sort_dir == 'desc' else col.asc()
 
     if sort_key == 'total':
         q = q.order_by(order(invoice.totalAmount))
@@ -1062,9 +1069,9 @@ def view_bills():
         bills = [
             b for b in bills
             if query in b['customer_name'].lower()
-            or query in b.get('phone', '')
-            or query in b['invoice_no'].lower()
-            or query in (b.get('customer_company') or '').lower()
+               or query in b.get('phone', '')
+               or query in b['invoice_no'].lower()
+               or query in (b.get('customer_company') or '').lower()
         ]
 
     # ---- 8️⃣ Render ----
@@ -1237,6 +1244,27 @@ def bill_preview(invoicenumber):
     config = layoutConfig().get_or_create()
     current_sizes = config.get_sizes()
 
+    upi_id = APP_INFO["upi_info"]["upi_id"]
+    company_name = APP_INFO["business"]["name"]
+    upi_name = APP_INFO["upi_info"]["upi_name"]
+
+    api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
+    params = {"upi_id": upi_id, "amount": current_invoice.totalAmount, "company_name": company_name}
+
+    try:
+        resp = requests.get(api_url, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            qr_svg_base64 = data.get('qr_svg_base64')
+            upi_url = data.get('upi_url')
+        else:
+            qr_svg_base64 = None
+            upi_url = None
+    except Exception as e:
+        print(f"[ERROR] failed to fetch QR: {e}")
+        qr_svg_base64 = None
+        upi_url = None
+
     return render_template(
         'bill_preview.html',
         invoice=current_invoice,
@@ -1245,7 +1273,12 @@ def bill_preview(invoicenumber):
         dcno=dcno,
         dc_numbers=dc_numbers,
         total_in_words=amount_to_words(current_invoice.totalAmount),
-        sizes=current_sizes
+        sizes=current_sizes,
+        qr_svg_base64=qr_svg_base64,
+        upi_id = upi_id,
+        upi_name = upi_name,
+        company_name = company_name,
+        total = current_invoice.totalAmount
     )
 
 
@@ -1289,7 +1322,7 @@ def edit_bill(invoicenumber):
         current_invoice.exclude_addr = request.form.get('exclude_addr') in ('on', 'true', '1')
         db.session.commit()
         # add alert - Not needed funcionally
-        return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill = 'true'))
+        return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill='true'))
 
     # Render the same template as create_bill.html but pre-filled
     return render_template(
@@ -1404,7 +1437,7 @@ def update_bill(invoicenumber):
     # 6) Redirect to locked preview after update
     session['persistent_notice'] = f"Old invoice {current_invoice.invoiceId} updated successfully!"
 
-    return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill = 'true'))
+    return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill='true'))
 
 
 @app.route('/bill_preview/latest')
@@ -1457,7 +1490,6 @@ def latest_bill_preview():
                            sizes=current_sizes)
 
 
-
 # --- Common builder for sample invoice context ---
 
 def _build_sample_invoice_context():
@@ -1467,7 +1499,8 @@ def _build_sample_invoice_context():
     if not recent_invoice:
         # Fallback if no invoice exists
         return {
-            "invoice": type("Invoice", (), {"invoiceId": "NO_DATA", "createdAt": datetime.utcnow(), "totalAmount": 0.0})(),
+            "invoice": type("Invoice", (),
+                            {"invoiceId": "NO_DATA", "createdAt": datetime.utcnow(), "totalAmount": 0.0})(),
             "customer": {},
             "items": [],
             "dcno": False,
@@ -1526,9 +1559,9 @@ def _build_sample_invoice_context():
         "persistent_notice": session.get("persistent_notice"),
     }
 
+
 # --- Unified Layout Handler ---
 def handle_layout(action=None, data=None):
-
     config = layoutConfig().get_or_create()
     updated = False
 
@@ -1568,20 +1601,21 @@ def test_pre_preview():
     ctx = handle_layout(action="view")
     return render_template("pre-preview-bill.html", **ctx)
 
+
 @app.route('/update-layout', methods=['POST'])
 def update_layout():
     data = request.get_json(force=True) if request.is_json else request.form
     ctx = handle_layout(action="update", data=data)
     return render_template("pre-preview-bill.html", **ctx)
 
+
 @app.route('/reset-layout', methods=['POST'])
 def reset_layout():
     ctx = handle_layout(action="reset")
     return render_template("pre-preview-bill.html", **ctx)
 
+
 app.jinja_env.globals.update(zip=zip)
-
-
 
 
 @app.route('/statements', methods=['GET'])
@@ -1611,7 +1645,7 @@ def statements():
         month = int(request.args.get('month') or today.month)
         start_date = datetime(year, month, 1).date()
         end_date = datetime(year, 12, 31).date() if month == 12 else (
-            datetime(year, month + 1, 1).date() - timedelta(days=1))
+                datetime(year, month + 1, 1).date() - timedelta(days=1))
     else:
         start_date = _parse_date(request.args.get('start'))
         end_date = _parse_date(request.args.get('end'))
@@ -1674,7 +1708,8 @@ def statements():
         bank = APP_INFO.get("bank", {})
         statement_meta = APP_INFO.get("statement", {})
 
-        writer.writerow([f"{biz.get('name', 'Business Name')} - {statement_meta.get('header_title', 'Statement Summary')}"])
+        writer.writerow(
+            [f"{biz.get('name', 'Business Name')} - {statement_meta.get('header_title', 'Statement Summary')}"])
         writer.writerow(["Generated On", datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
         writer.writerow(["Period", f"{start_date.strftime('%d %B %Y')} to {end_date.strftime('%d %B %Y')}"])
         writer.writerow([])
@@ -1778,7 +1813,8 @@ def statements():
         biz = APP_INFO.get("business", {})
         bank = APP_INFO.get("bank", {})
         statement_meta = APP_INFO.get("statement", {})
-        ws_sum.cell(row=row, column=1, value=f"{biz.get('name', 'Business Name')} - {statement_meta.get('header_title', 'Statement Summary')}").font = bold
+        ws_sum.cell(row=row, column=1,
+                    value=f"{biz.get('name', 'Business Name')} - {statement_meta.get('header_title', 'Statement Summary')}").font = bold
         row += 1
         ws_sum.cell(row=row, column=1, value="Generated On")
         ws_sum.cell(row=row, column=2, value=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -1898,6 +1934,7 @@ def statements():
         scope=scope,
     )
 
+
 @app.route('/statements_company', methods=['GET', 'POST'])
 def statements_company():
     """
@@ -1926,7 +1963,8 @@ def statements_company():
     if start and end:
         try:
             start_dt = datetime.strptime(start, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(seconds=1)
+            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(
+                seconds=1)
             # 🔹 Enforce lower limit from info.json
             min_allowed_start = get_default_statement_start()
             if start_dt < min_allowed_start:
@@ -2073,7 +2111,8 @@ def statements_company():
         bold = Font(bold=True)
         currency_fmt = u'INR #,##0.00'
         row = 1
-        ws_sum.cell(row=row, column=1, value=f"{biz.get('name', 'Business')} - {statement_meta.get('header_title', 'Customer Statement')}").font = bold
+        ws_sum.cell(row=row, column=1,
+                    value=f"{biz.get('name', 'Business')} - {statement_meta.get('header_title', 'Customer Statement')}").font = bold
         row += 1
         ws_sum.cell(row=row, column=1, value="Generated On")
         ws_sum.cell(row=row, column=2, value=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -2228,9 +2267,9 @@ def statements_company():
 @app.route('/qr_code', methods=['GET', 'POST'])
 def qr_code():
     return render_template('QR_code.html',
-                           upi_id = APP_INFO['upi_info']['upi_id'],
-                           upi_name = APP_INFO['upi_info']['upi_name'],
-                           qr_image = False)
+                           upi_id=APP_INFO['upi_info']['upi_id'],
+                           upi_name=APP_INFO['upi_info']['upi_name'],
+                           qr_image=False)
 
 
 @app.route('/generate_qr', methods=['GET', 'POST'])
@@ -2274,6 +2313,7 @@ def generate_qr():
         business_name=APP_INFO['business']['name'],
         amount_to_words=amount_to_words(amount)
     )
+
 
 if __name__ == '__main__':
     app.run(debug=True)
