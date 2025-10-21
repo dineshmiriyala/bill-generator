@@ -90,6 +90,7 @@
   <div class="offcanvas-body">
     <ul class="list-unstyled">
       <li><a class="text-white text-decoration-none d-block py-2" href="/view_bills">View Bills</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/qr_code">Generate UPI QR</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/select_customer">Create Bill</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/view_customers">View Customers</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/view_inventory">Inventory</a></li>
@@ -97,7 +98,7 @@
       <li><a class="text-white text-decoration-none d-block py-2" href="/statements_company">Company Statements</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/analytics">Business Analytics</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/recover">Data Recovery</a></li>
-      <li><a class="text-white text-decoration-none d-block py-2" href="/about_user?section=about">About Application</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/config">Account Settings</a></li>
     </ul>
   </div>
 </div>
@@ -161,9 +162,9 @@
     { name: "Data Recovery", url: "/recover" },
     { name: "Data Recovery", url: "/recover" },
     { name: "Home", url: "/" },
-    { name: "About Application", url: "/about_user?section=about" },
     { name: "Analytics", url: "/analytics" },
     { name: "Generate UPI QR", url: "/qr_code" },
+    { name: "Account Settings", url: "/config" },
   ];
 
   const searchInput = document.getElementById('globalSearch');

@@ -1,3 +1,5 @@
+import email
+
 from flask import Flask, render_template, render_template_string, request, Response, jsonify, redirect, url_for, flash
 from analytics import get_sales_trends, get_top_customers, get_customer_retention, get_day_wise_billing
 from datetime import datetime, timedelta, timezone
@@ -29,40 +31,8 @@ from dateutil import tz
 import requests
 
 
-
-
 def _format_customer_id(n: int) -> str:
     return f"ID-{n:06d}"
-
-
-# ---- Owner / Business profile (edit these to your real values) ----
-USER_PROFILE = {
-    "company": "Sri Lakshmi Offset Printers",
-    "name": "Sri Lakshmi Offset Printers",
-    "tagline": "Quality since 1973",
-    "address": "Pamarru, Krishna Dist - 521157",
-    "phone": "9848992207",
-    "email": "haripress@gmail.com",
-    "gst": "37AVEPM5991R3ZG",
-    "pan": None,
-    "businessType": "Composition",
-    "established": "1973",
-    "website": None,  # e.g., "https://example.com"
-    "billType": "Bill of Supply",
-    "isComposition": True,
-    "showRemarks": False,
-    "logo_path": "img/brand-wordmark.svg",  # under /static
-
-    "bank": {
-        "accountName": "Sri Lakshmi Offset Printers",
-        "bankName": "State Bank of India",
-        "branch": "Pamarru",
-        "accountNumber": "38588014977",
-        "ifsc": "SBIN0002776",
-        "PhonePe/GPay": "9848992207",
-    },
-}
-# --- top of app.py: imports & app/db config ---
 
 
 app = Flask(__name__)
@@ -174,24 +144,25 @@ def get_info_json_path():
     else:
         return basedir / "db" / "info.json"
 
+
 def ensure_info_json():
     """ensure db info.json exists or else creates it"""
     info_path = get_info_json_path()
     if not info_path.parent.exists():
-        info_path.parent.mkdir(parents=True, exist_ok = True)
+        info_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not info_path.exists():
         default_info = {
             "created_on":
-                datetime.utcnow().isoformat() + "Z",
+                datetime.utcnow().strftime("%d %B %Y"),
             "app_name": APP_NAME,
             'version': '1.0.0',
-            'last_updated': datetime.utcnow().isoformat() + "Z",
+            'last_updated': datetime.utcnow().strftime("%d %B %Y"),
             'data': {},
         }
         try:
             with open(info_path, "w", encoding='utf-8') as f:
-                json.dump(default_info, f, indent = 2)
+                json.dump(default_info, f, indent=2)
             print("[info] Created info.json file. with default info: {}".format(default_info))
         except Exception as e:
             print(f"[warn] could not create db info.json: {e}")
@@ -204,6 +175,7 @@ def loading_info():
     with open(info_path, 'r', encoding='utf-8') as f:
         json_loaded = json.load(f)
         return json_loaded
+
 
 def refresh_info_json():
     """Reload the info.json without restarting the app"""
@@ -218,6 +190,7 @@ def refresh_info_json():
 
 
 APP_INFO = loading_info()['data']
+
 
 def get_default_statement_start():
     """Return default statement start date from info.json"""
@@ -304,6 +277,27 @@ def analytics():
     )
 
 
+@app.route('/about_user', methods=['GET', 'POST'])
+def about_user():
+    customer_id = request.args.get('customer_id')
+    cust = customer.query.filter_by(id = customer_id, isDeleted = False).first_or_404()
+    data = {
+        'id': cust.id,
+        'name': cust.name,
+        'email': cust.email,
+        'company': cust.company,
+        'phone': cust.phone,
+        'gst': cust.gst,
+        'address': cust.address,
+        'businessType': cust.businessType
+    }
+    return render_template(
+        'about_user.html',
+        data=data,
+        app_info = APP_INFO
+
+    )
+
 @app.route('/edit_user/<int:customer_id>', methods=['GET', 'POST'])
 def edit_user(customer_id):
     cust = customer.query.filter_by(id=customer_id, isDeleted=False).first_or_404()
@@ -350,129 +344,6 @@ def recover_invoice(id):
     db.session.commit()
     flash('Invoice recovered successfully.', 'success')
     return redirect(url_for('recover_page'))
-
-
-@app.route("/about_user")
-def about_user():
-    """Owner/Business profile + optional customer snapshot, with better search.
-       Query:
-         - q: free text (company/name/phone)
-         - customer_id: exact id
-         - phone: substring (fallback)
-    """
-    prof = dict(USER_PROFILE)
-
-    # Invoices query (exclude soft-deleted if exists)
-    try:
-        q_inv = db.session.query(invoice).filter(invoice.isDeleted == False)
-    except Exception:
-        q_inv = db.session.query(invoice)
-
-    # Basic stats
-    prof["invoiceCount"] = q_inv.count()
-    prof["customerCount"] = db.session.query(func.count(customer.id)).scalar() or 0
-
-    # Activity (timestamps + invoice numbers)
-    first_inv = q_inv.order_by(invoice.createdAt.asc()).first()
-    last_inv = q_inv.order_by(invoice.createdAt.desc()).first()
-    prof["createdAt"] = getattr(first_inv, "createdAt", None)
-    prof["updatedAt"] = getattr(last_inv, "createdAt", None)
-    prof["firstInvoiceNo"] = getattr(first_inv, "invoiceId", None)
-    prof["lastInvoiceNo"] = getattr(last_inv, "invoiceId", None)
-
-    # Total billed
-    try:
-        total_billed = db.session.query(
-            func.coalesce(func.sum(invoice.totalAmount), 0)
-        ).filter(invoice.isDeleted == False).scalar() or 0
-    except Exception:
-        total_billed = db.session.query(
-            func.coalesce(func.sum(invoice.totalAmount), 0)
-        ).scalar() or 0
-    prof["totalBilled"] = f"INR: {float(total_billed):,.2f}"
-
-    # ---- Improved customer selection logic ----
-    cust = None
-    matches = []  # optional list of matches to render in template
-
-    # Priority 1: ?customer_id=...
-    cid = (request.args.get('customer_id') or '').strip()
-    if cid.isdigit():
-        cust = (customer.query
-                .filter(customer.isDeleted == False, customer.id == int(cid))
-                .first())
-
-    # Priority 2: ?q=...  (search company/name/phone)
-    if not cust:
-        qtext = (request.args.get('q') or '').strip()
-        if qtext:
-            like = f"%{qtext}%"
-            base = customer.query.filter(customer.isDeleted == False)
-            matches = (base.filter(
-                or_(customer.company.ilike(like),
-                    customer.name.ilike(like),
-                    customer.phone.ilike(like)))
-                       .order_by(customer.createdAt.desc(), customer.id.desc())
-                       .limit(25)
-                       .all())
-            if len(matches) == 1:
-                cust = matches[0]
-            elif len(matches) > 0:
-                # pick newest as the snapshot, but also return matches for UI
-                cust = matches[0]
-            else:
-                flash("No customer matched your search.", "warning")
-
-    # Priority 3: ?phone=... (legacy fallback)
-    if not cust:
-        cphone = (request.args.get('phone') or '').strip()
-        if cphone:
-            like = f"%{cphone}%"
-            cust = (customer.query
-                    .filter(customer.isDeleted == False, customer.phone.ilike(like))
-                    .order_by(customer.id.desc())
-                    .first())
-
-    # Priority 4: latest customer
-    if not cust:
-        cust = (customer.query
-                .filter(customer.isDeleted == False)
-                .order_by(customer.id.desc())
-                .first())
-
-    latest_cust = cust
-    cust_stats, cust_invs = {}, []
-    if latest_cust:
-        invs_q = (invoice.query
-                  .filter(invoice.customerId == latest_cust.id,
-                          getattr(invoice, 'isDeleted', False) == False)
-                  .order_by(invoice.createdAt.desc()))
-        cust_invs = invs_q.limit(10).all()
-
-        first_inv_c = invs_q.order_by(invoice.createdAt.asc()).first()
-        last_inv_c = cust_invs[0] if cust_invs else None
-        total_val = db.session.query(func.coalesce(func.sum(invoice.totalAmount), 0)).filter(
-            invoice.customerId == latest_cust.id,
-            getattr(invoice, 'isDeleted', False) == False
-        ).scalar() or 0
-        cust_stats = {
-            'invoiceCount': invs_q.count(),
-            'firstInvoiceDate': first_inv_c.createdAt.strftime('%d %b %Y') if getattr(first_inv_c, 'createdAt',
-                                                                                      None) else None,
-            'lastInvoiceDate': last_inv_c.createdAt.strftime('%d %b %Y') if getattr(last_inv_c, 'createdAt',
-                                                                                    None) else None,
-            'totalBilled': f"INR: {float(total_val):,.2f}",
-        }
-
-    return render_template(
-        'about_user.html',
-        user=prof,
-        latest_customer=latest_cust,
-        cust_stats=cust_stats,
-        cust_invs=cust_invs,
-        matches=matches,  # <-- pass matches (optional)
-        q=(request.args.get('q') or '').strip()
-    )
 
 
 # Custom Jinja filter to format dates as DD Month YYYY (e.g., '14 October 2025')
@@ -546,7 +417,7 @@ def config():
 
         # Update timestamp + save to file
         info_data['data'] = app_info
-        info_data['last_updated'] = datetime.utcnow().isoformat() + "Z"
+        info_data['last_updated'] = datetime.utcnow().strftime("%d %B %Y")
 
         try:
             with open(info_path, 'w', encoding='utf-8') as f:
@@ -560,9 +431,9 @@ def config():
         return redirect(url_for('config'))
 
     # --- Default (GET) view ---
-    return render_template('config_editor.html', app_info=app_info)
-
-
+    return render_template('config_editor.html', app_info=app_info,
+                           last_updated=info_data['last_updated'],
+                           created_on=info_data['created_on'])
 
 
 # customers page (temperory placeholder)
@@ -1390,10 +1261,10 @@ def bill_preview(invoicenumber):
         total_in_words=amount_to_words(current_invoice.totalAmount),
         sizes=current_sizes,
         qr_svg_base64=qr_svg_base64,
-        upi_id = upi_id,
-        upi_name = upi_name,
-        company_name = company_name,
-        total = current_invoice.totalAmount,
+        upi_id=upi_id,
+        upi_name=upi_name,
+        company_name=company_name,
+        total=current_invoice.totalAmount,
         app_info=APP_INFO,
     )
 
@@ -1558,9 +1429,12 @@ def update_bill(invoicenumber):
 
 @app.route('/bill_preview/latest')
 def latest_bill_preview():
-    current_invoice = (invoice.query.
-                       filter(invoice.isDeleted == False)
-                       .order_by(invoice.id.desc()).first())
+    current_invoice = (
+        invoice.query
+        .filter(invoice.isDeleted == False)
+        .order_by(invoice.id.desc())
+        .first()
+    )
     if not current_invoice:
         return "No invoice found"
 
@@ -1596,15 +1470,49 @@ def latest_bill_preview():
 
     dc_numbers = [i.dcNo or '' for i in items]
     dcno = any(bool((x or '').strip()) for x in dc_numbers)
-    return render_template('bill_preview.html',
-                           invoice=current_invoice,
-                           customer=current_customer,
-                           items=item_data,
-                           dcno=dcno,
-                           dc_numbers=dc_numbers,
-                           total_in_words=amount_to_words(current_invoice.totalAmount),
-                           sizes=current_sizes,
-                           app_info = APP_INFO)
+
+    # 🔹 UPI QR generation (same as main bill_preview route)
+    upi_id = APP_INFO["upi_info"]["upi_id"]
+    company_name = APP_INFO["business"]["name"]
+    upi_name = APP_INFO["upi_info"]["upi_name"]
+
+    api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
+    params = {
+        "upi_id": upi_id,
+        "amount": current_invoice.totalAmount,
+        "company_name": company_name
+    }
+
+    try:
+        resp = requests.get(api_url, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            qr_svg_base64 = data.get('qr_svg_base64')
+            upi_url = data.get('upi_url')
+        else:
+            qr_svg_base64 = None
+            upi_url = None
+    except Exception as e:
+        print(f"[ERROR] failed to fetch QR: {e}")
+        qr_svg_base64 = None
+        upi_url = None
+
+    return render_template(
+        'bill_preview.html',
+        invoice=current_invoice,
+        customer=current_customer,
+        items=item_data,
+        dcno=dcno,
+        dc_numbers=dc_numbers,
+        total_in_words=amount_to_words(current_invoice.totalAmount),
+        sizes=current_sizes,
+        app_info=APP_INFO,
+        qr_svg_base64=qr_svg_base64,
+        upi_id=upi_id,
+        upi_name=upi_name,
+        company_name=company_name,
+        total=current_invoice.totalAmount
+    )
 
 
 # --- Common builder for sample invoice context ---
@@ -1736,6 +1644,7 @@ def test_pre_preview():
         **ctx
     )
 
+
 @app.route('/pre-pre-preview', methods=['GET'])
 def test_pre_preview_():
     try:
@@ -1744,7 +1653,7 @@ def test_pre_preview_():
     except Exception:
         pass
     ctx = handle_layout(action="view")
-    return render_template("pre-preview-bill.html", app_info = APP_INFO, **ctx)
+    return render_template("pre-preview-bill.html", app_info=APP_INFO, **ctx)
 
 
 @app.route('/update-layout', methods=['POST'])
@@ -2186,7 +2095,7 @@ def statements_company():
             customer_phone = invs[0].customer.phone or ''
 
         # Header
-        writer.writerow(["Sri Lakshmi Offset Printers - Customer Statement"])
+        writer.writerow([f"{APP_INFO['business']['name']} - Customer Statement"])
         writer.writerow(["Generated On", datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
         writer.writerow(["Customer Name", customer_company])
         writer.writerow(["Customer Phone", customer_phone])
@@ -2211,11 +2120,11 @@ def statements_company():
 
         # Payment Info (static for now)
         writer.writerow(["Payment Information"])
-        writer.writerow(["Account Name", USER_PROFILE["bank"]["accountName"]])
-        writer.writerow(["Bank", f"{USER_PROFILE['bank']['bankName']}, {USER_PROFILE['bank']['branch']}"])
-        writer.writerow(["Account Number", USER_PROFILE["bank"]["accountNumber"]])
-        writer.writerow(["IFSC", USER_PROFILE["bank"]["ifsc"]])
-        writer.writerow(["PhonePe/GPay", USER_PROFILE["bank"]["PhonePe/GPay"]])
+        writer.writerow(["Account Name", APP_INFO["bank"]["account_name"]])
+        writer.writerow(["Bank", f"{APP_INFO['bank']['bank_name']}, {APP_INFO['bank']['branch']}"])
+        writer.writerow(["Account Number", APP_INFO["bank"]["account_number"]])
+        writer.writerow(["IFSC", APP_INFO["bank"]["ifsc"]])
+        writer.writerow(["PhonePe/GPay", APP_INFO["bank"]["bhim"]])
         writer.writerow([])
 
         writer.writerow(["Disclaimer", "This is a system-generated statement. No signature required."])

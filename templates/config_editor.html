@@ -4,6 +4,27 @@
   <form method="post" autocomplete="off">
     <div class="row justify-content-center">
       <div class="col-lg-8">
+        <!-- App Created On & Last Updated Apple-style Row -->
+        <div class="d-flex justify-content-center text-muted mb-4" style="font-size: 0.9rem; letter-spacing: 0.3px; font-weight: 400; gap: 2rem;">
+          <div>
+            <i class="bi bi-calendar-event me-1"></i>
+            Created On:
+            {% if created_on %}
+              {{ created_on | datetimeformat }}
+            {% else %}
+              N/A
+            {% endif %}
+          </div>
+          <div>
+            <i class="bi bi-clock me-1"></i>
+            Last Updated:
+            {% if last_updated %}
+              {{ last_updated | datetimeformat }}
+            {% else %}
+              N/A
+            {% endif %}
+          </div>
+        </div>
         <!-- Business Section -->
         <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
           <div class="card-body">
