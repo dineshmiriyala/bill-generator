@@ -1,12 +1,21 @@
 {% extends 'base.html' %}
 {% set hide_navbar = True %}
+{% block head %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+{% endblock %}
 {% block content %}
 <div class="container py-5" style="max-width: 850px;">
 
   {% if date_wise %}
   <!-- Header for Date-wise Statements -->
   <div class="text-center mb-5">
-    <h2 class="fw-bold text-dark mb-1">{{ APP_INFO.business.name }}</h2>
+    <div class="text-center mb-3">
+      <img src="{{ APP_INFO.business.logo_path }}"
+           alt="{{ APP_INFO.business.name }}"
+           style="height: 60px;"
+           onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', '<h2 class=&quot;fw-bold text-dark mb-1&quot;>{{ APP_INFO.business.name }}</h2>');">
+    </div>
     <p class="text-muted mb-1">{{ APP_INFO.business.address }}</p>
     <p class="text-secondary mb-0">{{ APP_INFO.business.phone }} | {{ APP_INFO.business.email }}</p>
     <hr class="my-4" style="opacity:0.15;">
@@ -17,12 +26,17 @@
   <!-- Summary -->
   <div class="rounded-4 bg-white border p-4 shadow-sm mb-4 text-center">
     <p class="fw-semibold text-dark mb-1">Total Invoices: {{ total_invoices }}</p>
-    <p class="fw-bold text-success mb-0" style="font-size: 1.4rem;">Total: INR: {{ '%.2f'|format(total_amount) }}</p>
+    <p class="fw-bold text-success mb-0" style="font-size: 1.4rem;">Total: &#8377 {{ '%.2f'|format(total_amount) }}</p>
   </div>
 {% else %}
   <!-- Header for Company-wise Statements -->
   <div class="text-center mb-5">
-    <h2 class="fw-bold text-dark mb-1">{{ APP_INFO.business.name }}</h2>
+    <div class="text-center mb-3">
+      <img src="{{ APP_INFO.business.logo_path }}"
+           alt="{{ APP_INFO.business.name }}"
+           style="height: 60px;"
+           onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', '<h2 class=&quot;fw-bold text-dark mb-1&quot;>{{ APP_INFO.business.name }}</h2>');">
+    </div>
     <p class="text-muted mb-1">{{ APP_INFO.business.address }}</p>
     <p class="text-secondary mb-0">{{ APP_INFO.business.phone }} | {{ APP_INFO.business.email }}</p>
     <hr class="my-4" style="opacity:0.15;">
@@ -39,7 +53,7 @@
       </div>
       <div class="col-md-6 text-md-end text-muted">
         <p class="fw-semibold text-dark mb-1">Total Invoices: {{ total_invoices }}</p>
-        <p class="fw-bold text-success mb-0" style="font-size: 1.4rem;">Total: INR: {{ '%.2f'|format(total_amount) }}</p>
+        <p class="fw-bold text-success mb-0" style="font-size: 1.4rem;">Total: &#8377 {{ '%.2f'|format(total_amount) }}</p>
       </div>
     </div>
   </div>

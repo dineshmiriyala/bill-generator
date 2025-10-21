@@ -28,16 +28,7 @@ import json
 from dateutil import tz
 import requests
 
-with open(os.path.join(os.path.dirname(__file__), 'db', 'info.json'), 'r', encoding='utf-8') as f:
-    APP_INFO = json.load(f)
 
-
-def get_default_statement_start():
-    """Return default statement start date from info.json"""
-    tzinfo = tz.gettz(APP_INFO['account_defaults']['timezone'])
-    return datetime.strptime(
-        APP_INFO['account_defaults']['start_date'], '%Y-%m-%dT%H:%M:%SZ'
-    ).replace(tzinfo=tzinfo)
 
 
 def _format_customer_id(n: int) -> str:
@@ -167,6 +158,59 @@ def _ensure_db_initialized():
         if not required.issubset(tables):
             print("[info] Creating/migrating schema via create_all()…")
             db.create_all()
+
+
+def get_info_json_path():
+    """Return correct info.json path"""
+    app_name = APP_NAME if 'APP_NAME' in globals() else 'SLO BILL'
+
+    basedir = Path(__file__).parent.resolve()
+
+    is_desktop = os.getenv("BG_DESKTOP") == "1"
+
+    if is_desktop:
+        data_dir = _desktop_data_dir(app_name)
+        return data_dir / "info.json"
+    else:
+        return basedir / "db" / "info.json"
+
+def ensure_info_json():
+    """ensure db info.json exists or else creates it"""
+    info_path = get_info_json_path()
+    if not info_path.parent.exists():
+        info_path.parent.mkdir(parents=True, exist_ok = True)
+
+    if not info_path.exists():
+        default_info = {
+            "created_on":
+                datetime.utcnow().isoformat() + "Z",
+            "app_name": APP_NAME,
+            'version': '1.0.0',
+            'last_updated': datetime.utcnow().isoformat() + "Z",
+            'data': {},
+        }
+        try:
+            with open(info_path, "w", encoding='utf-8') as f:
+                json.dump(default_info, f, indent = 2)
+            print("[info] Created info.json file. with default info: {}".format(default_info))
+        except Exception as e:
+            print(f"[warn] could not create db info.json: {e}")
+    return info_path
+
+info_path = ensure_info_json()
+
+print(info_path)
+
+with open(info_path, 'r', encoding='utf-8') as f:
+    json_loaded = json.load(f)
+    APP_INFO = json_loaded["data"]
+
+def get_default_statement_start():
+    """Return default statement start date from info.json"""
+    tzinfo = tz.gettz(APP_INFO['account_defaults']['timezone'])
+    return datetime.strptime(
+        APP_INFO['account_defaults']['start_date'], '%Y-%m-%dT%H:%M:%SZ'
+    ).replace(tzinfo=tzinfo)
 
 
 # ✅ Call this AFTER importing models, so metadata is populated
@@ -448,6 +492,62 @@ def _flash_test():
 def home():
     session['persistent_notice'] = None
     return render_template('home.html')
+
+
+@app.route('/config', methods=['GET', 'POST'])
+def config():
+    info_path = get_info_json_path()
+
+    # --- Load existing info.json ---
+    with open(info_path, 'r', encoding='utf-8') as f:
+        info_data = json.load(f)
+
+    app_info = info_data.get("data", {})
+
+    # --- Handle POST (Save Changes) ---
+    if request.method == 'POST':
+        section = request.form.get('section')
+        if not section:
+            flash('No section specified for update.', 'warning')
+            return redirect(url_for('config'))
+
+        # Get editable section data
+        updates = {}
+        for key, val in request.form.items():
+            if key not in ('section',):
+                updates[key] = val.strip()
+
+        # Apply updates to correct section
+        if section in app_info:
+            if isinstance(app_info[section], dict):
+                app_info[section].update(updates)
+            elif isinstance(app_info[section], list):
+                # handle lists (e.g., services textarea)
+                lines = updates.get('services', '').splitlines()
+                app_info[section] = [ln.strip() for ln in lines if ln.strip()]
+            else:
+                app_info[section] = updates
+        else:
+            app_info[section] = updates
+
+        # Update timestamp + save to file
+        info_data['data'] = app_info
+        info_data['last_updated'] = datetime.utcnow().isoformat() + "Z"
+
+        try:
+            with open(info_path, 'w', encoding='utf-8') as f:
+                json.dump(info_data, f, indent=2, ensure_ascii=False)
+            flash(f"{section.capitalize()} updated successfully!", "success")
+        except Exception as e:
+            flash(f"Error saving changes: {e}", "danger")
+
+        # Reload updated version
+        return redirect(url_for('config'))
+
+    # --- Default (GET) view ---
+    return render_template('config_editor.html', app_info=app_info)
+
+
 
 
 # customers page (temperory placeholder)
@@ -1278,7 +1378,8 @@ def bill_preview(invoicenumber):
         upi_id = upi_id,
         upi_name = upi_name,
         company_name = company_name,
-        total = current_invoice.totalAmount
+        total = current_invoice.totalAmount,
+        app_info=APP_INFO,
     )
 
 

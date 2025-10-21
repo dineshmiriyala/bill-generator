@@ -107,22 +107,24 @@
 
     <div class="container">
         <div class="masthead mb-2">
-          <h1 class="visually-hidden">Sri Lakshmi Offset Printers — ESTD: 1973</h1>
-          <img class="brand-logo" src="{{ url_for('static', filename='img/brand-wordmark.svg') }}" alt="Sri Lakshmi Offset Printers — ESTD: 1973">
-          <h2 class="bill-heading">Bill of Supply</h2>
+          <h1 class="visually-hidden">{{ app_info['business']['name'] }} — ESTD: {{ app_info['business']['estd'] }}</h1>
+          <img class="brand-logo"
+               src="/{{ app_info['business']['logo_path'] }}"
+               alt="{{ app_info['business']['name'] }} — ESTD: {{ app_info['business']['estd'] }}">
+          <h2 class="bill-heading">{{ app_info['bill_config']['heading'] }}</h2>
         </div>
 
         <div class="row mb-4 from-to-block">
             <div class="col-sm-6">
                 <h5>From:</h5>
                 <p class="fs-5">
-                    <strong class="fs-4">Sri Lakshmi Offset Printers</strong><br>
-                    PAMARRU, Krishna Dist - 521157<br>
-                    GST: 37AVEPM5991R3ZG<br>
-                    Cell: 9848992207<br>
-                    email: haripress@gmail.com<br>
+                    <strong class="fs-4">{{ app_info['business']['name'] }}</strong><br>
+                    {{ app_info['business']['address'] }}<br>
+                    GST: {{ app_info['business']['gstin'] }}<br>
+                    Cell: {{ app_info['business']['phone'] }}<br>
+                    email: {{ app_info['business']['email'] }}<br>
                 </p>
-                <small class="text-muted footer-note">Composition Taxable Person. Not eligible to collect Tax on supplies.</small>
+                <small class="text-muted footer-note">{{ app_info['bill_config']['footer'] }}</small>
             </div>
             <div class="col-sm-6 text-end">
                 <h5>To:</h5>
@@ -191,7 +193,7 @@
         </div>
 
         <div class="mt-3 text-end">
-          <small class="text-muted footer-note">Computer generated receipt – signature not required</small>
+          <small class="text-muted footer-note">{{ app_info['bill_config']['payment-footer'] }}</small>
         </div>
 
         <div class="row mt-5">
@@ -199,11 +201,11 @@
             <h6 class="mb-2">Payment Information</h6>
             <div class="d-flex justify-content-between align-items-start">
               <div class="flex-grow-1">
-                Account Name: <strong>Sri Lakshmi Offset Printers</strong><br>
-                Bank: <strong>State Bank of India, Pamarru</strong><br>
-                Account Number: <strong>38588014977</strong><br>
-                IFSC: <strong>SBIN0002776</strong><br>
-                PhonePe/GPay: <strong>9848992207</strong>
+                Account Name: <strong>{{ app_info['bank']['account_name'] }}</strong><br>
+                Bank: <strong>{{ app_info['bank']['bank_name'] }}, {{ app_info['bank']['branch'] }}</strong><br>
+                Account Number: <strong>{{ app_info['bank']['account_number'] }}</strong><br>
+                IFSC: <strong>{{ app_info['bank']['ifsc'] }}</strong><br>
+                PhonePe/GPay: <strong>{{ app_info['bank']['bhim'] }}</strong>
               </div>
               {% if qr_svg_base64 %}
               <div class="qr-wrapper text-end d-print-block" style="min-width:220px; margin-top:-1.5rem;">
@@ -224,13 +226,16 @@
         <hr class="my-3" style="border:0;border-top:2px solid #c8c8c8;" />
         <div class="services text-center mt-2">
           <small class="text-muted">
-            Services: Multi‑colour Offset Printing • Digital Printing • Brochures • Stickers • Invitations • Pamphlets • All Printing Works
+            Services:
+            {% for service in app_info['services'] %}
+              {{ service }}{% if not loop.last %} • {% endif %}
+            {% endfor %}
           </small>
         </div>
 
         <div class="text-center mt-3">
           <small class="text-muted thanks-note">
-            Thank you for your business! For inquiries or bulk orders, reach us at <strong>9848992207</strong> or <strong>haripress@gmail.com</strong>.
+            Thank you for your business! For inquiries or bulk orders, reach us at <strong>{{ app_info['business']['phone'] }}</strong> or <strong>{{ app_info['business']['email'] }}</strong>.
           </small>
         </div>
 
