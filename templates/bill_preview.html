@@ -208,13 +208,16 @@
                 PhonePe/GPay: <strong>{{ app_info['bank']['bhim'] }}</strong>
               </div>
               {% if qr_svg_base64 %}
-              <div class="qr-wrapper text-end d-print-block" style="min-width:220px; margin-top:-1.5rem;">
-                <div class="d-flex align-items-center justify-content-end">
-                  <img src="data:image/svg+xml;base64,{{ qr_svg_base64 }}" alt="UPI QR Code" style="width:110px;height:110px; margin-right:0.75rem;">
-                  <div style="font-size:0.8rem;color:#555; text-align:left;">
-                    <div><strong>{{ upi_name }}</strong></div>
-                    <div>UPI: {{ upi_id }}</div>
-                    <div>Total: <strong>&#8377; {{ total }}</strong></div>
+              <div class="qr-wrapper text-end d-print-block" style="flex-shrink:0; margin-top:-0.5rem;">
+                <div class="qr-box d-flex align-items-center justify-content-end" style="font-size: inherit;">
+                  <div class="qr-inner d-flex align-items-center justify-content-center" style="gap:0.75rem;">
+                    <img src="data:image/svg+xml;base64,{{ qr_svg_base64 }}" alt="UPI QR Code"
+                         style="width:calc(var(--payment-fs) * 7); height:calc(var(--payment-fs) * 7); border-radius:8px; background:#fff; box-shadow:0 1px 5px rgba(0,0,0,0.05);">
+                    <div class="text-muted text-start" style="font-size:calc(var(--payment-fs) * 0.8); line-height:1.2;">
+                      <div><strong>{{ upi_name }}</strong></div>
+                      <div>UPI: {{ upi_id }}</div>
+                      <div>Total: <strong>&#8377; {{ total }}</strong></div>
+                    </div>
                   </div>
                 </div>
               </div>

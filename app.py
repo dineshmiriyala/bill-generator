@@ -197,13 +197,27 @@ def ensure_info_json():
             print(f"[warn] could not create db info.json: {e}")
     return info_path
 
-info_path = ensure_info_json()
 
-print(info_path)
+def loading_info():
+    info_path = ensure_info_json()
 
-with open(info_path, 'r', encoding='utf-8') as f:
-    json_loaded = json.load(f)
-    APP_INFO = json_loaded["data"]
+    with open(info_path, 'r', encoding='utf-8') as f:
+        json_loaded = json.load(f)
+        return json_loaded
+
+def refresh_info_json():
+    """Reload the info.json without restarting the app"""
+    global APP_INFO
+    try:
+        new_info = loading_info()['data']
+        APP_INFO.clear()
+        APP_INFO.update(new_info)
+        flash(f"New values updated successfully everywhere!", "success")
+    except Exception as e:
+        print(f"[warn] Failed to load/refresh app_info: {e}")
+
+
+APP_INFO = loading_info()['data']
 
 def get_default_statement_start():
     """Return default statement start date from info.json"""
@@ -538,6 +552,7 @@ def config():
             with open(info_path, 'w', encoding='utf-8') as f:
                 json.dump(info_data, f, indent=2, ensure_ascii=False)
             flash(f"{section.capitalize()} updated successfully!", "success")
+            refresh_info_json()
         except Exception as e:
             flash(f"Error saving changes: {e}", "danger")
 
@@ -1588,7 +1603,8 @@ def latest_bill_preview():
                            dcno=dcno,
                            dc_numbers=dc_numbers,
                            total_in_words=amount_to_words(current_invoice.totalAmount),
-                           sizes=current_sizes)
+                           sizes=current_sizes,
+                           app_info = APP_INFO)
 
 
 # --- Common builder for sample invoice context ---
@@ -1692,15 +1708,43 @@ def handle_layout(action=None, data=None):
 
 
 # --- Routes ---
-@app.route('/test-pre-preview', methods=['GET'])
+@app.route('/test-pre-preview', methods=['GET', 'POST'])
 def test_pre_preview():
+    upi_id = APP_INFO["upi_info"]["upi_id"]
+    company_name = APP_INFO["business"]["name"]
+    upi_name = APP_INFO["upi_info"]["upi_name"]
+
+    api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
+    params = {"upi_id": upi_id, "amount": "", "company_name": company_name}  # amount empty for preview
+
+    try:
+        resp = requests.get(api_url, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            upi_qr = data.get('qr_svg_base64')
+        else:
+            upi_qr = None
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch QR for preview: {e}")
+        upi_qr = None
+
+    ctx = handle_layout(action="view")
+    return render_template(
+        'pre-preview-bill.html',
+        app_info=APP_INFO,
+        upi_qr=upi_qr,
+        **ctx
+    )
+
+@app.route('/pre-pre-preview', methods=['GET'])
+def test_pre_preview_():
     try:
         if session['persistent_notice']:
             pass  # keep notice, just no backup check
     except Exception:
         pass
     ctx = handle_layout(action="view")
-    return render_template("pre-preview-bill.html", **ctx)
+    return render_template("pre-preview-bill.html", app_info = APP_INFO, **ctx)
 
 
 @app.route('/update-layout', methods=['POST'])
