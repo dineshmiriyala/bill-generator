@@ -206,5 +206,53 @@
   });
 </script>
 
+<script>
+  // User Interaction Analytics Script
+  const pageStartTime = Date.now();
+
+  function sendAnalytics(activity, details = {}) {
+    const payload = {
+      timestamp: new Date().toISOString(),
+      current_page: window.location.pathname,
+      activity: activity,
+      click: details.click || null,
+      time_spent: (Date.now() - pageStartTime) / 1000,
+      previous_page: document.referrer || null,
+      user: "{{ session.get('username', 'guest') }}"
+    };
+    fetch('/analytics_event', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    }).catch(function(error) {
+      // Optionally log error, or silently ignore
+      // console.error('Analytics error:', error);
+    });
+  }
+
+  window.addEventListener('load', function() {
+    sendAnalytics('page_load');
+  });
+
+  document.addEventListener('click', function(event) {
+    const target = event.target;
+    if (target.tagName === 'BUTTON' || target.tagName === 'A') {
+      let clickInfo = null;
+      if (target.tagName === 'A') {
+        clickInfo = target.getAttribute('href') || target.textContent.trim() || null;
+      } else {
+        clickInfo = target.textContent.trim() || null;
+      }
+      sendAnalytics('click', { click: clickInfo });
+    }
+  });
+
+  window.addEventListener('beforeunload', function() {
+    sendAnalytics('page_exit');
+  });
+</script>
+
 </body>
 </html>
