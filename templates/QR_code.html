@@ -25,7 +25,10 @@
 
                 <label class="form-label small text-muted mb-1">UPI ID</label>
                 <div class="input-group">
-                    <input type="text" id="upiInput" name="upi_id" class="form-control shadow-sm" value="{{ upi_id }}" readonly>
+                    <input type="text" id="upiInput" name="upi_id" class="form-control shadow-sm"
+                           value="{{ upi_id }}" readonly
+                           pattern="^[A-Za-z0-9.\-_]{2,}@([A-Za-z]{2,}|[A-Za-z]{2,}\.[A-Za-z]{2,})$"
+                           title="Enter a valid UPI ID, e.g. username@upi or user.name@bankname">
                     <button type="button" id="editUpiBtn" class="btn btn-outline-secondary shadow-sm">Edit</button>
                 </div>
                 <div class="form-text">

@@ -7,7 +7,6 @@ from logging import exception
 from pathlib import Path
 import structlog
 
-LOG_FILE = "user_activity_log.json"
 basedir = Path(__file__).parent.resolve()
 
 def _desktop_data_dir(app_name: str) -> Path:

@@ -417,7 +417,7 @@ def edit_user(customer_id):
     }
 
     user_activity_log(edit_user.__name__, activity="edit_user",
-                      details={'new_customer_details': cust_log}, user='default',
+                      details=cust_log, user='default',
                       txn_id=get_txn_id())
     try:
         db.session.commit()
@@ -759,7 +759,7 @@ def add_inventory():
             'unitPrice': unit_price,
         }
         user_activity_log(add_inventory.__name__, activity="add_inventory",
-                          details={'new_item': new_item_log}, user='default',
+                          details=new_item_log, user='default',
                           txn_id=get_txn_id())
         return render_template('add_inventory.html', success=True)
 
@@ -1114,7 +1114,7 @@ def start_bill():
     }
 
     user_activity_log(start_bill.__name__, activity="new_invoice",
-                      details={'data': log_details}, user='default',
+                      details=log_details, user='default',
                       txn_id=get_txn_id())
 
     # add alerts - Not needed, persistent one is in place
@@ -1549,7 +1549,7 @@ def edit_bill(invoicenumber):
         }
 
         user_activity_log(edit_bill.__name__, activity="edit_bill",
-                          details={'edit_details': log_details}, user='default',
+                          details=log_details, user='default',
                           txn_id=get_txn_id())
 
         return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill='true'))
@@ -1571,7 +1571,7 @@ def edit_bill(invoicenumber):
     }
 
     user_activity_log(edit_bill.__name__, activity="edit_bill",
-                      details={'view_edit_details': view_log}, user='default',
+                      details=view_log, user='default',
                       txn_id=get_txn_id())
 
     # Render the same template as create_bill.html but pre-filled
@@ -1604,6 +1604,9 @@ def delete_bill(invoicenumber):
     inv.isDeleted = True
     inv.deletedAt = datetime.now(timezone.utc)
     db.session.commit()
+    user_activity_log(delete_bill.__name__, activity="delete_bill",
+                      details={'deleted_bill_id': invoicenumber}, user='default',
+                      txn_id=get_txn_id())
     # add alert
     flash('Bill has been deleted.', 'danger')
 
@@ -2617,6 +2620,16 @@ def generate_qr():
         print(f"[ERROR] failed to fetch QR: {e}")
         qr_svg_base64 = None
         upi_url = None
+
+    qr_details = {
+        'upi_id': upi_id,
+        'company_name': company_name,
+        'amount': amount
+    }
+
+    user_activity_log(generate_qr.__name__, activity="qr_generation",
+                      details=qr_details, user='default',
+                      txn_id=get_txn_id())
 
     return render_template(
         'qr_display.html',
