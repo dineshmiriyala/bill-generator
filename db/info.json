@@ -72,6 +72,11 @@
       "heading": "Bill of Supply",
       "footer": "Composition Taxable Person. Not eligible to collect Tax on supplies.",
       "payment-footer": "Computer generated receipt - Signature not requried"
+    },
+    "supabase": {
+      "url": "https://xpqwbwezdicftxryvgvr.supabase.co",
+      "key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwcXdid2V6ZGljZnR4cnl2Z3ZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEzNjIyMjQsImV4cCI6MjA3NjkzODIyNH0.yau0uFhjBk1_aWI7dqYrxYDAWP8OycuncBz9RBlzeTI",
+      "last_uploaded": ""
     }
   }
 }

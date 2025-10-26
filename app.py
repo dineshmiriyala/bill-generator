@@ -85,6 +85,8 @@ migrate = Migrate(app, db)
 from sqlalchemy import inspect
 from decimal import Decimal, ROUND_HALF_UP
 
+from db.db_events import *
+
 
 def rounding_to_nearest_zero(amount):
     """Rounding number to nearest zero"""
@@ -146,21 +148,6 @@ def get_info_json_path():
         return basedir / "db" / "info.json"
 
 
-def get_info_log_id():
-    """Return correct info.json path"""
-    app_name = APP_NAME if 'APP_NAME' in globals() else 'SLO BILL'
-
-    basedir = Path(__file__).parent.resolve()
-
-    is_desktop = os.getenv("BG_DESKTOP") == "1"
-
-    if is_desktop:
-        data_dir = _desktop_data_dir(app_name)
-        return data_dir / "txn_id.json"
-    else:
-        return basedir / "db" / "txn_id.json"
-
-
 def ensure_info_json():
     """ensure db info.json exists or else creates it"""
     info_path = get_info_json_path()
@@ -185,40 +172,6 @@ def ensure_info_json():
     return info_path
 
 
-def ensure_log_id_json():
-    """ensure db info.json exists or else creates it"""
-    log_path = get_info_log_id()
-    if not log_path.parent.exists():
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if not log_path.exists():
-        default_info = {
-            "txn_id": "0x0"
-        }
-        try:
-            with open(log_path, "w", encoding='utf-8') as f:
-                json.dump(default_info, f, indent=2)
-        except Exception as e:
-            print(f"[warn] could not create db info.json: {e}")
-    return log_path
-
-
-def loading_log_id():
-    log_path = ensure_log_id_json()
-
-    with open(log_path, "r", encoding='utf-8') as f:
-        txn_id = json.load(f)["txn_id"]
-        return txn_id
-
-
-def update_txn_id(txn_id):
-    log_path = ensure_log_id_json()
-
-    data = {"txn_id": txn_id}
-    with open(log_path, "w", encoding='utf-8') as f:
-        json.dump(data, f, indent=2)
-
-
 def loading_info():
     info_path = ensure_info_json()
 
@@ -240,19 +193,6 @@ def refresh_info_json():
 
 APP_INFO = loading_info()['data']
 
-
-def get_txn_id():
-    try:
-        current = loading_log_id()
-    except Exception as e:
-        current = '0x0'
-        update_txn_id(current)
-        return current
-    current = int(current, 16)
-    next_txn_id = hex(current + 1)
-
-    update_txn_id(next_txn_id)
-    return next_txn_id
 
 
 def get_default_statement_start():
@@ -406,19 +346,6 @@ def edit_user(customer_id):
     cust.businessType = businessType
     cust.company = company
 
-    cust_log = {
-        'name': cust.name,
-        'phone': cust.phone,
-        'address': cust.address,
-        'gst': cust.gst,
-        'email': cust.email,
-        'businessType': cust.businessType,
-        'company': cust.company
-    }
-
-    user_activity_log(edit_user.__name__, activity="edit_user",
-                      details=cust_log, user='default',
-                      txn_id=get_txn_id())
     try:
         db.session.commit()
         flash('Customer updated successfully!', 'success')
@@ -436,9 +363,6 @@ def recover_invoice(id):
     inv.isDeleted = False
     db.session.commit()
     flash('Invoice recovered successfully.', 'success')
-    user_activity_log(recover_invoice.__name__, activity="recover_invoice",
-                      details={'recovered_invoice_id': id}, user='default',
-                      txn_id=get_txn_id())
     return redirect(url_for('recover_page'))
 
 
@@ -619,20 +543,6 @@ def add_customers():
         db.session.commit()
         # add alert
         flash('New Customer Created successfully.', 'success')
-        c_log = {
-            'id': c.id,
-            'name': c.name,
-            'company': c.company,
-            'phone': c.phone,
-            'email': c.email,
-            'gst': c.gst,
-            'address': c.address,
-            'businessType': c.businessType,
-        }
-
-        user_activity_log(add_customers.__name__, activity="new_customer",
-                          details={'new_customer_details': c_log}, user='default',
-                          txn_id=get_txn_id())
 
         return redirect(url_for('about_user', customer_id=c.id))
 
@@ -677,9 +587,6 @@ def delete_customer(cid):
                 inv.isDeleted = True
                 inv.deletedAt = datetime.now(timezone.utc)
         db.session.commit()
-        user_activity_log(delete_customer.__name__, activity="delete_customer",
-                          details={'id': cid}, user='default',
-                          txn_id=get_txn_id())
         # add alert,
         flash('Customer and related invoices deleted successfully.', 'danger')
         return redirect(url_for('view_customers'))
@@ -697,9 +604,6 @@ def delete_customer(cid):
     if hasattr(c, 'isDeleted'):
         c.isDeleted = True
         db.session.commit()
-        user_activity_log(delete_customer.__name__, activity="delete_customer",
-                          details={'id': cid}, user='default',
-                          txn_id=get_txn_id())
         flash('Customer deleted.', 'danger')
     else:
         flash('Delete not available in this build.', 'warning')
@@ -752,15 +656,6 @@ def add_inventory():
         db.session.commit()
         # add alert
         flash('Item added successfully.', 'success')
-        new_item_log = {
-            'name': name,
-            'quantity': qty,
-            'taxPercentage': tax_pct,
-            'unitPrice': unit_price,
-        }
-        user_activity_log(add_inventory.__name__, activity="add_inventory",
-                          details=new_item_log, user='default',
-                          txn_id=get_txn_id())
         return render_template('add_inventory.html', success=True)
 
     return render_template('add_inventory.html')
@@ -1041,7 +936,7 @@ def start_bill():
     )
 
     db.session.add(new_invoice)
-    db.session.commit()
+    db.session.flush()
     # Add Alert - Not needed
 
     # Generate invoice Id + pdf path
@@ -1051,7 +946,7 @@ def start_bill():
 
     new_invoice.invoiceId = inv_name
     new_invoice.pdfPath = pdf_path
-    db.session.commit()
+    db.session.flush()
     # add alerts - not needed as persistant on in place
 
     # Add line items
@@ -1062,7 +957,7 @@ def start_bill():
         else:
             new_item = item(name=desc, unitPrice=rate, quantity=0, taxPercentage=0)
             db.session.add(new_item)
-            db.session.commit()
+            db.session.flush()
             # add alert - not needed as persistent one in place
             item_id = new_item.id
 
@@ -1076,46 +971,7 @@ def start_bill():
             line_total=line_total,
             dcNo=(dc_val if dc_val else None)
         ))
-
     db.session.commit()
-    log_details = {
-        "invoice": {
-            "invoice_id": new_invoice.invoiceId,
-            "invoice_db_id": new_invoice.id,
-            "customer_id": selected_customer.id,
-            "customer_name": selected_customer.name,
-            "created_at": new_invoice.createdAt.isoformat(),
-            "total_amount": round(total, 2),
-            "pdf_path": new_invoice.pdfPath,
-            "exclude_flags": {
-                "phone": exclude_phone,
-                "gst": exclude_gst,
-                "address": exclude_addr
-            }
-        },
-        "items": [
-            {
-                "description": desc,
-                "quantity": qty,
-                "rate": rate,
-                "line_total": line_total,
-                "dc_number": dc_val or None,
-                "is_new_item": matched_item is None,
-                "item_id": item_id
-            }
-            for desc, qty, rate, line_total, dc_val in item_rows
-        ],
-        "summary": {
-            "items_count": len(item_rows),
-            "new_items_created": len([1 for desc, qty, rate, line_total, dc_val in item_rows
-                                      if not item.query.filter_by(name=desc).first()]),
-            "invoice_url": url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId, _external=True)
-        }
-    }
-
-    user_activity_log(start_bill.__name__, activity="new_invoice",
-                      details=log_details, user='default',
-                      txn_id=get_txn_id())
 
     # add alerts - Not needed, persistent one is in place
 
@@ -1436,13 +1292,12 @@ def bill_preview(invoicenumber):
 
 @app.route('/edit-bill/<invoicenumber>', methods=['GET', 'POST'])
 def edit_bill(invoicenumber):
-    # ATTENTION: logging fixes required
-
+    # fetch invoice and related data
     current_invoice = invoice.query.filter_by(invoiceId=invoicenumber).first_or_404()
     current_customer = customer.query.get(current_invoice.customerId)
     line_items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
 
-    # Build lists for template display
+    # Build lists for template
     descriptions, quantities, rates, dc_numbers = [], [], [], []
     line_totals = []
     total = 0.0
@@ -1467,112 +1322,15 @@ def edit_bill(invoicenumber):
     exclude_gst = current_invoice.exclude_gst
     exclude_addr = current_invoice.exclude_addr
 
-    # 🧠 Handle POST (edit submission)
+    # If POST: update invoice and redirect to view_bill_locked
     if request.method == 'POST':
-        # --- Capture old state ---
-        old_items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
-        old_state = {
-            li.id: {
-                "description": item.query.get(li.itemId).name if item.query.get(li.itemId) else None,
-                "quantity": li.quantity,
-                "rate": li.rate,
-                "line_total": li.line_total,
-                "dc_number": li.dcNo
-            }
-            for li in old_items
-        }
-
-        # --- Apply metadata updates ---
+        # Update customer-level metadata before saving invoice
         current_invoice.exclude_phone = request.form.get('exclude_phone') in ('on', 'true', '1')
         current_invoice.exclude_gst = request.form.get('exclude_gst') in ('on', 'true', '1')
         current_invoice.exclude_addr = request.form.get('exclude_addr') in ('on', 'true', '1')
         db.session.commit()
-
-        # --- Capture new state ---
-        new_items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
-        new_state = {
-            li.id: {
-                "description": item.query.get(li.itemId).name if item.query.get(li.itemId) else None,
-                "quantity": li.quantity,
-                "rate": li.rate,
-                "line_total": li.line_total,
-                "dc_number": li.dcNo
-            }
-            for li in new_items
-        }
-
-        # --- Detect differences ---
-        added_items, removed_items, modified_items = [], [], []
-        old_ids, new_ids = set(old_state.keys()), set(new_state.keys())
-        added_ids, removed_ids = new_ids - old_ids, old_ids - new_ids
-
-        for i in added_ids:
-            added_items.append(new_state[i])
-        for i in removed_ids:
-            removed_items.append(old_state[i])
-
-        for i in (old_ids & new_ids):
-            before, after = old_state[i], new_state[i]
-            diffs = {k: {"old": before[k], "new": after[k]} for k in before if before[k] != after[k]}
-            if diffs:
-                modified_items.append({
-                    "item_id": i,
-                    "changes": diffs
-                })
-
-        # --- Prepare log details ---
-        log_details = {
-            "invoice": {
-                "invoice_id": current_invoice.invoiceId,
-                "invoice_db_id": current_invoice.id,
-                "customer_id": current_customer.id,
-                "customer_name": current_customer.name,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            },
-            "metadata_changes": {
-                "exclude_phone": current_invoice.exclude_phone,
-                "exclude_gst": current_invoice.exclude_gst,
-                "exclude_addr": current_invoice.exclude_addr
-            },
-            "line_item_changes": {
-                "added_items": added_items,
-                "removed_items": removed_items,
-                "modified_items": modified_items
-            },
-            "summary": {
-                "added_count": len(added_items),
-                "removed_count": len(removed_items),
-                "modified_count": len(modified_items),
-                "invoice_url": url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, _external=True),
-                "edit_mode": True
-            }
-        }
-
-        user_activity_log(edit_bill.__name__, activity="edit_bill",
-                          details=log_details, user='default',
-                          txn_id=get_txn_id())
-
-        return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill='true'))
-
-    # 🧾 Handle GET (view/edit page open)
-    view_log = {
-        "invoice": {
-            "invoice_id": current_invoice.invoiceId,
-            "invoice_db_id": current_invoice.id,
-            "customer_id": current_customer.id,
-            "customer_name": current_customer.name
-        },
-        "summary": {
-            "items_count": len(line_items),
-            "invoice_total": round(total, 2),
-            "page": "edit_bill_page_load",
-            "url": url_for('edit_bill', invoicenumber=current_invoice.invoiceId, _external=True)
-        }
-    }
-
-    user_activity_log(edit_bill.__name__, activity="edit_bill",
-                      details=view_log, user='default',
-                      txn_id=get_txn_id())
+        # add alert - Not needed funcionally
+        return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill = 'true'))
 
     # Render the same template as create_bill.html but pre-filled
     return render_template(
@@ -1588,7 +1346,7 @@ def edit_bill(invoicenumber):
         total=round(total, 2),
         grand_total=round(total, 2),
         invoice_no=current_invoice.invoiceId,
-        edit_mode=True,
+        edit_mode=True,  # flag to distinguish editing vs new bill
         prev_invoice_no=prev_invoice_no,
         prev_created_at=prev_created_at,
         exclude_phone=exclude_phone,
@@ -1598,15 +1356,13 @@ def edit_bill(invoicenumber):
     )
 
 
+
 @app.route('/delete-bill/<invoicenumber>', methods=['POST'])
 def delete_bill(invoicenumber):
     inv = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
     inv.isDeleted = True
     inv.deletedAt = datetime.now(timezone.utc)
     db.session.commit()
-    user_activity_log(delete_bill.__name__, activity="delete_bill",
-                      details={'deleted_bill_id': invoicenumber}, user='default',
-                      txn_id=get_txn_id())
     # add alert
     flash('Bill has been deleted.', 'danger')
 
@@ -2627,10 +2383,6 @@ def generate_qr():
         'amount': amount
     }
 
-    user_activity_log(generate_qr.__name__, activity="qr_generation",
-                      details=qr_details, user='default',
-                      txn_id=get_txn_id())
-
     return render_template(
         'qr_display.html',
         upi_id=upi_id,
@@ -2642,6 +2394,48 @@ def generate_qr():
         business_name=APP_INFO['business']['name'],
         amount_to_words=amount_to_words(amount)
     )
+
+
+def load_supabase_config():
+    try:
+        url = APP_INFO['supabase']['url']
+        key = APP_INFO['supabase']['key']
+        # last_updated = APP_INFO['supabase']['last_updated']
+        return url, key  # , last_updated
+    except Exception as e:
+        print(f"Could not load supabase config: {e}")
+        return None, None, None
+
+
+@app.route('/supabase', methods=['GET', 'POST'])
+def supabase_upload():
+    url, key = load_supabase_config()
+
+    if not url or not key:
+        flash(f"Supabase credentials missing, cloud saving not possible", "warning")
+        return redirect(url_for('supabase_upload', upload=False))
+
+    # TEST HARD CODE, EDITS REQUIRED
+    folder = os.path.join("logs", "26-10-2025", "analytics")
+    if not os.path.isdir(folder):
+        flash("Analytics Folder doesn't exist", "warning")
+        return redirect(url_for('supabase_upload', upload=False))
+
+    uploaded = 0
+    failed = 0
+
+    import glob
+    for json_file in glob.glob(os.path.join(folder, "*.json")):
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            upload_analytics_json_to_supabase(data, url, key)
+            # Transform records to match Supabase schema
+            return render_template("supabase_upload.html", upload=True)
+        except Exception as e:
+            print(f"[ERROR] failed to load supabase config: {e}")
+            return redirect(url_for('supabase_upload', upload=False))
 
 
 if __name__ == '__main__':
