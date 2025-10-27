@@ -30,6 +30,7 @@ import json
 from dateutil import tz
 import requests
 from analytics_tracking import *
+from supabase_upload import *
 
 
 def _format_customer_id(n: int) -> str:
@@ -42,7 +43,7 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret')
 app.register_blueprint(api_bp)
 
 
-def _desktop_data_dir(app_name: str) -> Path:
+def _desktop_data_dir(app_name):
     if os.name == "nt":
         return Path(os.getenv("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / app_name
     elif sys.platform == "darwin":
@@ -192,7 +193,6 @@ def refresh_info_json():
 
 
 APP_INFO = loading_info()['data']
-
 
 
 def get_default_statement_start():
@@ -1330,7 +1330,7 @@ def edit_bill(invoicenumber):
         current_invoice.exclude_addr = request.form.get('exclude_addr') in ('on', 'true', '1')
         db.session.commit()
         # add alert - Not needed funcionally
-        return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill = 'true'))
+        return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill='true'))
 
     # Render the same template as create_bill.html but pre-filled
     return render_template(
@@ -1354,7 +1354,6 @@ def edit_bill(invoicenumber):
         exclude_addr=exclude_addr,
         line_totals=line_totals,
     )
-
 
 
 @app.route('/delete-bill/<invoicenumber>', methods=['POST'])
@@ -2400,42 +2399,21 @@ def load_supabase_config():
     try:
         url = APP_INFO['supabase']['url']
         key = APP_INFO['supabase']['key']
-        # last_updated = APP_INFO['supabase']['last_updated']
-        return url, key  # , last_updated
+        last_updated = APP_INFO['supabase']['last_uploaded']
+        return url, key, last_updated
     except Exception as e:
         print(f"Could not load supabase config: {e}")
         return None, None, None
 
 
-@app.route('/supabase', methods=['GET', 'POST'])
+@app.route('/supabase_upload', methods=['GET', 'POST'])
 def supabase_upload():
-    url, key = load_supabase_config()
-
-    if not url or not key:
-        flash(f"Supabase credentials missing, cloud saving not possible", "warning")
-        return redirect(url_for('supabase_upload', upload=False))
-
-    # TEST HARD CODE, EDITS REQUIRED
-    folder = os.path.join("logs", "26-10-2025", "analytics")
-    if not os.path.isdir(folder):
-        flash("Analytics Folder doesn't exist", "warning")
-        return redirect(url_for('supabase_upload', upload=False))
-
-    uploaded = 0
-    failed = 0
-
-    import glob
-    for json_file in glob.glob(os.path.join(folder, "*.json")):
-        try:
-            with open(json_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            upload_analytics_json_to_supabase(data, url, key)
-            # Transform records to match Supabase schema
-            return render_template("supabase_upload.html", upload=True)
-        except Exception as e:
-            print(f"[ERROR] failed to load supabase config: {e}")
-            return redirect(url_for('supabase_upload', upload=False))
+    url, key, last_updated = load_supabase_config()
+    data = upload_to_supabase(url, key)
+    return render_template(
+        'test.html',
+        data=data,
+    )
 
 
 if __name__ == '__main__':

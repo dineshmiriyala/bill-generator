@@ -23,37 +23,53 @@ def get_sync_folder() -> Path:
     """Return correct sync staging folder path depending on environment."""
     is_desktop = os.getenv("BG_DESKTOP") == "1"
     if is_desktop:
-        folder = _desktop_data_dir(APP_NAME) / "logs" / "sync_staging"
+        folder = _desktop_data_dir(APP_NAME) / "logs"
     else:
-        folder = Path("logs") / "sync_staging"
+        folder = Path("logs")
 
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
 # ---------------- LOGGING HELPERS ----------------
 def stage_sync(table, action, data):
-    """Save change as JSON to logs/sync_staging/ for later Supabase sync."""
+    """Append daily activity logs like analytics tracking."""
     if table not in SYNCED_TABLES:
         return  # skip non-core tables
 
-    folder = get_sync_folder()
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    filename = f"{table}_{action}_{timestamp}.json"
+    folder = get_sync_folder()  / "activity"
+    folder.mkdir(parents=True, exist_ok=True)
+
+    today_str = datetime.now().strftime("%Y_%m_%d")
+    filename = f"activity_{today_str}.json"
     filepath = folder / filename
 
-    payload = {
+    entry = {
+        "timestamp": datetime.now().isoformat(),
         "table": table,
         "action": action,
-        "timestamp": datetime.now().isoformat(),
         "data": data
     }
 
     try:
+        if filepath.exists():
+            with open(filepath, "r", encoding="utf-8") as f:
+                try:
+                    existing = json.load(f)
+                    if not isinstance(existing, list):
+                        existing = []
+                except json.JSONDecodeError:
+                    existing = []
+        else:
+            existing = []
+
+        existing.append(entry)
+
         with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2, ensure_ascii=False)
-        print(f"[staged ✅] {table} {action} → {filename}")
+            json.dump(existing, f, indent=2, ensure_ascii=False)
+
+        print(f"[append ✅] Logged {table} {action} in {filename}")
     except Exception as e:
-        print(f"[staging ⚠️] Failed to log {table} {action}: {e}")
+        print(f"[append ⚠️] Failed to log {table} {action}: {e}")
 
 def obj_to_dict(obj):
     """Convert SQLAlchemy ORM object to JSON-safe dict."""

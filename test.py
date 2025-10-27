@@ -1,8 +1,6 @@
 import os, json, requests
 import datetime
 
-key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwcXdid2V6ZGljZnR4cnl2Z3ZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEzNjIyMjQsImV4cCI6MjA3NjkzODIyNH0.yau0uFhjBk1_aWI7dqYrxYDAWP8OycuncBz9RBlzeTI'
-url = 'https://xpqwbwezdicftxryvgvr.supabase.co'
 
 test = {
     'id': '200',
