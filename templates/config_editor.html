@@ -145,6 +145,24 @@
           </div>
         </div>
 
+                <!-- Supabase Info Section -->
+        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h4 class="fw-semibold mb-3 text-primary">Cloud Settings</h4>
+              <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#supabasemodal" style="min-width: 70px;">Edit</button>
+            </div>
+            <dl class="row mb-0">
+              <dt class="col-sm-4">URL</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['supabase']['url'] }}</dd>
+              <dt class="col-sm-4">API Key</dt>
+              <dd class="col-sm-8 text-muted">************</dd>
+              <dt class="col-sm-4">Last Uploaded to Cloud</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['supabase']['last_uploaded'] }}</dd>
+            </dl>
+          </div>
+        </div>
+
         <!-- Modals -->
         <!-- Business Modal -->
         <div class="modal fade" id="businessModal" tabindex="-1" aria-labelledby="businessModalLabel" aria-hidden="true">
@@ -322,6 +340,53 @@
                       <div class="mb-3">
                         <label class="form-label">UPI Name</label>
                         <input type="text" name="upi_name" class="form-control" value="{{ app_info['upi_info']['upi_name'] }}">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Supabase Modal -->
+        <div class="modal fade" id="supabasemodal" tabindex="-1" aria-labelledby="upiModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 1rem;">
+              <form method="post" autocomplete="off" action="{{ url_for('config') }}">
+                <input type="hidden" name="section" value="Cloud Settings">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title fw-semibold" id="supabasemodellabel">Edit Cloud Auth</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <dl>
+                        <dt>URL</dt>
+                        <dd class="text-muted">{{ app_info['supabase']['url'] }}</dd>
+                        <dt>Key</dt>
+                        <dd class="text-muted">************</dd>
+                        <dt>Last Uploaded</dt>
+                        <dd class="text-muted">{{ app_info['supabase']['last_uploaded'] }}</dd>
+                      </dl>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label class="form-label">URL</label>
+                        <input type="text" name="url" class="form-control" value="{{ app_info['supabase']['url'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">API Key</label>
+                        <input type="password" name="key" class="form-control" value="{{ app_info['supabase']['key'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Last Uploaded</label>
+                        <input type="text" name="last_uploaded" class="form-control" value="{{ app_info['supabase']['last_uploaded'] }}" readonly>
                       </div>
                     </div>
                   </div>

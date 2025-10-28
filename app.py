@@ -1,7 +1,10 @@
 import email
 
-from flask import Flask, render_template, render_template_string, request, Response, jsonify, redirect, url_for, flash
-from analytics import get_sales_trends, get_top_customers, get_customer_retention, get_day_wise_billing
+from flask import (Flask, render_template,
+                   render_template_string, request, Response,
+                   jsonify, redirect, url_for, flash)
+from analytics import (get_sales_trends, get_top_customers,
+                       get_customer_retention, get_day_wise_billing)
 from datetime import datetime, timedelta, timezone
 from flask_migrate import Migrate
 from db.models import *
@@ -396,7 +399,15 @@ def _flash_test():
 @app.route('/')
 def home():
     session['persistent_notice'] = None
-    return render_template('home.html', last_uploaded = APP_INFO['supabase']['last_uploaded'])
+    last_uploaded = APP_INFO['supabase']['last_uploaded']
+    last_up = datetime.strptime(last_uploaded, '%d %B %Y').date()
+
+    today = datetime.now().date()
+
+    if (today - last_up) >= timedelta(days=7):
+        print('It has been 7 or more days ago')
+        supabase_upload()
+    return render_template('home.html', last_uploaded = last_uploaded)
 
 
 @app.route('/config', methods=['GET', 'POST'])
