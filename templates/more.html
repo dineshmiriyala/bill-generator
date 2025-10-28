@@ -2,150 +2,149 @@
 
 {% block content %}
 <div class="menu-container">
-  <!-- Main Menu -->
-  <div id="mainMenu" class="menu-list active">
-    <button class="back-btn-main" onclick="history.back()">←Go Back/Home</button>
-    <button class="menu-item" data-target="statementsMenu">Statements & Reports</button>
-    <button class="menu-item" data-target="billMenu">Billing & Invoicing</button>
-    <button class="menu-item" data-target="customerMenu">Customers</button>
-    <button class="menu-item" data-target="inventoryMenu">Inventory</button>
-    <button class="menu-item" data-target="accountMenu">Account & Insights</button>
+  <div id="mainMenu" class="menu-grid active">
+    <button class="card-btn" data-target="statementsMenu">📊 Statements & Reports</button>
+    <button class="card-btn" data-target="billMenu">🧾 Billing & Invoicing</button>
+    <button class="card-btn" data-target="customerMenu">👤 Customers</button>
+    <button class="card-btn" data-target="inventoryMenu">📦 Inventory</button>
+    <button class="card-btn" data-target="accountMenu">⚙️ Account & Insights</button>
+    <button class="card-btn" onclick="history.back()">⬅️ Go Back</button>
   </div>
 
   <!-- Billing Submenu -->
-  <div id="billMenu" class="submenu">
+  <div id="billMenu" class="submenu" style="display:none;">
     <button class="back-btn">← Back</button>
-    <a href="/select_customer">Create Invoice</a>
-    <a href="/view_bills">View Invoices</a>
-    <a href="/test-pre-preview">Invoice Layout Editor</a>
-    <a href="/qr_code">Generate UPI QR</a>
+    <a href="/select_customer" class="card-link">Create Invoice</a>
+    <a href="/view_bills" class="card-link">View Invoices</a>
+    <a href="/test-pre-preview" class="card-link">Invoice Layout Editor</a>
+    <a href="/qr_code" class="card-link">Generate UPI QR</a>
   </div>
 
   <!-- Customer Submenu -->
-  <div id="customerMenu" class="submenu">
+  <div id="customerMenu" class="submenu" style="display:none;">
     <button class="back-btn">← Back</button>
-    <a href="/create_customers">Add Customer</a>
-    <a href="/view_customers">Customer List</a>
+    <a href="/create_customers" class="card-link">Add Customer</a>
+    <a href="/view_customers" class="card-link">Customer List</a>
   </div>
 
   <!-- Inventory Submenu -->
-  <div id="inventoryMenu" class="submenu">
+  <div id="inventoryMenu" class="submenu" style="display:none;">
     <button class="back-btn">← Back</button>
-    <a href="/view_inventory">Inventory List</a>
-    <a href="/add_inventory">Add Item</a>
+    <a href="/view_inventory" class="card-link">Inventory List</a>
+    <a href="/add_inventory" class="card-link">Add Item</a>
   </div>
 
   <!-- Statements Submenu -->
-  <div id="statementsMenu" class="submenu">
+  <div id="statementsMenu" class="submenu" style="display:none;">
     <button class="back-btn">← Back</button>
-    <a href="/statements_company">Company Statements</a>
-    <a href="/statements">Date-wise Statements</a>
+    <a href="/statements_company" class="card-link">Company Statements</a>
+    <a href="/statements" class="card-link">Date-wise Statements</a>
   </div>
 
   <!-- Account Submenu -->
-  <div id="accountMenu" class="submenu">
+  <div id="accountMenu" class="submenu" style="display:none;">
     <button class="back-btn">← Back</button>
-    <a href="/recover">Data Recovery</a>
-    <a href="/analytics">Business Analytics</a>
-    <a href="/config">Account Settings</a>
+    <a href="/recover" class="card-link">Data Recovery</a>
+    <a href="/analytics" class="card-link">Business Analytics</a>
+    <a href="/config" class="card-link">Account Settings</a>
   </div>
 </div>
 
 <style>
-  .menu-container {
-    position: relative;
-    width: 340px;
-    margin: 2rem auto;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    overflow: hidden;
-    min-height: 80vh;
-  }
-  .menu-list, .submenu {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    transition: transform 0.3s ease;
-  }
-  .menu-list {
-    transform: translateX(0);
-  }
-  .menu-list.hidden {
-    transform: translateX(-100%);
-  }
-  .submenu {
-    transform: translateX(100%);
-  }
-  .submenu.active {
-    transform: translateX(0);
-  }
-  .menu-item, .back-btn, .submenu a {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    padding: 0.75rem 1rem;
-    font-size: 1rem;
-    background: #212529;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    text-decoration: none;
-    transition: background 0.2s;
-    cursor: pointer;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .menu-item:hover, .back-btn:hover, .submenu a:hover {
-    background: #343a40;
-  }
-  .back-btn-main {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    padding: 0.75rem 1rem;
-    font-size: 1rem;
-    background: #0056b3; /* distinct blue color */
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    text-decoration: none;
-    transition: background 0.2s;
-    cursor: pointer;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .back-btn-main:hover {
-    background: #003f7f; /* darker on hover */
-  }
-
-  .back-btn {
-    background: #0056b3; /* same as main back button */
-    color: #fff;
-  }
-  .back-btn:hover {
-    background: #003f7f; /* same darker hover as main back button */
-  }
+.menu-container {
+  width: 100%;
+  max-width: 850px;
+  margin: 10rem auto;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  text-align: center;
+  background: linear-gradient(145deg, #f8f8f8, #eaeaea);
+  border-radius: 18px;
+  padding: 2rem;
+  color: #333333;
+}
+/* body {
+  background: #333333;
+  color: #333333;
+} */
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.2rem;
+  justify-items: center;
+}
+.card-btn {
+  width: 100%;
+  padding: 1.4rem 1rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,0.2);
+  color: #fff;
+  cursor: pointer;
+  background: #262626;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.2);
+  transition: all 0.3s ease;
+}
+.card-btn:hover {
+  background: #222;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+.card-link {
+  display: block;
+  width: 100%;
+  padding: 1rem;
+  margin-bottom: 0.8rem;
+  border-radius: 12px;
+  text-decoration: none;
+  font-size: 1.1rem;
+  font-weight: 500;
+  background: #262626;
+  color: #fff;
+  border: 1px solid rgba(0,0,0,0.2);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.2);
+  transition: all 0.25s ease;
+}
+.card-link:hover {
+  background: #222;
+  transform: translateY(-2px);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+.back-btn {
+  background: transparent;
+  color: #000;
+  border: none;
+  font-weight: 500;
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+.back-btn:hover { color: #555; }
 </style>
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.menu-item').forEach(btn => {
+    const mainMenu = document.getElementById('mainMenu');
+    const submenus = document.querySelectorAll('.submenu');
+
+    document.querySelectorAll('.card-btn[data-target]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const target = document.getElementById(btn.dataset.target);
-        document.getElementById('mainMenu').classList.add('hidden');
-        target.classList.add('active');
+        const targetId = btn.dataset.target;
+        const targetMenu = document.getElementById(targetId);
+        if (targetMenu) {
+          mainMenu.style.display = 'none';
+          submenus.forEach(sm => sm.style.display = 'none');
+          targetMenu.style.display = 'block';
+        }
       });
     });
 
     document.querySelectorAll('.back-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        btn.parentElement.classList.remove('active');
-        document.getElementById('mainMenu').classList.remove('hidden');
+        btn.parentElement.style.display = 'none';
+        mainMenu.style.display = 'grid';
       });
     });
   });

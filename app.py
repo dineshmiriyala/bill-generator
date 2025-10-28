@@ -396,7 +396,7 @@ def _flash_test():
 @app.route('/')
 def home():
     session['persistent_notice'] = None
-    return render_template('home.html')
+    return render_template('home.html', last_uploaded = APP_INFO['supabase']['last_uploaded'])
 
 
 @app.route('/config', methods=['GET', 'POST'])
