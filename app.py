@@ -1,95 +1,92 @@
-import email
-
-from flask import (Flask, render_template,
-                   render_template_string, request, Response,
-                   jsonify, redirect, url_for, flash)
-from analytics import (get_sales_trends, get_top_customers,
-                       get_customer_retention, get_day_wise_billing)
-from datetime import datetime, timedelta, timezone
-from flask_migrate import Migrate
-from db.models import *
-from sqlalchemy.orm import joinedload
-import os
-import csv, io
-from urllib.parse import urlparse
-from collections import defaultdict
-import uuid
-from sqlalchemy import func, or_
-from sqlalchemy import inspect
-from flask import session
-import os
-from pathlib import Path
-import os, sys, shutil
-from pathlib import Path
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from migration import migrate_db
-from flask import send_file
+import atexit
+import csv
 import io
 import json
-from api import api_bp
-import json
-from dateutil import tz
+import os
+import shutil
+import sys
+import uuid
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
+from urllib.parse import urlparse
+
 import requests
-from analytics_tracking import *
-from supabase_upload import *
+from dateutil import tz, parser
+from flask import (
+    Flask,
+    Response,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    render_template_string,
+    request,
+    send_file,
+    session,
+    url_for,
+)
+from flask_migrate import Migrate
+from sqlalchemy import func, inspect, or_
+from sqlalchemy.orm import joinedload
+
+from analytics import (
+    get_customer_retention,
+    get_day_wise_billing,
+    get_sales_trends,
+    get_top_customers,
+)
+from analytics_tracking import log_user_event
+from api import api_bp
+from db import db_events  # noqa: F401
+from db.models import db, customer, invoice, invoiceItem, item, layoutConfig
+from migration import migrate_db
+from supabase_upload import SupabaseUploadError, upload_full_database, upload_to_supabase
+
+APP_NAME = "SLO BILL"
+BG_DESKTOP_ENV = "BG_DESKTOP"
+DEFAULT_SECRET_KEY = "super-secret"
+DATABASE_FILENAME = "app.db"
+INFO_FILENAME = "info.json"
+REQUIRED_DB_TABLES = {"customer", "invoice", "invoice_item", "item"}
+BACKUP_DIRNAME = "backups"
+BACKUP_RETENTION = 10
+BACKUP_MAX_AGE_DAYS = 7
 
 
-def _format_customer_id(n: int) -> str:
-    return f"ID-{n:06d}"
+def _desktop_data_dir(app_name: str) -> Path:
+    if os.name == "nt":
+        return Path(os.getenv("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / app_name
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / app_name
+    return Path.home() / ".local" / "share" / app_name
+
+
+BASE_DIR = Path(__file__).resolve().parent
+IS_DESKTOP = os.getenv(BG_DESKTOP_ENV) == "1"
+DATA_DIR = _desktop_data_dir(APP_NAME) if IS_DESKTOP else BASE_DIR / "db"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / DATABASE_FILENAME
+SEED_DB_PATH = BASE_DIR / "db" / DATABASE_FILENAME
+INFO_PATH = DATA_DIR / INFO_FILENAME
 
 
 app = Flask(__name__)
-basedir = Path(__file__).parent.resolve()
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret')
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", DEFAULT_SECRET_KEY)
+app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH.as_posix()}"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.register_blueprint(api_bp)
 
-
-def _desktop_data_dir(app_name):
-    if os.name == "nt":
-        return Path(os.getenv("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / app_name
-    elif sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / app_name
-    else:
-        return Path.home() / ".local" / "share" / app_name
-
-
-# Determine DB path before calling migrate_db
-if os.getenv("BG_DESKTOP") == "1":
-    db_file = _desktop_data_dir("SLO BILL") / "app.db"
-else:
-    db_file = basedir / "db" / "app.db"
-
-migrate_db(db_file.as_posix())  # <- Pass resolved DB path
-
-APP_NAME = "SLO BILL"
-is_desktop = os.getenv("BG_DESKTOP") == "1"
-
-if is_desktop:
-    data_dir = _desktop_data_dir(APP_NAME)
-    data_dir.mkdir(parents=True, exist_ok=True)
-    db_file = data_dir / "app.db"
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file.as_posix()}"
-else:
-    db_file = basedir / "db" / "app.db"
-    db_file.parent.mkdir(parents=True, exist_ok=True)
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file.as_posix()}"
-
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# ✅ Reuse the ONE db from your models module
-from db.models import db, customer, invoice, invoiceItem, item  # import your models & shared db
+migrate_db(DB_PATH.as_posix())
 
 # Attach to this Flask app
 db.init_app(app)
 migrate = Migrate(app, db)
 
-# add at top with other imports
-from sqlalchemy import inspect
-from decimal import Decimal, ROUND_HALF_UP
 
-from db.db_events import *
+def _format_customer_id(n: int) -> str:
+    return f"ID-{n:06d}"
 
 
 def rounding_to_nearest_zero(amount):
@@ -108,19 +105,17 @@ def _ensure_db_initialized():
     - If DB file missing: create schema (or copy seed if present + desktop).
     - If DB file exists but has no tables: create schema.
     """
-    seed_db = basedir / "db" / "app.db"  # optional seed; ok if missing
-
     with app.app_context():
         # create file if missing (and optionally copy seed on desktop)
-        if not db_file.exists():
+        if not DB_PATH.exists():
             try:
-                if seed_db.exists() and is_desktop:
-                    shutil.copy2(seed_db, db_file)
+                if SEED_DB_PATH.exists() and IS_DESKTOP:
+                    shutil.copy2(SEED_DB_PATH, DB_PATH)
                     print("[info] Copied seed DB to desktop data dir.")
                 else:
                     # touch file so engine can open it cleanly
-                    db_file.parent.mkdir(parents=True, exist_ok=True)
-                    db_file.touch(exist_ok=True)
+                    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+                    DB_PATH.touch(exist_ok=True)
                     print("[info] Created empty DB file.")
             except Exception as e:
                 print(f"[warn] could not prepare DB file: {e}")
@@ -129,27 +124,14 @@ def _ensure_db_initialized():
         insp = inspect(db.engine)
         tables = set(insp.get_table_names())
 
-        required = {"customer", "invoice", "invoice_item", "item"}
-        # adjust names if your table names differ
-
-        if not required.issubset(tables):
+        if not REQUIRED_DB_TABLES.issubset(tables):
             print("[info] Creating/migrating schema via create_all()…")
             db.create_all()
 
 
 def get_info_json_path():
     """Return correct info.json path"""
-    app_name = APP_NAME if 'APP_NAME' in globals() else 'SLO BILL'
-
-    basedir = Path(__file__).parent.resolve()
-
-    is_desktop = os.getenv("BG_DESKTOP") == "1"
-
-    if is_desktop:
-        data_dir = _desktop_data_dir(app_name)
-        return data_dir / "info.json"
-    else:
-        return basedir / "db" / "info.json"
+    return INFO_PATH
 
 
 def ensure_info_json():
@@ -399,15 +381,11 @@ def _flash_test():
 @app.route('/')
 def home():
     session['persistent_notice'] = None
-    last_uploaded = APP_INFO['supabase']['last_uploaded']
-    last_up = datetime.strptime(last_uploaded, '%d %B %Y').date()
-
-    today = datetime.now().date()
-
-    if (today - last_up) >= timedelta(days=7):
-        print('It has been 7 or more days ago')
-        supabase_upload()
-    return render_template('home.html', last_uploaded = last_uploaded)
+    supabase_meta = APP_INFO.get('supabase', {})
+    last_incremental = supabase_meta.get('last_incremental_uploaded')
+    last_full = supabase_meta.get('last_uploaded')
+    display_last = _format_sync_timestamp(last_incremental or last_full)
+    return render_template('home.html', last_uploaded=display_last)
 
 
 @app.route('/config', methods=['GET', 'POST'])
@@ -2417,14 +2395,236 @@ def load_supabase_config():
         return None, None, None
 
 
-@app.route('/supabase_upload', methods=['GET', 'POST'])
-def supabase_upload():
-    url, key, last_updated = load_supabase_config()
-    data = upload_to_supabase(url, key)
-    return render_template(
-        'test.html',
-        data=data,
-    )
+def _update_supabase_last_uploaded(timestamp: str) -> None:
+    info_path = ensure_info_json()
+    try:
+        with open(info_path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception:
+        payload = {"data": {}}
+
+    payload.setdefault("data", {})
+    supabase_info = dict(payload["data"].get("supabase", {}))
+    supabase_info["last_uploaded"] = timestamp
+    payload["data"]["supabase"] = supabase_info
+
+    try:
+        with open(info_path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+    except Exception as exc:
+        print(f"[warn] Failed to update Supabase sync metadata: {exc}")
+        return
+
+    refresh_info_json()
+
+
+def _update_supabase_last_incremental(timestamp: str) -> None:
+    info_path = ensure_info_json()
+    try:
+        with open(info_path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception:
+        payload = {"data": {}}
+
+    payload.setdefault("data", {})
+    supabase_info = dict(payload["data"].get("supabase", {}))
+    supabase_info["last_incremental_uploaded"] = timestamp
+    payload["data"]["supabase"] = supabase_info
+
+    try:
+        with open(info_path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+    except Exception as exc:
+        print(f"[warn] Failed to update Supabase incremental metadata: {exc}")
+        return
+
+    refresh_info_json()
+
+
+def _create_db_backup() -> Path | None:
+    backup_dir = DATA_DIR / BACKUP_DIRNAME
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    backup_path = backup_dir / f"{DATABASE_FILENAME}.{timestamp}.bak"
+    try:
+        shutil.copy2(DB_PATH, backup_path)
+    except Exception as exc:
+        print(f"[warn] Failed to create DB backup: {exc}")
+        return None
+
+    try:
+        backups = sorted(backup_dir.glob(f"{DATABASE_FILENAME}.*.bak"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for old_backup in backups[BACKUP_RETENTION:]:
+            try:
+                old_backup.unlink()
+            except Exception as cleanup_exc:
+                print(f"[warn] Failed to prune old backup {old_backup}: {cleanup_exc}")
+    except Exception as exc:
+        print(f"[warn] Failed to prune backups: {exc}")
+
+    return backup_path
+
+
+def _format_sync_timestamp(raw_value):
+    if not raw_value:
+        return "Never"
+    try:
+        parsed = parser.parse(str(raw_value))
+    except Exception:
+        return str(raw_value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    local_dt = parsed.astimezone(tz.tzlocal())
+    return local_dt.strftime("%d %b %Y · %H:%M")
+
+
+def _latest_backup_path() -> Path | None:
+    backup_dir = DATA_DIR / BACKUP_DIRNAME
+    if not backup_dir.exists():
+        return None
+    try:
+        backups = sorted(
+            backup_dir.glob(f"{DATABASE_FILENAME}.*.bak"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True
+        )
+    except Exception as exc:
+        print(f"[warn] Failed to inspect backups: {exc}")
+        return None
+    return backups[0] if backups else None
+
+
+def _ensure_recent_backup_on_shutdown() -> None:
+    try:
+        last_backup = _latest_backup_path()
+        if last_backup is None:
+            created = _create_db_backup()
+            if created:
+                print(f"[info] Shutdown backup created (no prior backups): {created}")
+            return
+
+        age = datetime.utcnow() - datetime.utcfromtimestamp(last_backup.stat().st_mtime)
+        if age > timedelta(days=BACKUP_MAX_AGE_DAYS):
+            created = _create_db_backup()
+            if created:
+                print(f"[info] Shutdown backup created (stale backup): {created}")
+    except Exception as exc:
+        print(f"[warn] Backup-on-shutdown failed: {exc}")
+
+
+atexit.register(_ensure_recent_backup_on_shutdown)
+
+
+def _check_supabase_connectivity(url: str, timeout: float = 5.0) -> tuple[bool, str]:
+    health_url = f"{url.rstrip('/')}/auth/v1/health"
+    try:
+        response = requests.get(health_url, timeout=timeout)
+    except requests.RequestException as exc:
+        return False, str(exc)
+
+    if response.status_code >= 500:
+        return False, f"Supabase health check failed with status {response.status_code}"
+
+    return True, ""
+
+
+@app.post('/supabase_sync_all')
+def supabase_sync_all():
+    url, key, _ = load_supabase_config()
+    if not url or not key:
+        flash('Supabase credentials are missing. Please update Account Settings.', 'danger')
+        return redirect(url_for('more'))
+
+    reachable, error_message = _check_supabase_connectivity(url)
+    if not reachable:
+        flash('Cloud sync unavailable right now — check your internet connection and try again.', 'warning')
+        return redirect(url_for('more'))
+
+    backup_path = _create_db_backup()
+
+    if backup_path:
+        print(f"[info] Created database backup at {backup_path}")
+
+    try:
+        result = upload_full_database(url, key)
+    except SupabaseUploadError as exc:
+        skipped = ', '.join(exc.skipped_tables) if exc.skipped_tables else 'none'
+        detail = f" Reason: {exc.detail}" if exc.detail else ''
+        flash(
+            (
+                f"Supabase rejected {exc.failed_count} records in '{exc.failed_table}'. "
+                f"Upload stopped before tables: {skipped}.{detail}"
+            ),
+            'danger'
+        )
+        return redirect(url_for('more'))
+    except Exception as exc:
+        flash(f'Failed to sync with Supabase: {exc}', 'danger')
+        return redirect(url_for('more'))
+
+    timestamp = datetime.utcnow().isoformat()
+    _update_supabase_last_uploaded(timestamp)
+    flash(f'Successfully uploaded {result.uploaded} records to Supabase.', 'success')
+
+    return redirect(url_for('more'))
+
+
+@app.post('/supabase_sync_incremental')
+def supabase_sync_incremental():
+    url, key, _ = load_supabase_config()
+    if not url or not key:
+        return jsonify({
+            "status": "error",
+            "message": "Supabase credentials are missing. Please update Account Settings."
+        }), 400
+
+    reachable, error_message = _check_supabase_connectivity(url)
+    if not reachable:
+        return jsonify({
+            "status": "error",
+            "message": "Looks like the internet is down. Please reconnect and try again."
+        }), 503
+
+    try:
+        result = upload_to_supabase(url, key)
+    except Exception as exc:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to upload incremental data: {exc}"
+        }), 500
+
+    db_result = result["db"]
+    analytics_result = result["analytics"]
+    archived = result["archived"]
+
+    payload = {
+        "status": "ok",
+        "db_uploaded": db_result.uploaded,
+        "db_failed": db_result.failed,
+        "analytics_uploaded": analytics_result.uploaded,
+        "analytics_failed": analytics_result.failed,
+        "archived": archived,
+    }
+
+    if db_result.failed == 0 and analytics_result.failed == 0:
+        timestamp = datetime.utcnow().isoformat()
+        _update_supabase_last_incremental(timestamp)
+        payload["message"] = (
+            f"Uploaded {db_result.uploaded} changes"
+            f" and {analytics_result.uploaded} analytics events."
+        )
+        payload["last_uploaded"] = _format_sync_timestamp(timestamp)
+    else:
+        payload["status"] = "partial"
+        payload["message"] = (
+            "Incremental sync finished with errors. "
+            "Check logs/failed for details."
+        )
+        supabase_meta = APP_INFO.get('supabase', {})
+        previous = supabase_meta.get('last_incremental_uploaded') or supabase_meta.get('last_uploaded')
+        payload["last_uploaded"] = _format_sync_timestamp(previous)
+
+    return jsonify(payload)
 
 
 if __name__ == '__main__':

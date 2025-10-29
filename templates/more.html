@@ -47,6 +47,17 @@
     <a href="/recover" class="card-link">Data Recovery</a>
     <a href="/analytics" class="card-link">Business Analytics</a>
     <a href="/config" class="card-link">Account Settings</a>
+    <form id="supabaseSyncForm" action="{{ url_for('supabase_sync_all') }}" method="post">
+      <button type="submit" class="card-link-button">Upload All Data to Supabase</button>
+    </form>
+  </div>
+</div>
+
+<div id="supabaseSyncOverlay" class="sync-overlay" aria-live="polite" hidden>
+  <div class="sync-modal">
+    <div class="sync-spinner" role="presentation"></div>
+    <p class="sync-status">Preparing upload…</p>
+    <p class="sync-subtext">This may take a minute depending on your data size.</p>
   </div>
 </div>
 
@@ -111,6 +122,30 @@
   color: #fff;
   box-shadow: 0 8px 20px rgba(0,0,0,0.3);
 }
+.card-link-button {
+  display: block;
+  width: 100%;
+  padding: 1rem;
+  margin-bottom: 0.8rem;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  font-weight: 500;
+  background: #262626;
+  color: #fff;
+  border: 1px solid rgba(0,0,0,0.2);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.2);
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
+.card-link-button:hover:enabled {
+  background: #222;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+.card-link-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
 .back-btn {
   background: transparent;
   color: #000;
@@ -122,6 +157,48 @@
   transition: color 0.3s ease;
 }
 .back-btn:hover { color: #555; }
+.sync-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.sync-overlay.visible {
+  display: flex;
+}
+.sync-modal {
+  background: #ffffff;
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.25);
+  text-align: center;
+  width: min(320px, 90%);
+}
+.sync-spinner {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  border: 4px solid rgba(0,0,0,0.1);
+  border-top-color: #262626;
+  animation: spinner-rotate 1s linear infinite;
+}
+.sync-status {
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: #262626;
+}
+.sync-subtext {
+  margin-top: 0.5rem;
+  font-size: 0.92rem;
+  color: #555;
+}
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
+}
 </style>
 
 <script>
@@ -147,6 +224,21 @@
         mainMenu.style.display = 'grid';
       });
     });
+
+    const syncForm = document.getElementById('supabaseSyncForm');
+    const overlay = document.getElementById('supabaseSyncOverlay');
+    const statusLabel = overlay ? overlay.querySelector('.sync-status') : null;
+    if (syncForm && overlay && statusLabel) {
+      syncForm.addEventListener('submit', () => {
+        overlay.classList.add('visible');
+        overlay.removeAttribute('hidden');
+        statusLabel.textContent = 'Uploading data to Supabase…';
+        const submitButton = syncForm.querySelector('button[type="submit"]');
+        if (submitButton) {
+          submitButton.disabled = true;
+        }
+      });
+    }
   });
 </script>
 {% if session and session.get('persistent_notice') %}

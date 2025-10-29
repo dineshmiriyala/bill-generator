@@ -121,6 +121,9 @@
     opacity: 1;
     color: #4a6cb3;
   }
+  .sync-highlight {
+    text-shadow: 0 0 10px rgba(108, 142, 219, 0.6);
+  }
 </style>
 
 <div class="d-flex flex-column justify-content-center align-items-center text-center vh-100">
@@ -211,35 +214,67 @@
     const progressCircle = document.getElementById('progressCircle');
     const progressValue = document.getElementById('progressValue');
     const statusText = document.getElementById('uploadStatus');
+    const lastUploadedLabel = document.getElementById('lastUploaded');
 
     uploadBtn.addEventListener('click', function(e) {
       e.preventDefault();
       uploadModal.show();
+      uploadBtn.disabled = true;
       let progress = 0;
-      statusText.textContent = 'Uploading to Cloud...';
+      statusText.textContent = 'Uploading new data…';
+      progressValue.style.color = '#6c757d';
 
       const interval = setInterval(() => {
-        progress += 5;
+        if (progress < 90) {
+          progress += 5;
+        }
         const degrees = (progress / 100) * 360;
         progressCircle.style.background = `conic-gradient(#6c8edb ${degrees}deg, #cfd8dc ${degrees}deg)`;
-        progressValue.textContent = progress + '%';
-
-        if (progress >= 100) {
-          clearInterval(interval);
-          statusText.textContent = 'Upload Complete!';
-          progressValue.textContent = '✓';
-          progressCircle.style.background = 'conic-gradient(#6c8edb 360deg, #6c8edb 360deg)';
-          progressValue.style.color = '#6c8edb';
-        }
+        progressValue.textContent = `${progress}%`;
       }, 200);
+
+      fetch('{{ url_for("supabase_sync_incremental") }}', {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || 'Incremental sync failed.');
+        }
+        return data;
+      })
+      .then(data => {
+        clearInterval(interval);
+        progress = 100;
+        progressCircle.style.background = 'conic-gradient(#6c8edb 360deg, #6c8edb 360deg)';
+        progressValue.textContent = data.status === 'ok' ? '✓' : '!';
+        progressValue.style.color = data.status === 'ok' ? '#6c8edb' : '#dc3545';
+        statusText.textContent = data.message || 'Incremental sync completed.';
+        if (lastUploadedLabel && data.status === 'ok' && data.last_uploaded) {
+          lastUploadedLabel.textContent = `Last Sync: ${data.last_uploaded}`;
+          lastUploadedLabel.classList.add('sync-highlight');
+          setTimeout(() => lastUploadedLabel.classList.remove('sync-highlight'), 3000);
+        }
+      })
+      .catch(error => {
+        clearInterval(interval);
+        progressCircle.style.background = 'conic-gradient(#dc3545 360deg, #dc3545 360deg)';
+        progressValue.textContent = '!';
+        progressValue.style.color = '#dc3545';
+        statusText.textContent = error.message || 'Network unavailable. Please try again later.';
+      })
+      .finally(() => {
+        uploadBtn.disabled = false;
+      });
     });
 
     const lastUpload = document.getElementById("lastUploaded");
     if (lastUpload && lastUpload.textContent.includes(new Date().getFullYear().toString())) {
-      lastUpload.style.textShadow = "0 0 8px rgba(108,142,219,0.4)";
-      setTimeout(() => {
-        lastUpload.style.textShadow = "none";
-      }, 5000);
+      lastUpload.classList.add('sync-highlight');
+      setTimeout(() => lastUpload.classList.remove('sync-highlight'), 4000);
     }
   });
 </script>
