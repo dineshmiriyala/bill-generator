@@ -37,7 +37,9 @@
   <div class="container d-flex align-items-center justify-content-between w-100">
     <!-- Left side: Back + Menu -->
     <div class="d-flex align-items-center">
-      {% if back_to_select_customer %}
+      {% if back_to_url %}
+        <a href="{{ back_to_url }}" class="btn btn-sm me-2" style="background-color: #30363d; color: #f0f6fc; border: 1px solid #484f58;">←</a>
+      {% elif back_to_select_customer %}
         <a href="{{ url_for('select_customer') }}" class="btn btn-sm me-2" style="background-color: #30363d; color: #f0f6fc; border: 1px solid #484f58;">←</a>
       {% elif back_two_pages %}
         <button class="btn btn-sm me-2" onclick="history.go(-3)" style="background-color: #30363d; color: #f0f6fc; border: 1px solid #484f58;">←</button>
