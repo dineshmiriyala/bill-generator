@@ -7,6 +7,8 @@ import shutil
 import sys
 import uuid
 from collections import defaultdict
+from copy import deepcopy
+from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
@@ -49,10 +51,109 @@ BG_DESKTOP_ENV = "BG_DESKTOP"
 DEFAULT_SECRET_KEY = "super-secret"
 DATABASE_FILENAME = "app.db"
 INFO_FILENAME = "info.json"
+APP_VERSION = "3.1.2"
+DEFAULT_TIMEZONE = "Asia/Kolkata"
 REQUIRED_DB_TABLES = {"customer", "invoice", "invoice_item", "item"}
 BACKUP_DIRNAME = "backups"
 BACKUP_RETENTION = 10
 BACKUP_MAX_AGE_DAYS = 7
+
+
+def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
+    """Return a fresh copy of default info.json sections."""
+    reference_dt = reference_dt or datetime.utcnow()
+    iso_now = reference_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    current_year = str(reference_dt.year)
+
+    return {
+        "business": {
+            "name": "",
+            "owner": "",
+            "address": "",
+            "email": "",
+            "phone": "",
+            "gstin": "",
+            "upi_id": "",
+            "upi_name": "",
+            "businessType": "",
+            "pan": "",
+            "estd": current_year,
+            "logo_path": "static/img/brand-wordmark.svg",
+        },
+        "bank": {
+            "account_name": "",
+            "bank_name": "",
+            "branch": "",
+            "account_number": "",
+            "ifsc": "",
+            "bhim": "",
+        },
+        "appearance": {
+            "currency_symbol": "\\u20b9",
+            "date_format": "%d %B %Y",
+            "font_family": "Inter, Helvetica, Arial, sans-serif",
+            "theme_color": "#0056b3",
+        },
+        "payment": {
+            "methods": ["Bank Transfer", "UPI"],
+            "upi_qr_enabled": False,
+            "qr_label": "Scan to Pay",
+            "terms": [
+                "Payment due within 7 days of invoice date.",
+                "Late payments may incur a 2% interest per month.",
+                "This is a computer-generated document, no signature required.",
+            ],
+        },
+        "statement": {
+            "header_title": "Statement Summary",
+            "disclaimer": "This is a system-generated statement. No signature required.",
+        },
+        "account_defaults": {
+            "start_date": iso_now,
+            "timezone": DEFAULT_TIMEZONE,
+        },
+        "meta": {
+            "version": APP_VERSION,
+            "created_on": iso_now,
+        },
+        "upi_info": {
+            "upi_id": "",
+            "currency": "INR",
+            "upi_name": "",
+        },
+        "services": [
+            "Printing",
+            "Design",
+            "Branding Collateral",
+        ],
+        "bill_config": {
+            "heading": "Tax Invoice",
+            "footer": "Composition Taxable Person. Not eligible to collect Tax on supplies.",
+            "payment-footer": "Computer generated receipt - Signature not required",
+        },
+        "file_location": "",
+        "supabase": {
+            "url": "",
+            "key": "",
+            "last_uploaded": "",
+            "last_incremental_uploaded": "",
+        },
+    }
+
+
+def _merge_missing(target: dict, defaults: dict) -> bool:
+    """Merge missing keys from defaults into target. Returns True if mutated."""
+    changed = False
+    for key, default_value in defaults.items():
+        if key not in target:
+            target[key] = deepcopy(default_value)
+            changed = True
+        else:
+            current_value = target[key]
+            if isinstance(default_value, dict) and isinstance(current_value, dict):
+                if _merge_missing(current_value, default_value):
+                    changed = True
+    return changed
 
 
 def _desktop_data_dir(app_name: str) -> Path:
@@ -140,21 +241,62 @@ def ensure_info_json():
     if not info_path.parent.exists():
         info_path.parent.mkdir(parents=True, exist_ok=True)
 
+    now = datetime.utcnow()
+    default_payload = {
+        "created_on": now.strftime("%d %B %Y"),
+        "app_name": APP_NAME,
+        "version": APP_VERSION,
+        "last_updated": now.strftime("%d %B %Y"),
+        "onboarding_complete": False,
+        "data": _default_info_sections(now),
+    }
+
     if not info_path.exists():
-        default_info = {
-            "created_on":
-                datetime.utcnow().strftime("%d %B %Y"),
-            "app_name": APP_NAME,
-            'version': '1.0.0',
-            'last_updated': datetime.utcnow().strftime("%d %B %Y"),
-            'data': {},
-        }
         try:
             with open(info_path, "w", encoding='utf-8') as f:
-                json.dump(default_info, f, indent=2)
-            print("[info] Created info.json file. with default info: {}".format(default_info))
+                json.dump(default_payload, f, indent=2, ensure_ascii=False)
+            print("[info] Created info.json with default structure.")
         except Exception as e:
             print(f"[warn] could not create db info.json: {e}")
+        return info_path
+
+    try:
+        with open(info_path, "r", encoding='utf-8') as f:
+            info_data = json.load(f)
+    except Exception as exc:
+        print(f"[warn] Failed to read info.json ({exc}); rewriting with defaults.")
+        try:
+            with open(info_path, "w", encoding='utf-8') as f:
+                json.dump(default_payload, f, indent=2, ensure_ascii=False)
+        except Exception as write_err:
+            print(f"[warn] could not rewrite db info.json: {write_err}")
+        return info_path
+
+    changed = False
+    for key in ("created_on", "app_name", "version", "last_updated"):
+        if key not in info_data:
+            info_data[key] = default_payload[key]
+            changed = True
+
+    if "onboarding_complete" not in info_data:
+        info_data["onboarding_complete"] = False
+        changed = True
+
+    if not isinstance(info_data.get("data"), dict):
+        info_data["data"] = _default_info_sections(now)
+        changed = True
+    else:
+        defaults = _default_info_sections(now)
+        if _merge_missing(info_data["data"], defaults):
+            changed = True
+
+    if changed:
+        try:
+            with open(info_path, "w", encoding='utf-8') as f:
+                json.dump(info_data, f, indent=2, ensure_ascii=False)
+        except Exception as exc:
+            print(f"[warn] Failed to update info.json defaults: {exc}")
+
     return info_path
 
 
@@ -168,16 +310,190 @@ def loading_info():
 
 def refresh_info_json():
     """Reload the info.json without restarting the app"""
-    global APP_INFO
+    global APP_INFO, ONBOARDING_COMPLETE
     try:
-        new_info = loading_info()['data']
+        full_payload = loading_info()
+        new_info = full_payload.get('data', {})
+        if not isinstance(new_info, dict):
+            new_info = {}
         APP_INFO.clear()
         APP_INFO.update(new_info)
+        ONBOARDING_COMPLETE = bool(full_payload.get('onboarding_complete', False))
     except Exception as e:
         print(f"[warn] Failed to load/refresh app_info: {e}")
 
 
-APP_INFO = loading_info()['data']
+_initial_info_payload = loading_info()
+APP_INFO = _initial_info_payload.get('data', {})
+if not isinstance(APP_INFO, dict):
+    APP_INFO = {}
+ONBOARDING_COMPLETE = bool(_initial_info_payload.get('onboarding_complete', False))
+
+
+ONBOARDING_EXEMPT_ENDPOINTS = {
+    'static',
+    'onboarding',
+    'onboarding_submit',
+    'config_refresh',
+}
+
+
+def _is_onboarding_complete() -> bool:
+    return bool(ONBOARDING_COMPLETE)
+
+
+@app.before_request
+def _enforce_onboarding_flow():
+    if _is_onboarding_complete():
+        return
+
+    endpoint = request.endpoint or ''
+    if endpoint in ONBOARDING_EXEMPT_ENDPOINTS:
+        return
+    if endpoint.startswith('api_bp.'):
+        return
+
+    return redirect(url_for('onboarding'))
+
+
+@app.route('/onboarding', methods=['GET'])
+def onboarding():
+    if _is_onboarding_complete():
+        return redirect(url_for('home'))
+
+    seed_info = loading_info().get('data', {})
+    business_defaults = seed_info.get('business', {}) if isinstance(seed_info, dict) else {}
+    bank_defaults = seed_info.get('bank', {}) if isinstance(seed_info, dict) else {}
+    return render_template(
+        'onboarding.html',
+        business=business_defaults,
+        bank=bank_defaults,
+    )
+
+
+def _normalize_account_number(value: str) -> str:
+    return ''.join(ch for ch in value if ch.isalnum())
+
+
+@app.route('/onboarding/submit', methods=['POST'])
+def onboarding_submit():
+    if _is_onboarding_complete():
+        flash('Onboarding already completed.', 'info')
+        return redirect(url_for('home'))
+
+    form = request.form
+
+    def _clean(key: str) -> str:
+        return (form.get(key) or '').strip()
+
+    business_name = _clean('business_name')
+    owner_name = _clean('owner_name')
+    phone = _clean('phone')
+    email = _clean('email')
+    address = _clean('address')
+    upi_id = _clean('upi_id')
+    gstin = _clean('gstin').upper()
+    business_type = _clean('business_type')
+    pan = _clean('pan').upper()
+
+    bank_account_number = _clean('bank_account_number')
+    confirm_bank_account_number = _clean('confirm_bank_account_number')
+    ifsc_code = _clean('ifsc_code').upper()
+    account_holder_name = _clean('account_holder_name') or business_name
+    branch_name = _clean('branch_name')
+    bank_name = _clean('bank_name')
+
+    skip_bank = form.get('skip_bank', 'false').lower() == 'true'
+
+    errors: List[str] = []
+    if not business_name:
+        errors.append('Business name is required.')
+    if not owner_name:
+        errors.append('Owner name is required.')
+    if not phone:
+        errors.append('Phone number is required.')
+
+    normalized_account = _normalize_account_number(bank_account_number)
+    normalized_confirm = _normalize_account_number(confirm_bank_account_number)
+
+    if not skip_bank:
+        if not normalized_account:
+            errors.append('Bank account number is required or choose skip.')
+        elif normalized_account != normalized_confirm:
+            errors.append('Bank account numbers do not match.')
+
+    if errors:
+        for err in errors:
+            flash(err, 'danger')
+        return redirect(url_for('onboarding'))
+
+    now = datetime.utcnow()
+    info_payload = loading_info()
+    data_section = _default_info_sections(now)
+
+    # Business details
+    data_section['business'].update({
+        'name': business_name,
+        'owner': owner_name,
+        'address': address,
+        'email': email,
+        'phone': phone,
+        'gstin': gstin,
+        'upi_id': upi_id,
+        'upi_name': owner_name or business_name,
+        'businessType': business_type,
+        'pan': pan,
+    })
+
+    # Bank details (optional)
+    if not skip_bank:
+        data_section['bank'].update({
+            'account_name': account_holder_name,
+            'bank_name': bank_name,
+            'branch': branch_name,
+            'account_number': normalized_account,
+            'ifsc': ifsc_code,
+            'bhim': phone,
+        })
+
+    # Payment / UPI info
+    data_section['upi_info'].update({
+        'upi_id': upi_id,
+        'upi_name': owner_name or business_name,
+    })
+    payment_methods = [m for m in data_section['payment'].get('methods', [])]
+    if upi_id:
+        if 'UPI' not in (method.upper() for method in payment_methods):
+            payment_methods.insert(0, 'UPI')
+        data_section['payment']['upi_qr_enabled'] = True
+    else:
+        payment_methods = [m for m in payment_methods if m.upper() != 'UPI'] or ['Bank Transfer']
+        data_section['payment']['upi_qr_enabled'] = False
+    data_section['payment']['methods'] = payment_methods
+
+    # Account defaults / meta
+    data_section['account_defaults']['start_date'] = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+    data_section['meta']['version'] = APP_VERSION
+    data_section['meta']['created_on'] = now.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    info_payload['data'] = data_section
+    info_payload['onboarding_complete'] = True
+    info_payload['last_updated'] = now.strftime('%d %B %Y')
+    info_payload.setdefault('created_on', now.strftime('%d %B %Y'))
+    info_payload.setdefault('app_name', APP_NAME)
+    info_payload['version'] = APP_VERSION
+
+    info_path = get_info_json_path()
+    try:
+        with open(info_path, 'w', encoding='utf-8') as f:
+            json.dump(info_payload, f, indent=2, ensure_ascii=False)
+    except Exception as exc:
+        flash(f'Failed to save onboarding details: {exc}', 'danger')
+        return redirect(url_for('onboarding'))
+
+    refresh_info_json()
+    flash('Setup complete! You can start generating invoices.', 'success')
+    return redirect(url_for('home'))
 
 
 def get_default_statement_start():
@@ -229,7 +545,8 @@ def recover_customer(id):
 @app.route('/more')
 def more():
     return render_template(
-        'more.html'
+        'more.html',
+        has_backup_location=bool((APP_INFO.get('file_location') or '').strip())
     )
 
 
@@ -397,6 +714,10 @@ def config():
         info_data = json.load(f)
 
     app_info = info_data.get("data", {})
+    if not isinstance(app_info, dict):
+        app_info = {}
+    if 'file_location' not in app_info:
+        app_info['file_location'] = ''
 
     # --- Handle POST (Save Changes) ---
     if request.method == 'POST':
@@ -412,7 +733,10 @@ def config():
                 updates[key] = val.strip()
 
         # Apply updates to correct section
-        if section in app_info:
+        if section == 'file_location':
+            new_path = updates.get('file_location') or updates.get('value') or ''
+            app_info['file_location'] = new_path.strip()
+        elif section in app_info:
             if isinstance(app_info[section], dict):
                 app_info[section].update(updates)
             elif isinstance(app_info[section], list):
@@ -420,7 +744,9 @@ def config():
                 lines = updates.get('services', '').splitlines()
                 app_info[section] = [ln.strip() for ln in lines if ln.strip()]
             else:
-                app_info[section] = updates
+                # simple scalar fields
+                value = updates.get(section) or updates.get('value')
+                app_info[section] = value.strip() if isinstance(value, str) else updates
         else:
             app_info[section] = updates
 
@@ -431,7 +757,8 @@ def config():
         try:
             with open(info_path, 'w', encoding='utf-8') as f:
                 json.dump(info_data, f, indent=2, ensure_ascii=False)
-            flash(f"{section.capitalize()} updated successfully!", "success")
+            section_label = section.replace('_', ' ').title()
+            flash(f"{section_label} updated successfully!", "success")
             refresh_info_json()
         except Exception as e:
             flash(f"Error saving changes: {e}", "danger")
@@ -443,6 +770,16 @@ def config():
     return render_template('config_editor.html', app_info=app_info,
                            last_updated=info_data['last_updated'],
                            created_on=info_data['created_on'])
+
+
+@app.route('/config/refresh', methods=['POST'])
+def config_refresh():
+    try:
+        refresh_info_json()
+        flash('Account settings reloaded from info.json.', 'success')
+    except Exception as exc:
+        flash(f'Unable to refresh settings: {exc}', 'danger')
+    return redirect(url_for('config'))
 
 
 # customers page (temperory placeholder)
@@ -2441,6 +2778,68 @@ def _update_supabase_last_incremental(timestamp: str) -> None:
     refresh_info_json()
 
 
+def _resolve_external_backup_dir() -> Optional[Path]:
+    """Return configured external backup directory, or None if unset."""
+    location = (APP_INFO.get('file_location') or '').strip()
+    if not location:
+        return None
+    try:
+        return Path(location).expanduser()
+    except Exception as exc:
+        print(f"[warn] Invalid file_location '{location}': {exc}")
+        return None
+
+
+def _prune_backup_dir(directory: Path) -> None:
+    """Keep only the newest BACKUP_RETENTION backup files in directory."""
+    try:
+        backups = sorted(
+            directory.glob(f"{DATABASE_FILENAME}.*.bak"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    except Exception as exc:
+        print(f"[warn] Failed to enumerate external backups in {directory}: {exc}")
+        return
+
+    for old_backup in backups[BACKUP_RETENTION:]:
+        try:
+            old_backup.unlink()
+        except Exception as exc:
+            print(f"[warn] Failed to prune external backup {old_backup}: {exc}")
+
+
+def _copy_backup_to_external(backup_source: Optional[Path] = None) -> Optional[Path]:
+    """Copy the DB (or provided backup file) to configured external location."""
+    destination_dir = _resolve_external_backup_dir()
+    if not destination_dir:
+        return None
+
+    try:
+        destination_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        print(f"[warn] Unable to prepare external backup directory {destination_dir}: {exc}")
+        return None
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    source_path = backup_source if backup_source and backup_source.exists() else DB_PATH
+    if backup_source and backup_source.exists() and backup_source.suffix == '.bak':
+        target_name = backup_source.name
+    else:
+        target_name = f"{DATABASE_FILENAME}.{timestamp}.bak"
+
+    target_path = destination_dir / target_name
+
+    try:
+        shutil.copy2(source_path, target_path)
+    except Exception as exc:
+        print(f"[warn] Failed to copy backup to {target_path}: {exc}")
+        return None
+
+    _prune_backup_dir(destination_dir)
+    return target_path
+
+
 def _create_db_backup() -> Path | None:
     backup_dir = DATA_DIR / BACKUP_DIRNAME
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -2461,6 +2860,10 @@ def _create_db_backup() -> Path | None:
                 print(f"[warn] Failed to prune old backup {old_backup}: {cleanup_exc}")
     except Exception as exc:
         print(f"[warn] Failed to prune backups: {exc}")
+
+    external_path = _copy_backup_to_external(backup_path)
+    if external_path:
+        print(f"[info] External backup saved to {external_path}")
 
     return backup_path
 
@@ -2566,6 +2969,22 @@ def supabase_sync_all():
     _update_supabase_last_uploaded(timestamp)
     flash(f'Successfully uploaded {result.uploaded} records to Supabase.', 'success')
 
+    return redirect(url_for('more'))
+
+
+@app.post('/backup/local_copy')
+def create_local_backup_copy():
+    refresh_info_json()
+    destination = _resolve_external_backup_dir()
+    if not destination:
+        flash('Set a backup folder in Account Settings before creating local copies.', 'warning')
+        return redirect(url_for('more'))
+
+    backup_path = _copy_backup_to_external()
+    if backup_path:
+        flash(f'Backup copied to {backup_path}', 'success')
+    else:
+        flash('Unable to copy database to the configured folder. Check permissions and path.', 'danger')
     return redirect(url_for('more'))
 
 

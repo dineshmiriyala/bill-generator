@@ -50,6 +50,12 @@
     <form id="supabaseSyncForm" action="{{ url_for('supabase_sync_all') }}" method="post">
       <button type="submit" class="card-link-button">Upload All Data to Supabase</button>
     </form>
+    <form action="{{ url_for('create_local_backup_copy') }}" method="post">
+      <button type="submit" class="card-link-button" {% if not has_backup_location %}disabled{% endif %}>Make Local DB Copy</button>
+    </form>
+    {% if not has_backup_location %}
+      <p class="text-muted small">Set a backup folder in Account Settings to enable local copies.</p>
+    {% endif %}
   </div>
 </div>
 
