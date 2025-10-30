@@ -7,6 +7,14 @@ __pycache__/
 .venv/
 venv/
 .env
+.pytest_cache/
+
+tests/__pycache__/
+bg_app/__pycache__/
+bg_app/routes/__pycache__/
+bg_app/services/__pycache__/
+migrations/__pycache__/
+migrations/versions/__pycache__/
 
 # OS / IDE
 .DS_Store

@@ -1516,7 +1516,7 @@ def start_bill():
 
     # After successful creation, flash and redirect to locked preview page
     session['persistent_notice'] = f"Invoice {new_invoice.invoiceId} created successfully!"
-    return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId, new_bill='True'))
+    return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId, edit_bill='true'))
 
 
 @app.route('/view_customers', methods=['GET', 'POST'])
@@ -1654,8 +1654,6 @@ def view_bill_locked(invoicenumber):
     # Determine whether to show DC column
     dcno = any((x or '').strip() for x in dc_numbers)
 
-    new_bill = request.args.get('new_bill', '').lower() in ('yes', 'true', '1')
-    back_redirect_url = url_for('view_bills') if new_bill else None
     edit_bill = request.args.get('edit_bill', '').lower() in ('yes', 'true', '1')
     back_two_pages = edit_bill
 
@@ -1672,9 +1670,8 @@ def view_bill_locked(invoicenumber):
         dcno=dcno,
         total=round(total, 2),
         invoice_no=current_invoice.invoiceId,
-        new_bill=new_bill,
         back_to_select_customer=False,
-        back_to_url=back_redirect_url,
+        back_to_url=None,
         customer_id=cur_cust.id,
         back_two_pages=back_two_pages,
         invoice_date=invoice_date,
@@ -1989,7 +1986,7 @@ def update_bill(invoicenumber):
     # 6) Redirect to locked preview after update
     session['persistent_notice'] = f"Old invoice {current_invoice.invoiceId} updated successfully!"
 
-    return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill='true'))
+    return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill='true', new_bill='true'))
 
 
 @app.route('/bill_preview/latest')

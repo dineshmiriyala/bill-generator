@@ -102,7 +102,13 @@ python app.py
 The development server listens on `http://127.0.0.1:5000/` by default. On first launch, the onboarding workflow will guide you through initial setup.
 
 ### Desktop Packaging
-For Windows packaging the project ships a `build_exe.bat` script that wraps PyInstaller to produce a standalone executable. Ensure you run it from a clean virtual environment with all dependencies installed.
+For Windows packaging the project ships a `build_exe.bat` script that wraps PyInstaller to produce a standalone executable. Before packaging, run `pytest` to ensure the latest test suite passes, then execute:
+
+```
+build_exe.bat
+```
+
+The script installs/updates dependencies, clears previous artefacts, and emits `BillGenerator_V4.0.exe` under `dist/`. Launch the generated binary from `cmd.exe` or PowerShell for first-run smoke testing so any console logs remain visible.
 
 ## Configuration and Onboarding
 
@@ -173,11 +179,10 @@ All API endpoints require the application to be running locally. Authentication 
 ## Development Notes
 
 - **Database migrations:** Use Flask-Migrate commands (e.g., `flask db migrate`, `flask db upgrade`) to evolve the schema. The app runs `migrate_db()` on startup to ensure the SQLite file is up to date.
-- **Testing:** The project currently relies on manual QA. Consider adding unit tests under a future `tests/` directory and wiring continuous integration as part of roadmap 4.0.
+- **Testing:** Automated coverage lives under `tests/`; run `pytest` before raising PRs or cutting releases.
 - **Coding standards:** The codebase targets Python 3.11, uses type hints in newer modules, and prefers Decimal for currency math. Follow existing patterns when contributing.
-- **Packaging:** When building desktop distributions, set the `BG_DESKTOP_ENV=1` environment variable so the data directory resolves to the user’s application support folder.
+- **Packaging:** When building desktop distributions, set the `BG_DESKTOP_ENV=1` environment variable so the data directory resolves to the user’s application support folder. The provided `build_exe.bat` handles this automatically for Windows builds.
 
 ## License
 
 This project is licensed under the MIT License. See `LICENSE` for details.
-

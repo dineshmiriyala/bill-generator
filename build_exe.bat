@@ -1,6 +1,6 @@
 @echo off
 echo =====================================================
-echo   Building Bill Generator V 3_1_2  —  Dinesh Miriyala
+echo   Building Bill Generator V4.0  —  Dinesh Miriyala
 echo =====================================================
 
 :: Activate virtual environment
@@ -37,7 +37,7 @@ rmdir /s /q dist
 echo.
 echo Running PyInstaller build...
 pyinstaller --noconsole --onefile ^
---name "BillGenerator_V3.1.2" ^
+--name "BillGenerator_V4.0" ^
 --icon "static\img\slo_bill_icon.ico" ^
 --add-data "templates;templates" ^
 --add-data "static;static" ^
@@ -54,6 +54,6 @@ if errorlevel 1 (
 
 echo =====================================================
 echo Build complete! Check the 'dist' folder:
-echo     → BillGenerator_V3.1.2.exe
+echo     → BillGenerator_V4.0.exe
 echo =====================================================
 pause
