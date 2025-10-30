@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import sys
+import sqlite3
 import uuid
 from collections import defaultdict
 from copy import deepcopy
@@ -15,6 +16,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
+import stat
 from dateutil import tz, parser
 from flask import (
     Flask,
@@ -57,6 +59,8 @@ REQUIRED_DB_TABLES = {"customer", "invoice", "invoice_item", "item"}
 BACKUP_DIRNAME = "backups"
 BACKUP_RETENTION = 10
 BACKUP_MAX_AGE_DAYS = 7
+ISO_8601_UTC = "%Y-%m-%dT%H:%M:%SZ"
+HUMAN_DATE_FMT = "%d %B %Y"
 
 
 def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
@@ -156,6 +160,74 @@ def _merge_missing(target: dict, defaults: dict) -> bool:
     return changed
 
 
+def _ensure_utc(dt: datetime) -> datetime:
+    """Normalize datetimes to UTC with timezone info."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _format_iso_utc(dt: datetime) -> str:
+    return _ensure_utc(dt).strftime(ISO_8601_UTC)
+
+
+def _format_human_date(dt: datetime) -> str:
+    return _ensure_utc(dt).strftime(HUMAN_DATE_FMT)
+
+
+def _get_earliest_invoice_created_at() -> Optional[datetime]:
+    """Fetch the earliest invoice.createdAt value from the DB."""
+    try:
+        with app.app_context():
+            earliest = (
+                db.session.query(func.min(invoice.createdAt))
+                .filter(invoice.isDeleted == False)  # noqa: E712
+                .scalar()
+            )
+    except Exception as exc:
+        print(f"[warn] Failed to determine earliest invoice date: {exc}")
+        return None
+
+    if not earliest:
+        return None
+
+    if isinstance(earliest, str):
+        try:
+            earliest = datetime.strptime(earliest, ISO_8601_UTC)
+        except Exception:
+            return None
+
+    return _ensure_utc(earliest)
+
+
+def _determine_data_start(now: datetime) -> datetime:
+    """Return the correct account start date, preferring the first invoice date."""
+    earliest = _get_earliest_invoice_created_at()
+    if not earliest:
+        return now
+
+    earliest_utc = _ensure_utc(earliest)
+    # Guard against corrupted future dates
+    if earliest_utc > now:
+        return now
+    return earliest_utc
+
+
+def _ensure_file_writable(path: Path) -> None:
+    """Best-effort to guarantee the SQLite file is writable (fixes Windows bundle perms)."""
+    try:
+        if not path.exists():
+            return
+        if os.name == "nt":
+            path.chmod(stat.S_IWRITE | stat.S_IREAD)
+        else:
+            path.chmod(0o600)
+    except Exception as exc:
+        print(f"[warn] Could not adjust permissions for {path}: {exc}")
+
+
 def _desktop_data_dir(app_name: str) -> Path:
     if os.name == "nt":
         return Path(os.getenv("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / app_name
@@ -220,6 +292,19 @@ def _ensure_db_initialized():
                     print("[info] Created empty DB file.")
             except Exception as e:
                 print(f"[warn] could not prepare DB file: {e}")
+        # Always ensure the DB file is writable (pyinstaller seed copies can be read-only on Windows)
+        _ensure_file_writable(DB_PATH)
+        if DB_PATH.exists() and os.name == "nt":
+            try:
+                test_conn = sqlite3.connect(DB_PATH.as_posix())
+                test_conn.execute("PRAGMA user_version;")
+                test_conn.close()
+            except sqlite3.OperationalError as exc:
+                if "readonly" in str(exc).lower():
+                    print("[warn] Detected read-only SQLite database; retrying permission reset.")
+                    _ensure_file_writable(DB_PATH)
+                else:
+                    print(f"[warn] SQLite connection check failed: {exc}")
 
         # check whether tables exist
         insp = inspect(db.engine)
@@ -242,13 +327,22 @@ def ensure_info_json():
         info_path.parent.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now(timezone.utc)
+    determined_start = _determine_data_start(now)
+    start_iso = _format_iso_utc(determined_start)
+    start_dt = _ensure_utc(datetime.strptime(start_iso, ISO_8601_UTC))
+    created_display = _format_human_date(start_dt)
+
+    default_sections = _default_info_sections(start_dt)
+    default_sections["account_defaults"]["start_date"] = start_iso
+    default_sections["meta"]["created_on"] = start_iso
+
     default_payload = {
-        "created_on": now.strftime("%d %B %Y"),
+        "created_on": created_display,
         "app_name": APP_NAME,
         "version": APP_VERSION,
-        "last_updated": now.strftime("%d %B %Y"),
+        "last_updated": now.strftime(HUMAN_DATE_FMT),
         "onboarding_complete": False,
-        "data": _default_info_sections(now),
+        "data": default_sections,
     }
 
     if not info_path.exists():
@@ -283,12 +377,60 @@ def ensure_info_json():
         changed = True
 
     if not isinstance(info_data.get("data"), dict):
-        info_data["data"] = _default_info_sections(now)
+        info_data["data"] = deepcopy(default_sections)
         changed = True
     else:
-        defaults = _default_info_sections(now)
-        if _merge_missing(info_data["data"], defaults):
+        if _merge_missing(info_data["data"], default_sections):
             changed = True
+
+    data_section = info_data["data"]
+
+    account_defaults = data_section.setdefault("account_defaults", {})
+    existing_start = account_defaults.get("start_date")
+    if existing_start:
+        try:
+            existing_start_dt = _ensure_utc(datetime.strptime(existing_start, ISO_8601_UTC))
+        except Exception:
+            account_defaults["start_date"] = start_iso
+            changed = True
+        else:
+            if existing_start_dt > start_dt:
+                account_defaults["start_date"] = start_iso
+                changed = True
+    else:
+        account_defaults["start_date"] = start_iso
+        changed = True
+
+    meta_section = data_section.setdefault("meta", {})
+    meta_created = meta_section.get("created_on")
+    if meta_created:
+        try:
+            meta_dt = _ensure_utc(datetime.strptime(meta_created, ISO_8601_UTC))
+        except Exception:
+            meta_section["created_on"] = start_iso
+            changed = True
+        else:
+            if meta_dt != start_dt:
+                meta_section["created_on"] = start_iso
+                changed = True
+    else:
+        meta_section["created_on"] = start_iso
+        changed = True
+
+    created_on_value = info_data.get("created_on")
+    if created_on_value:
+        try:
+            created_on_dt = datetime.strptime(created_on_value, HUMAN_DATE_FMT).replace(tzinfo=timezone.utc)
+        except Exception:
+            info_data["created_on"] = created_display
+            changed = True
+        else:
+            if created_on_dt.date() != start_dt.date():
+                info_data["created_on"] = created_display
+                changed = True
+    else:
+        info_data["created_on"] = created_display
+        changed = True
 
     if changed:
         try:
