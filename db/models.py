@@ -1,9 +1,13 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import event, func, select
 import json
 
 db = SQLAlchemy()
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 
 class customer(db.Model):
@@ -16,7 +20,7 @@ class customer(db.Model):
     address = db.Column(db.Text)
     businessType = db.Column(db.String(50))
     invoices = db.relationship("invoice", backref="customer", lazy=True)
-    createdAt = db.Column(db.DateTime, default=datetime.utcnow)
+    createdAt = db.Column(db.DateTime, default=_utcnow)
     isDeleted = db.Column(db.Boolean, nullable=False, default=False, index=True)
     deletedAt = db.Column(db.DateTime, nullable=True, index=True)
 
@@ -29,7 +33,7 @@ class invoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoiceId = db.Column(db.String(50), unique=True, nullable=False)
     customerId = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=False, index=True)
-    createdAt = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    createdAt = db.Column(db.DateTime, default=_utcnow, index=True)
     pdfPath = db.Column(db.String(255), nullable=False)
     totalAmount = db.Column(db.Float, nullable=False)
     items = db.relationship("invoiceItem", backref="invoice", lazy=True)
@@ -94,16 +98,16 @@ class lastBackup(db.Model):
     __tablename__ = "last_backup"
 
     id = db.Column(db.Integer, primary_key=True)
-    occurred_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    occurred_at = db.Column(db.DateTime, default=_utcnow, nullable=False, index=True)
     note = db.Column(db.String(255))
 
     # audit fields
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utcnow)
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow
+        default=_utcnow,
+        onupdate=_utcnow
     )
 
 
@@ -118,11 +122,11 @@ class layoutConfig(db.Model):
         "footer": 10,
         "invoice_info": 13
     }))
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utcnow)
     updated_at = db.Column(
         db.DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=_utcnow,
+        onupdate=_utcnow,
         nullable=False
     )
 

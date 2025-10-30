@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Sequence, Tuple, Optional
 
@@ -303,10 +303,10 @@ def _archive_processed_files(files: List[Path], archive_root: Path, subdir: str)
 def _cleanup_archive(archive_root: Path, retention_days: int = ARCHIVE_RETENTION_DAYS) -> None:
     if not archive_root.exists():
         return
-    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
     for file in archive_root.rglob("*.json"):
         try:
-            modified = datetime.utcfromtimestamp(file.stat().st_mtime)
+            modified = datetime.fromtimestamp(file.stat().st_mtime, tz=timezone.utc)
             if modified < cutoff:
                 file.unlink()
         except Exception as exc:
@@ -317,10 +317,10 @@ def _cleanup_failed_logs(base_folder: Path, retention_days: int = FAILED_RETENTI
     failed_root = base_folder / FAILED_DIR_NAME
     if not failed_root.exists():
         return
-    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
     for path in failed_root.rglob("*.json"):
         try:
-            modified = datetime.utcfromtimestamp(path.stat().st_mtime)
+            modified = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
             if modified < cutoff:
                 path.unlink()
         except Exception as exc:

@@ -2,7 +2,7 @@
 import json
 import os
 import sys
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from logging import exception
 from pathlib import Path
 import structlog
@@ -39,12 +39,13 @@ def log_user_event(data):
     log_file = log_dir / f"analytics_{today_str}.json"
 
     # Ensure all required fields exist with default None if missing
+    now_utc = datetime.now(timezone.utc)
     entry = {
-        "timestamp": normalize_timestamp(datetime.now().isoformat()),
+        "timestamp": normalize_timestamp(now_utc.isoformat()),
         "table": 'analytics',
         'action': 'insert',
         'data': {
-        "timestamp": normalize_timestamp(data.get("timestamp") or datetime.utcnow().isoformat()),
+        "timestamp": normalize_timestamp(data.get("timestamp") or now_utc.isoformat()),
         "current_page": data.get("current_page"),
         "activity": data.get("activity"),
         "click": data.get("click"),
