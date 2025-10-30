@@ -67,9 +67,9 @@ def stage_sync(table, action, data):
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=2, ensure_ascii=False)
 
-        print(f"[append ✅] Logged {table} {action} in {filename}")
+        print(f"[append OK] Logged {table} {action} in {filename}")
     except Exception as e:
-        print(f"[append ⚠️] Failed to log {table} {action}: {e}")
+        print(f"[append WARN] Failed to log {table} {action}: {e}")
 
 def obj_to_dict(obj):
     """Convert SQLAlchemy ORM object to JSON-safe dict."""
@@ -77,7 +77,7 @@ def obj_to_dict(obj):
     for col in obj.__table__.columns:
         val = getattr(obj, col.name, None)
         if isinstance(val, (datetime, date)):
-            result[col.name] = val.isoformat()  # ✅ serialize datetime/date
+            result[col.name] = val.isoformat()  # serialize datetime/date
         else:
             result[col.name] = val
     return result
@@ -112,10 +112,10 @@ def track_after_commit(session):
             if table in SYNCED_TABLES:
                 stage_sync(table, "post_commit_insert", obj_to_dict(obj))
     except Exception as e:
-        print(f"[after_commit ⚠️] Error tracking dependent inserts: {e}")
+        print(f"[after_commit WARN] Error tracking dependent inserts: {e}")
 
 @event.listens_for(Session, "after_commit")
 def confirm_commit(session):
     """Optional: print commit summary."""
     if any([session.new, session.dirty, session.deleted]):
-        print(f"[commit ✅] {len(session.new)} inserted, {len(session.dirty)} updated, {len(session.deleted)} deleted.")
+        print(f"[commit OK] {len(session.new)} inserted, {len(session.dirty)} updated, {len(session.deleted)} deleted.")

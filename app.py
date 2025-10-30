@@ -5,7 +5,6 @@ import json
 import os
 import shutil
 import sys
-import logging
 import sqlite3
 import uuid
 from collections import defaultdict
@@ -251,16 +250,6 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", DEFAULT_SECRET_KEY)
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH.as_posix()}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.register_blueprint(api_bp)
-
-# Configure app logging to persistent desktop log file
-LOG_DIR = DATA_DIR / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-LOG_FILE = LOG_DIR / "app.log"
-_file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
-_file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-app.logger.addHandler(_file_handler)
-app.logger.setLevel(logging.INFO)
-logging.getLogger().addHandler(_file_handler)
 
 migrate_db(DB_PATH.as_posix())
 
@@ -672,7 +661,7 @@ def get_default_statement_start():
     ).replace(tzinfo=tzinfo)
 
 
-# ✅ Call this AFTER importing models, so metadata is populated
+# Call this AFTER importing models, so metadata is populated
 with app.app_context():
     _ensure_db_initialized()
 
@@ -1418,8 +1407,6 @@ def start_bill():
         flash('Customer not found. Please reselect the customer.', 'warning')
         return render_template('select_customer.html')
 
-    app.logger.info("Creating invoice for customer_id=%s phone=%s", selected_customer.id, selected_phone)
-
     descriptions = request.form.getlist('description[]')
     quantities = request.form.getlist('quantity[]')
     rates = request.form.getlist('rate[]')
@@ -1460,45 +1447,43 @@ def start_bill():
         exclude_addr=exclude_addr
     )
 
-    try:
-        db.session.add(new_invoice)
-        db.session.flush()
-        # Generate invoice Id + pdf path
-        inv_name = f"SLP-{datetime.now().strftime('%d%m%y')}-{str(new_invoice.id).zfill(5)}"
-        pdf_filename = f"{inv_name}.pdf"
-        pdf_path = os.path.join("static/pdfs", pdf_filename)
+    db.session.add(new_invoice)
+    db.session.flush()
+    # Add Alert - Not needed
 
-        new_invoice.invoiceId = inv_name
-        new_invoice.pdfPath = pdf_path
-        db.session.flush()
+    # Generate invoice Id + pdf path
+    inv_name = f"SLP-{datetime.now().strftime('%d%m%y')}-{str(new_invoice.id).zfill(5)}"
+    pdf_filename = f"{inv_name}.pdf"
+    pdf_path = os.path.join("static/pdfs", pdf_filename)
 
-        # Add line items
-        for desc, qty, rate, line_total, dc_val in item_rows:
-            matched_item = item.query.filter_by(name=desc).first()
-            if matched_item:
-                item_id = matched_item.id
-            else:
-                new_item = item(name=desc, unitPrice=rate, quantity=0, taxPercentage=0)
-                db.session.add(new_item)
-                db.session.flush()
-                item_id = new_item.id
+    new_invoice.invoiceId = inv_name
+    new_invoice.pdfPath = pdf_path
+    db.session.flush()
+    # add alerts - not needed as persistant on in place
 
-            db.session.add(invoiceItem(
-                invoiceId=new_invoice.id,
-                itemId=item_id,
-                quantity=qty,
-                rate=rate,
-                discount=0,
-                taxPercentage=0,
-                line_total=line_total,
-                dcNo=(dc_val if dc_val else None)
-            ))
-        db.session.commit()
-    except Exception as exc:
-        db.session.rollback()
-        app.logger.exception("Failed to create invoice for customer_id=%s: %s", selected_customer.id, exc)
-        flash('Something went wrong while creating the bill. Please try again.', 'danger')
-        return render_template('create_bill.html', customer=selected_customer, inventory=item.query.all())
+    # Add line items
+    for desc, qty, rate, line_total, dc_val in item_rows:
+        matched_item = item.query.filter_by(name=desc).first()
+        if matched_item:
+            item_id = matched_item.id
+        else:
+            new_item = item(name=desc, unitPrice=rate, quantity=0, taxPercentage=0)
+            db.session.add(new_item)
+            db.session.flush()
+            # add alert - not needed as persistent one in place
+            item_id = new_item.id
+
+        db.session.add(invoiceItem(
+            invoiceId=new_invoice.id,
+            itemId=item_id,
+            quantity=qty,
+            rate=rate,
+            discount=0,
+            taxPercentage=0,
+            line_total=line_total,
+            dcNo=(dc_val if dc_val else None)
+        ))
+    db.session.commit()
 
     # add alerts - Not needed, persistent one is in place
 
@@ -1507,7 +1492,6 @@ def start_bill():
 
     # After successful creation, flash and redirect to locked preview page
     session['persistent_notice'] = f"Invoice {new_invoice.invoiceId} created successfully!"
-    app.logger.info("Created invoice %s for customer_id=%s total=%.2f", new_invoice.invoiceId, selected_customer.id, new_invoice.totalAmount)
     return redirect(url_for('view_bill_locked', invoicenumber=new_invoice.invoiceId, new_bill='True'))
 
 
@@ -1616,7 +1600,6 @@ def view_bills():
 @app.route('/view-bill/<invoicenumber>')
 def view_bill_locked(invoicenumber):
     # load invoice and related data
-    app.logger.info("Rendering view_bill_locked for %s", invoicenumber)
     current_invoice = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
     cur_cust = customer.query.get(current_invoice.customerId)
     line_items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
@@ -2159,12 +2142,12 @@ def handle_layout(action=None, data=None):
         if updated:
             config.set_sizes(current_sizes)
             db.session.commit()
-            session['persistent_notice'] = "✅ Layout has been updated successfully!"
+            session['persistent_notice'] = "Layout has been updated successfully!"
 
     elif action == "reset":
         config.reset_sizes()
         db.session.commit()
-        session['persistent_notice'] = "✅ Layout has been reset to defaults!"
+        session['persistent_notice'] = "Layout has been reset to defaults!"
 
     return _build_sample_invoice_context()
 
