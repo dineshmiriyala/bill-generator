@@ -15,6 +15,7 @@
   {% endif %}
 
   <form method="POST" action="{% if edit_mode %}{{ url_for('update_bill', invoicenumber=invoice_no) }}{% else %}/create-bill{% endif %}">
+    <input type="hidden" name="form_token" value="{{ form_token }}">
     {% if edit_mode %}<input type="hidden" name="invoice_no" value="{{ invoice_no }}">{% endif %}
 
     <!-- Customer Details -->

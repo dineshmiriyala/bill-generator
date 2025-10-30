@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timezone
+import re
 
 
 def _read_info_json(module):
@@ -52,6 +53,18 @@ def test_create_bill_endpoint_creates_invoice(app_module):
         module.db.session.commit()
 
         client = module.app.test_client()
+
+        # Step 1: load the create bill form for this customer to obtain the form token
+        form_resp = client.post(
+            "/select_customer",
+            data={"customer": customer.phone},
+            follow_redirects=False,
+        )
+        html = form_resp.get_data(as_text=True)
+        match = re.search(r'name="form_token" value="([^"]+)"', html)
+        assert match, "form token not rendered"
+        token = match.group(1)
+
         form_payload = {
             "customer_phone": customer.phone,
             "description[]": ["Service A"],
@@ -60,6 +73,7 @@ def test_create_bill_endpoint_creates_invoice(app_module):
             "total[]": ["900.00"],
             "rounded[]": ["0"],
             "dc_no[]": [""],
+            "form_token": token,
         }
 
         response = client.post("/create-bill", data=form_payload, follow_redirects=False)

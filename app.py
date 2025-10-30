@@ -215,6 +215,25 @@ def _determine_data_start(now: datetime) -> datetime:
     return earliest_utc
 
 
+def _issue_bill_token() -> str:
+    token = uuid.uuid4().hex
+    session['bill_form_token'] = token
+    return token
+
+
+def _validate_bill_token(submitted: str) -> bool:
+    expected = session.get('bill_form_token')
+    if not expected or not submitted or submitted != expected:
+        return False
+    session.pop('bill_form_token', None)
+    return True
+
+
+def _render_create_bill(**context):
+    context['form_token'] = _issue_bill_token()
+    return render_template('create_bill.html', **context)
+
+
 def _ensure_file_writable(path: Path) -> None:
     """Best-effort to guarantee the SQLite file is writable (fixes Windows bundle perms)."""
     try:
@@ -1181,7 +1200,7 @@ def select_customer():
         sel = (customer.query
                .filter(customer.isDeleted == False, customer.phone == phone)
                .first_or_404())
-        return render_template('create_bill.html', customer=sel, inventory=item.query.all())
+        return _render_create_bill(customer=sel, inventory=item.query.all())
 
     # GET: either search or show recent
     q = (request.args.get('q') or '').strip()
@@ -1383,10 +1402,10 @@ def start_bill():
             if not cust:
                 flash('Customer not found', 'warning')
                 return redirect(url_for('about_user'))
-            return render_template('create_bill.html', customer=cust,
-                                   inventory=item.query.order_by(item.name.asc()).all())
+            inventory_list = item.query.order_by(item.name.asc()).all()
+            return _render_create_bill(customer=cust, inventory=inventory_list)
         # GET: no customer_id, just render blank/new bill
-        return render_template('create_bill.html')
+        return _render_create_bill()
 
     # POST logic
     # POST (A) select customer
@@ -1398,9 +1417,14 @@ def start_bill():
         if not sel:
             flash('Please pick a valid customer', 'warning')
             return render_template('select_customer.html')
-        return render_template('create_bill.html', customer=sel, inventory=item.query.all())
+        return _render_create_bill(customer=sel, inventory=item.query.all())
 
     # (B) Final bill submission with line items
+    submitted_token = request.form.get('form_token')
+    if not _validate_bill_token(submitted_token):
+        flash('The bill form has expired. Please start a new bill.', 'warning')
+        return redirect(url_for('select_customer'))
+
     selected_phone = request.form.get('customer_phone')
     selected_customer = customer.query.filter_by(phone=selected_phone).first()
     if not selected_customer:
@@ -1502,7 +1526,7 @@ def view_customers():
         sel = (customer.query
                .filter(customer.isDeleted == False, customer.phone == phone)
                .first_or_404())
-        return render_template('create_bill.html', customer=sel, inventory=item.query.all())
+        return _render_create_bill(customer=sel, inventory=item.query.all())
 
     query = (request.args.get('q') or '').strip().lower()
     q = (customer.query
@@ -1845,8 +1869,7 @@ def edit_bill(invoicenumber):
         return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill='true'))
 
     # Render the same template as create_bill.html but pre-filled
-    return render_template(
-        'create_bill.html',
+    return _render_create_bill(
         customer=current_customer,
         inventory=item.query.all(),
         success=False,  # show filled rows
@@ -1893,6 +1916,11 @@ def update_bill(invoicenumber):
     # 1) Load the invoice being edited
     current_invoice = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
     current_customer = customer.query.get(current_invoice.customerId)
+
+    submitted_token = request.form.get('form_token')
+    if not _validate_bill_token(submitted_token):
+        flash('The bill form has expired. Please reopen the invoice before updating.', 'warning')
+        return redirect(url_for('view_bill_locked', invoicenumber=invoicenumber, edit_bill='true'))
 
     # 2) Read form inputs
     descriptions = request.form.getlist('description[]')
