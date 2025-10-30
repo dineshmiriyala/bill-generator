@@ -198,11 +198,12 @@
 
 <div class="modal fade" id="cloudUploadModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content p-4 text-center">
+    <div class="modal-content p-4 text-center position-relative">
+      <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Close"></button>
       <div class="progress-circle" id="progressCircle">
         <div class="progress-inner" id="progressValue">0%</div>
       </div>
-      <p id="uploadStatus" class="mb-0">Waiting to start...</p>
+      <p id="uploadStatus" class="mb-0">Waiting to start…</p>
     </div>
   </div>
 </div>
@@ -210,21 +211,23 @@
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     const uploadBtn = document.getElementById('cloudUploadBtn');
-    const uploadModal = new bootstrap.Modal(document.getElementById('cloudUploadModal'));
+    const cloudModalEl = document.getElementById('cloudUploadModal');
+    const uploadModal = new bootstrap.Modal(cloudModalEl);
     const progressCircle = document.getElementById('progressCircle');
     const progressValue = document.getElementById('progressValue');
     const statusText = document.getElementById('uploadStatus');
     const lastUploadedLabel = document.getElementById('lastUploaded');
+    let uploadInterval = null;
 
     uploadBtn.addEventListener('click', function(e) {
       e.preventDefault();
       uploadModal.show();
       uploadBtn.disabled = true;
       let progress = 0;
-      statusText.textContent = 'Uploading new data…';
+      statusText.textContent = 'Uploading new data… This may take up to a minute.';
       progressValue.style.color = '#6c757d';
 
-      const interval = setInterval(() => {
+      uploadInterval = setInterval(() => {
         if (progress < 90) {
           progress += 5;
         }
@@ -247,7 +250,10 @@
         return data;
       })
       .then(data => {
-        clearInterval(interval);
+        if (uploadInterval) {
+          clearInterval(uploadInterval);
+          uploadInterval = null;
+        }
         progress = 100;
         progressCircle.style.background = 'conic-gradient(#6c8edb 360deg, #6c8edb 360deg)';
         progressValue.textContent = data.status === 'ok' ? '✓' : '!';
@@ -260,15 +266,30 @@
         }
       })
       .catch(error => {
-        clearInterval(interval);
+        if (uploadInterval) {
+          clearInterval(uploadInterval);
+          uploadInterval = null;
+        }
         progressCircle.style.background = 'conic-gradient(#dc3545 360deg, #dc3545 360deg)';
         progressValue.textContent = '!';
         progressValue.style.color = '#dc3545';
-        statusText.textContent = error.message || 'Network unavailable. Please try again later.';
+        statusText.textContent = (error.message || 'Network unavailable. Please try again later.') + ' You can close this window once it resolves.';
       })
       .finally(() => {
         uploadBtn.disabled = false;
       });
+    });
+
+    cloudModalEl.addEventListener('hidden.bs.modal', function() {
+      if (uploadInterval) {
+        clearInterval(uploadInterval);
+        uploadInterval = null;
+      }
+      progressCircle.style.background = 'conic-gradient(#6c8edb 0deg, #cfd8dc 0deg)';
+      progressValue.textContent = '0%';
+      progressValue.style.color = '#6c757d';
+      statusText.textContent = 'Waiting to start…';
+      uploadBtn.disabled = false;
     });
 
     const lastUpload = document.getElementById("lastUploaded");

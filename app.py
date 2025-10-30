@@ -559,9 +559,25 @@ def recover_customer(id):
 
 @app.route('/more')
 def more():
+    supabase_meta = APP_INFO.get('supabase', {})
+    last_sync_raw = supabase_meta.get('last_incremental_uploaded') or supabase_meta.get('last_uploaded')
+    last_sync_display = _format_sync_timestamp(last_sync_raw)
+
+    latest_backup = _latest_backup_path()
+    if latest_backup:
+        backup_iso = datetime.fromtimestamp(latest_backup.stat().st_mtime, tz=timezone.utc).isoformat()
+        last_backup_display = _format_sync_timestamp(backup_iso)
+        last_backup_name = latest_backup.name
+    else:
+        last_backup_display = "Never"
+        last_backup_name = None
+
     return render_template(
         'more.html',
-        has_backup_location=bool((APP_INFO.get('file_location') or '').strip())
+        has_backup_location=bool((APP_INFO.get('file_location') or '').strip()),
+        last_sync_display=last_sync_display,
+        last_backup_display=last_backup_display,
+        last_backup_name=last_backup_name,
     )
 
 
@@ -2910,7 +2926,9 @@ def _format_sync_timestamp(raw_value):
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     local_dt = parsed.astimezone(tz.tzlocal())
-    return local_dt.strftime("%d %b %Y · %H:%M")
+    date_part = local_dt.strftime("%d %b %Y")
+    time_part = local_dt.strftime("%I:%M %p").lstrip('0')
+    return f"{date_part} · {time_part}"
 
 
 def _latest_backup_path() -> Path | None:
@@ -3019,6 +3037,16 @@ def create_local_backup_copy():
         flash(f'Backup copied to {backup_path}', 'success')
     else:
         flash('Unable to copy database to the configured folder. Check permissions and path.', 'danger')
+    return redirect(url_for('more'))
+
+
+@app.post('/backup/snapshot')
+def create_backup_snapshot():
+    backup_path = _create_db_backup()
+    if backup_path:
+        flash(f'Backup snapshot created at {backup_path}', 'success')
+    else:
+        flash('Unable to create backup snapshot. Check disk space and permissions.', 'danger')
     return redirect(url_for('more'))
 
 

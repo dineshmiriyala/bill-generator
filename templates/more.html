@@ -1,61 +1,326 @@
 {% extends 'base.html' %}
+{% set hide_navbar = True %}
 
 {% block content %}
-<div class="menu-container">
-  <div id="mainMenu" class="menu-grid active">
-    <button class="card-btn" data-target="statementsMenu">📊 Statements & Reports</button>
-    <button class="card-btn" data-target="billMenu">🧾 Billing & Invoicing</button>
-    <button class="card-btn" data-target="customerMenu">👤 Customers</button>
-    <button class="card-btn" data-target="inventoryMenu">📦 Inventory</button>
-    <button class="card-btn" data-target="accountMenu">⚙️ Account & Insights</button>
-    <button class="card-btn" onclick="history.back()">⬅️ Go Back</button>
-  </div>
+<style>
+  body {
+    background: radial-gradient(circle at top, #f6f8fc 0%, #e8ebf5 45%, #fdfefe 100%);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  }
 
-  <!-- Billing Submenu -->
-  <div id="billMenu" class="submenu" style="display:none;">
-    <button class="back-btn">← Back</button>
-    <a href="/select_customer" class="card-link">Create Invoice</a>
-    <a href="/view_bills" class="card-link">View Invoices</a>
-    <a href="/test-pre-preview" class="card-link">Invoice Layout Editor</a>
-    <a href="/qr_code" class="card-link">Generate UPI QR</a>
-  </div>
+  .hub-wrapper {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3.5rem 1.5rem;
+  }
 
-  <!-- Customer Submenu -->
-  <div id="customerMenu" class="submenu" style="display:none;">
-    <button class="back-btn">← Back</button>
-    <a href="/create_customers" class="card-link">Add Customer</a>
-    <a href="/view_customers" class="card-link">Customer List</a>
-  </div>
+  .hub-container {
+    width: min(1080px, 100%);
+  }
 
-  <!-- Inventory Submenu -->
-  <div id="inventoryMenu" class="submenu" style="display:none;">
-    <button class="back-btn">← Back</button>
-    <a href="/view_inventory" class="card-link">Inventory List</a>
-    <a href="/add_inventory" class="card-link">Add Item</a>
-  </div>
+  .hub-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.75rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
 
-  <!-- Statements Submenu -->
-  <div id="statementsMenu" class="submenu" style="display:none;">
-    <button class="back-btn">← Back</button>
-    <a href="/statements_company" class="card-link">Company Statements</a>
-    <a href="/statements" class="card-link">Date-wise Statements</a>
-  </div>
+  .hub-home {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.65rem 1.1rem;
+    border-radius: 999px;
+    background: rgba(24, 31, 52, 0.88);
+    color: #f8fafc;
+    text-decoration: none;
+    font-weight: 550;
+    font-size: 0.95rem;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.22);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
 
-  <!-- Account Submenu -->
-  <div id="accountMenu" class="submenu" style="display:none;">
-    <button class="back-btn">← Back</button>
-    <a href="/recover" class="card-link">Data Recovery</a>
-    <a href="/analytics" class="card-link">Business Analytics</a>
-    <a href="/config" class="card-link">Account Settings</a>
-    <form id="supabaseSyncForm" action="{{ url_for('supabase_sync_all') }}" method="post">
-      <button type="submit" class="card-link-button">Upload All Data to Supabase</button>
-    </form>
-    <form action="{{ url_for('create_local_backup_copy') }}" method="post">
-      <button type="submit" class="card-link-button" {% if not has_backup_location %}disabled{% endif %}>Make Local DB Copy</button>
-    </form>
-    {% if not has_backup_location %}
-      <p class="text-muted small">Set a backup folder in Account Settings to enable local copies.</p>
-    {% endif %}
+  .hub-home:hover,
+  .hub-home:focus {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.32);
+    outline: none;
+  }
+
+  .hub-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .hub-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.55rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.78);
+    color: #334155;
+    font-size: 0.85rem;
+    font-weight: 520;
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.25);
+    backdrop-filter: blur(8px);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+  }
+
+  .hub-chip.highlight {
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
+    transform: translateY(-2px);
+  }
+
+  .hub-title {
+    font-size: clamp(2rem, 2.3vw, 2.6rem);
+    font-weight: 650;
+    color: #1c1f26;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.4rem;
+    text-align: center;
+  }
+
+  .hub-tagline {
+    text-align: center;
+    font-size: 1.02rem;
+    color: #667085;
+    margin-bottom: 2.2rem;
+  }
+
+  .hub-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .hub-card {
+    background: rgba(255, 255, 255, 0.94);
+    border-radius: 22px;
+    padding: 1.7rem 1.6rem;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.1);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 280px;
+  }
+
+  .hub-card h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 1rem;
+  }
+
+  .hub-card p {
+    margin-bottom: 1rem;
+    color: #6b7280;
+    font-size: 0.94rem;
+  }
+
+  .hub-card-actions {
+    display: grid;
+    gap: 0.65rem;
+  }
+
+  .hub-btn,
+  .hub-btn-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 0.85rem 1.1rem;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #1f2937, #111827);
+    color: #f8fafc;
+    font-size: 0.98rem;
+    font-weight: 550;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.32);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+  }
+
+  .hub-btn:hover,
+  .hub-btn:focus,
+  .hub-btn-submit:hover,
+  .hub-btn-submit:focus {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 38px rgba(37, 99, 235, 0.28);
+    outline: none;
+    background: linear-gradient(135deg, #27303f, #111827);
+  }
+
+  .hub-btn[disabled],
+  .hub-btn.disabled,
+  .hub-btn-submit[disabled] {
+    cursor: not-allowed;
+    opacity: 0.55;
+    box-shadow: none;
+    transform: none;
+    background: linear-gradient(135deg, #475569, #334155);
+  }
+
+  .hub-note {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: #6b7280;
+  }
+
+  .hub-note a {
+    color: #2563eb;
+    text-decoration: none;
+  }
+
+  .hub-note a:hover {
+    text-decoration: underline;
+  }
+
+  .sync-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2600;
+  }
+
+  .sync-overlay.visible {
+    display: flex;
+  }
+
+  .sync-modal {
+    background: #ffffff;
+    padding: 2.2rem 2rem;
+    border-radius: 22px;
+    box-shadow: 0 32px 60px rgba(15, 23, 42, 0.28);
+    text-align: center;
+    width: min(340px, 90%);
+  }
+
+  .sync-spinner {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 5px solid rgba(148, 163, 184, 0.25);
+    border-top-color: #4338ca;
+    margin: 0 auto 1.2rem;
+    animation: spin 1s linear infinite;
+  }
+
+  .sync-status {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 0.5rem;
+  }
+
+  .sync-subtext {
+    font-size: 0.9rem;
+    color: #6b7280;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .sync-progress-circle {
+    position: relative;
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    background: conic-gradient(#6366f1 0deg, #d1d5db 0deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.1rem;
+  }
+
+  .sync-progress-value {
+    position: absolute;
+    width: 66px;
+    height: 66px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #4b5563;
+  }
+
+  @media (max-width: 768px) {
+    .hub-wrapper { padding: 2.5rem 1rem; }
+    .hub-card { min-height: auto; }
+  }
+</style>
+
+<div class="hub-wrapper">
+  <div class="hub-container">
+    <div class="hub-top">
+      <a class="hub-home" href="/">← Back to Home</a>
+      <div class="hub-meta">
+        <span id="cloudSyncChip" class="hub-chip" aria-label="Last Supabase sync">☁️ Cloud Sync: {{ last_sync_display }}</span>
+        <span id="backupChip" class="hub-chip" aria-label="Last backup"{% if last_backup_name %} title="{{ last_backup_name }}"{% endif %}>💾 Backup: {{ last_backup_display }}</span>
+      </div>
+    </div>
+
+    <h1 class="hub-title">Operations Hub</h1>
+    <p class="hub-tagline">Quick access to everything beyond billing—analytics, configuration, and resilient backup routines.</p>
+
+    <div class="hub-grid">
+      <section class="hub-card">
+        <h2>Daily Workflows</h2>
+        <p>Keep the day-to-day running smoothly with shortcuts to your most frequent tasks.</p>
+        <div class="hub-card-actions">
+          <a href="/select_customer" class="hub-btn">🧾 Create Invoice</a>
+          <a href="/view_bills" class="hub-btn">📚 View Bills</a>
+          <a href="/view_customers" class="hub-btn">👥 Customers</a>
+          <a href="/view_inventory" class="hub-btn">📦 Inventory</a>
+        </div>
+      </section>
+
+      <section class="hub-card">
+        <h2>Analytics & Tools</h2>
+        <p>Understand performance, tune layouts, and manage account settings from one place.</p>
+        <div class="hub-card-actions">
+          <a href="/analytics" class="hub-btn">📈 Analytics Dashboard</a>
+          <a href="/statements" class="hub-btn">🗓 Date Statements</a>
+          <a href="/statements_company" class="hub-btn">🏢 Company Statements</a>
+          <a href="/test-pre-preview" class="hub-btn">🧩 Invoice Layout</a>
+          <a href="/qr_code" class="hub-btn">💳 Generate UPI QR</a>
+          <a href="/recover" class="hub-btn">🛟 Data Recovery</a>
+          <a href="/config" class="hub-btn">⚙️ Account Settings</a>
+        </div>
+      </section>
+
+      <section class="hub-card">
+        <h2>Backup & Sync</h2>
+        <p>Mirror data safely, capture on-demand snapshots, or push a full dataset to Supabase.</p>
+        <div class="hub-card-actions">
+          <button type="button" id="incrementalSyncBtn" class="hub-btn-submit">☁️ Quick Cloud Sync</button>
+          <form id="supabaseSyncForm" action="{{ url_for('supabase_sync_all') }}" method="post">
+            <button type="submit" class="hub-btn-submit">☁️ Upload All Data to Supabase</button>
+          </form>
+          <form action="{{ url_for('create_local_backup_copy') }}" method="post">
+            <button type="submit" class="hub-btn-submit{% if not has_backup_location %} disabled{% endif %}" {% if not has_backup_location %}disabled{% endif %}>📁 Mirror DB to External Folder</button>
+          </form>
+          <form action="{{ url_for('create_backup_snapshot') }}" method="post">
+            <button type="submit" class="hub-btn-submit">💾 Create Backup Snapshot</button>
+          </form>
+        </div>
+        {% if not has_backup_location %}
+          <p class="hub-note">Set a backup folder in <a href="{{ url_for('config') }}">Account Settings</a> to enable automatic mirroring.</p>
+        {% endif %}
+      </section>
+    </div>
   </div>
 </div>
 
@@ -63,190 +328,127 @@
   <div class="sync-modal">
     <div class="sync-spinner" role="presentation"></div>
     <p class="sync-status">Preparing upload…</p>
-    <p class="sync-subtext">This may take a minute depending on your data size.</p>
+    <p class="sync-subtext">Sit tight while we package your data for Supabase.</p>
   </div>
 </div>
 
-<style>
-.menu-container {
-  width: 100%;
-  max-width: 850px;
-  margin: 10rem auto;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
-  text-align: center;
-  background: linear-gradient(145deg, #f8f8f8, #eaeaea);
-  border-radius: 18px;
-  padding: 2rem;
-  color: #333333;
-}
-/* body {
-  background: #333333;
-  color: #333333;
-} */
-.menu-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.2rem;
-  justify-items: center;
-}
-.card-btn {
-  width: 100%;
-  padding: 1.4rem 1rem;
-  font-size: 1.15rem;
-  font-weight: 600;
-  border-radius: 16px;
-  border: 1px solid rgba(0,0,0,0.2);
-  color: #fff;
-  cursor: pointer;
-  background: #262626;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.2);
-  transition: all 0.3s ease;
-}
-.card-btn:hover {
-  background: #222;
-  transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-}
-.card-link {
-  display: block;
-  width: 100%;
-  padding: 1rem;
-  margin-bottom: 0.8rem;
-  border-radius: 12px;
-  text-decoration: none;
-  font-size: 1.1rem;
-  font-weight: 500;
-  background: #262626;
-  color: #fff;
-  border: 1px solid rgba(0,0,0,0.2);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.2);
-  transition: all 0.25s ease;
-}
-.card-link:hover {
-  background: #222;
-  transform: translateY(-2px);
-  color: #fff;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-}
-.card-link-button {
-  display: block;
-  width: 100%;
-  padding: 1rem;
-  margin-bottom: 0.8rem;
-  border-radius: 12px;
-  font-size: 1.1rem;
-  font-weight: 500;
-  background: #262626;
-  color: #fff;
-  border: 1px solid rgba(0,0,0,0.2);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.2);
-  transition: all 0.25s ease;
-  cursor: pointer;
-}
-.card-link-button:hover:enabled {
-  background: #222;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-}
-.card-link-button:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-.back-btn {
-  background: transparent;
-  color: #000;
-  border: none;
-  font-weight: 500;
-  font-size: 1.1rem;
-  margin-bottom: 1rem;
-  cursor: pointer;
-  transition: color 0.3s ease;
-}
-.back-btn:hover { color: #555; }
-.sync-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.45);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-}
-.sync-overlay.visible {
-  display: flex;
-}
-.sync-modal {
-  background: #ffffff;
-  padding: 2rem;
-  border-radius: 16px;
-  box-shadow: 0 18px 40px rgba(0,0,0,0.25);
-  text-align: center;
-  width: min(320px, 90%);
-}
-.sync-spinner {
-  width: 42px;
-  height: 42px;
-  margin: 0 auto 1rem;
-  border-radius: 50%;
-  border: 4px solid rgba(0,0,0,0.1);
-  border-top-color: #262626;
-  animation: spinner-rotate 1s linear infinite;
-}
-.sync-status {
-  font-size: 1.05rem;
-  font-weight: 500;
-  color: #262626;
-}
-.sync-subtext {
-  margin-top: 0.5rem;
-  font-size: 0.92rem;
-  color: #555;
-}
-@keyframes spinner-rotate {
-  to { transform: rotate(360deg); }
-}
-</style>
+<div class="modal fade" id="quickSyncModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content p-4 text-center position-relative">
+      <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Close"></button>
+      <div class="sync-progress-circle" id="quickSyncProgressCircle">
+        <div class="sync-progress-value" id="quickSyncProgressValue">0%</div>
+      </div>
+      <p class="mb-0" id="quickSyncStatus">Waiting to start…</p>
+    </div>
+  </div>
+</div>
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    const mainMenu = document.getElementById('mainMenu');
-    const submenus = document.querySelectorAll('.submenu');
-
-    document.querySelectorAll('.card-btn[data-target]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const targetId = btn.dataset.target;
-        const targetMenu = document.getElementById(targetId);
-        if (targetMenu) {
-          mainMenu.style.display = 'none';
-          submenus.forEach(sm => sm.style.display = 'none');
-          targetMenu.style.display = 'block';
-        }
-      });
-    });
-
-    document.querySelectorAll('.back-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        btn.parentElement.style.display = 'none';
-        mainMenu.style.display = 'grid';
-      });
-    });
-
     const syncForm = document.getElementById('supabaseSyncForm');
     const overlay = document.getElementById('supabaseSyncOverlay');
     const statusLabel = overlay ? overlay.querySelector('.sync-status') : null;
     if (syncForm && overlay && statusLabel) {
-      syncForm.addEventListener('submit', () => {
+      syncForm.addEventListener('submit', function() {
         overlay.classList.add('visible');
         overlay.removeAttribute('hidden');
         statusLabel.textContent = 'Uploading data to Supabase…';
         const submitButton = syncForm.querySelector('button[type="submit"]');
         if (submitButton) {
           submitButton.disabled = true;
+          submitButton.classList.add('disabled');
         }
+      });
+    }
+
+    const incrementalBtn = document.getElementById('incrementalSyncBtn');
+    const quickSyncModalEl = document.getElementById('quickSyncModal');
+    const quickSyncModal = quickSyncModalEl ? new bootstrap.Modal(quickSyncModalEl) : null;
+    const progressCircle = document.getElementById('quickSyncProgressCircle');
+    const progressValue = document.getElementById('quickSyncProgressValue');
+    const progressStatus = document.getElementById('quickSyncStatus');
+    const syncChip = document.getElementById('cloudSyncChip');
+
+    if (incrementalBtn && quickSyncModal && progressCircle && progressValue && progressStatus) {
+      let quickSyncInterval = null;
+      incrementalBtn.addEventListener('click', function() {
+        quickSyncModal.show();
+        incrementalBtn.disabled = true;
+        incrementalBtn.classList.add('disabled');
+        progressStatus.textContent = 'Uploading incremental changes… This may take up to a minute.';
+        progressValue.textContent = '0%';
+        progressValue.style.color = '#4b5563';
+        let progress = 0;
+
+        quickSyncInterval = setInterval(() => {
+          if (progress < 90) {
+            progress += 5;
+          }
+          const degrees = (progress / 100) * 360;
+          progressCircle.style.background = `conic-gradient(#6366f1 ${degrees}deg, #d1d5db ${degrees}deg)`;
+          progressValue.textContent = `${progress}%`;
+        }, 200);
+
+        fetch('{{ url_for("supabase_sync_incremental") }}', {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(async response => {
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.message || 'Incremental sync failed.');
+          }
+          return data;
+        })
+        .then(data => {
+          if (quickSyncInterval) {
+            clearInterval(quickSyncInterval);
+            quickSyncInterval = null;
+          }
+          progress = 100;
+          progressCircle.style.background = 'conic-gradient(#6366f1 360deg, #6366f1 360deg)';
+          progressValue.textContent = data.status === 'ok' ? '✓' : '!';
+          progressValue.style.color = data.status === 'ok' ? '#4f46e5' : '#dc2626';
+          progressStatus.textContent = (data.message || 'Incremental sync completed.') + ' You can close this window once it finishes.';
+          if (syncChip && data.status === 'ok' && data.last_uploaded) {
+            syncChip.textContent = `☁️ Cloud Sync: ${data.last_uploaded}`;
+            syncChip.classList.add('highlight');
+            setTimeout(() => syncChip.classList.remove('highlight'), 3200);
+          }
+        })
+        .catch(error => {
+          if (quickSyncInterval) {
+            clearInterval(quickSyncInterval);
+            quickSyncInterval = null;
+          }
+          progressCircle.style.background = 'conic-gradient(#dc2626 360deg, #dc2626 360deg)';
+          progressValue.textContent = '!';
+          progressValue.style.color = '#dc2626';
+          progressStatus.textContent = (error.message || 'Network unavailable. Please try again later.') + ' Feel free to retry in a moment.';
+        })
+        .finally(() => {
+          incrementalBtn.disabled = false;
+          incrementalBtn.classList.remove('disabled');
+        });
+      });
+
+      quickSyncModalEl.addEventListener('hidden.bs.modal', function() {
+        if (quickSyncInterval) {
+          clearInterval(quickSyncInterval);
+          quickSyncInterval = null;
+        }
+        progressCircle.style.background = 'conic-gradient(#6366f1 0deg, #d1d5db 0deg)';
+        progressValue.textContent = '0%';
+        progressValue.style.color = '#4b5563';
+        progressStatus.textContent = 'Waiting to start…';
+        incrementalBtn.disabled = false;
+        incrementalBtn.classList.remove('disabled');
       });
     }
   });
 </script>
+
 {% if session and session.get('persistent_notice') %}
 <div class="modal fade" id="persistentNoticeModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
