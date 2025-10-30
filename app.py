@@ -61,7 +61,7 @@ BACKUP_MAX_AGE_DAYS = 7
 
 def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
     """Return a fresh copy of default info.json sections."""
-    reference_dt = reference_dt or datetime.utcnow()
+    reference_dt = reference_dt or datetime.now(timezone.utc)
     iso_now = reference_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     current_year = str(reference_dt.year)
 
@@ -241,7 +241,7 @@ def ensure_info_json():
     if not info_path.parent.exists():
         info_path.parent.mkdir(parents=True, exist_ok=True)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     default_payload = {
         "created_on": now.strftime("%d %B %Y"),
         "app_name": APP_NAME,
@@ -427,7 +427,7 @@ def onboarding_submit():
             flash(err, 'danger')
         return redirect(url_for('onboarding'))
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     info_payload = loading_info()
     data_section = _default_info_sections(now)
 
@@ -752,7 +752,7 @@ def config():
 
         # Update timestamp + save to file
         info_data['data'] = app_info
-        info_data['last_updated'] = datetime.utcnow().strftime("%d %B %Y")
+        info_data['last_updated'] = datetime.now(timezone.utc).strftime("%d %B %Y")
 
         try:
             with open(info_path, 'w', encoding='utf-8') as f:
@@ -1870,9 +1870,10 @@ def _build_sample_invoice_context():
 
     if not recent_invoice:
         # Fallback if no invoice exists
+        fallback_created_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return {
             "invoice": type("Invoice", (),
-                            {"invoiceId": "NO_DATA", "createdAt": datetime.utcnow(), "totalAmount": 0.0})(),
+                            {"invoiceId": "NO_DATA", "createdAt": fallback_created_at, "totalAmount": 0.0})(),
             "customer": {},
             "items": [],
             "dcno": False,
@@ -2821,7 +2822,7 @@ def _copy_backup_to_external(backup_source: Optional[Path] = None) -> Optional[P
         print(f"[warn] Unable to prepare external backup directory {destination_dir}: {exc}")
         return None
 
-    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     source_path = backup_source if backup_source and backup_source.exists() else DB_PATH
     if backup_source and backup_source.exists() and backup_source.suffix == '.bak':
         target_name = backup_source.name
@@ -2843,7 +2844,7 @@ def _copy_backup_to_external(backup_source: Optional[Path] = None) -> Optional[P
 def _create_db_backup() -> Path | None:
     backup_dir = DATA_DIR / BACKUP_DIRNAME
     backup_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     backup_path = backup_dir / f"{DATABASE_FILENAME}.{timestamp}.bak"
     try:
         shutil.copy2(DB_PATH, backup_path)
@@ -2906,7 +2907,9 @@ def _ensure_recent_backup_on_shutdown() -> None:
                 print(f"[info] Shutdown backup created (no prior backups): {created}")
             return
 
-        age = datetime.utcnow() - datetime.utcfromtimestamp(last_backup.stat().st_mtime)
+        now_utc = datetime.now(timezone.utc)
+        last_backup_time = datetime.fromtimestamp(last_backup.stat().st_mtime, tz=timezone.utc)
+        age = now_utc - last_backup_time
         if age > timedelta(days=BACKUP_MAX_AGE_DAYS):
             created = _create_db_backup()
             if created:
@@ -2965,7 +2968,7 @@ def supabase_sync_all():
         flash(f'Failed to sync with Supabase: {exc}', 'danger')
         return redirect(url_for('more'))
 
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
     _update_supabase_last_uploaded(timestamp)
     flash(f'Successfully uploaded {result.uploaded} records to Supabase.', 'success')
 
@@ -3026,7 +3029,7 @@ def supabase_sync_incremental():
     }
 
     if db_result.failed == 0 and analytics_result.failed == 0:
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         _update_supabase_last_incremental(timestamp)
         payload["message"] = (
             f"Uploaded {db_result.uploaded} changes"
