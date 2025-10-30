@@ -2,7 +2,7 @@ import os, sys, socket, threading, time, webbrowser
 from contextlib import closing
 from waitress import serve
 
-# ✅ set flags BEFORE importing app
+# Set flags BEFORE importing app
 os.environ.setdefault("FLASK_ENV", "production")
 os.environ.setdefault("BG_DESKTOP", "1")
 

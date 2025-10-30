@@ -1,0 +1,577 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-5">
+  <div class="d-flex justify-content-end mb-3">
+    <form method="post" action="{{ url_for('config_refresh') }}" class="d-inline">
+      <button type="submit" class="btn btn-outline-primary btn-sm px-3">Reload Settings</button>
+    </form>
+  </div>
+  <form method="post" autocomplete="off">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        <!-- App Created On & Last Updated Apple-style Row -->
+        <div class="d-flex justify-content-center text-muted mb-4" style="font-size: 0.9rem; letter-spacing: 0.3px; font-weight: 400; gap: 2rem;">
+          <div>
+            <i class="bi bi-calendar-event me-1"></i>
+            Created On:
+            {% if created_on %}
+              {{ created_on | datetimeformat }}
+            {% else %}
+              N/A
+            {% endif %}
+          </div>
+          <div>
+            <i class="bi bi-clock me-1"></i>
+            Last Updated:
+            {% if last_updated %}
+              {{ last_updated | datetimeformat }}
+            {% else %}
+              N/A
+            {% endif %}
+          </div>
+        </div>
+        <!-- Business Section -->
+        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h4 class="fw-semibold mb-3 text-primary">Business</h4>
+              <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#businessModal" style="min-width: 70px;">Edit</button>
+            </div>
+            <dl class="row mb-0">
+              <dt class="col-sm-4">Name</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['business']['name'] }}</dd>
+              <dt class="col-sm-4">Owner</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['business']['owner'] }}</dd>
+              <dt class="col-sm-4">Address</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['business']['address'] }}</dd>
+              <dt class="col-sm-4">Email</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['business']['email'] }}</dd>
+              <dt class="col-sm-4">Phone</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['business']['phone'] }}</dd>
+              <dt class="col-sm-4">GSTIN</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['business']['gstin'] }}</dd>
+              <dt class="col-sm-4">UPI ID</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['business']['upi_id'] }}</dd>
+              <dt class="col-sm-4">Established</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['business']['estd'] }}</dd>
+            </dl>
+          </div>
+        </div>
+
+        <!-- Bank Section -->
+        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h4 class="fw-semibold mb-3 text-primary">Bank</h4>
+              <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#bankModal" style="min-width: 70px;">Edit</button>
+            </div>
+            <dl class="row mb-0">
+              <dt class="col-sm-4">Account Name</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['bank']['account_name'] }}</dd>
+              <dt class="col-sm-4">Bank Name</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['bank']['bank_name'] }}</dd>
+              <dt class="col-sm-4">Branch</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['bank']['branch'] }}</dd>
+              <dt class="col-sm-4">Account Number</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['bank']['account_number'] }}</dd>
+              <dt class="col-sm-4">IFSC</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['bank']['ifsc'] }}</dd>
+              <dt class="col-sm-4">BHIM</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['bank']['bhim'] }}</dd>
+            </dl>
+          </div>
+        </div>
+
+        <!-- UPI Info Section -->
+        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h4 class="fw-semibold mb-3 text-primary">UPI Info</h4>
+              <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#upiModal" style="min-width: 70px;">Edit</button>
+            </div>
+            <dl class="row mb-0">
+              <dt class="col-sm-4">UPI ID</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['upi_info']['upi_id'] }}</dd>
+              <dt class="col-sm-4">Currency</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['upi_info']['currency'] }}</dd>
+              <dt class="col-sm-4">UPI Name</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['upi_info']['upi_name'] }}</dd>
+            </dl>
+          </div>
+        </div>
+
+        <!-- Backup Settings Section -->
+        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h4 class="fw-semibold mb-3 text-primary">Backups</h4>
+              <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#backupModal" style="min-width: 70px;">Edit</button>
+            </div>
+            <dl class="row mb-0">
+              <dt class="col-sm-4">Local Backup Folder</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info.get('file_location') or 'Not set' }}</dd>
+            </dl>
+            <p class="small text-muted mt-3">The app will mirror database backups to this folder and retain the 10 most recent copies.</p>
+          </div>
+        </div>
+
+        <!-- Invoice Settings Section (formerly Bill Config) -->
+        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h4 class="fw-semibold mb-3 text-primary">Invoice Settings</h4>
+              <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#invoiceSettingsModal" style="min-width: 70px;">Edit</button>
+            </div>
+            <dl class="row mb-0">
+              <dt class="col-sm-4">Heading</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['bill_config']['heading'] }}</dd>
+              <dt class="col-sm-4">Footer</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['bill_config']['footer'] }}</dd>
+              <dt class="col-sm-4">Payment Footer</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['bill_config']['payment-footer'] }}</dd>
+            </dl>
+          </div>
+        </div>
+
+        <!-- Services Section -->
+        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h4 class="fw-semibold mb-3 text-primary">Services</h4>
+              <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#servicesModal" style="min-width: 70px;">Edit</button>
+            </div>
+            <ul class="mb-0 ps-3">
+              {% for service in app_info['services'] %}
+                <li class="text-muted">{{ service }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+
+
+        <!-- Statement Section -->
+        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h4 class="fw-semibold mb-3 text-primary">Statement</h4>
+              <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#statementModal" style="min-width: 70px;">Edit</button>
+            </div>
+            <dl class="row mb-0">
+              <dt class="col-sm-4">Header Title</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['statement']['header_title'] }}</dd>
+              <dt class="col-sm-4">Disclaimer</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['statement']['disclaimer'] }}</dd>
+            </dl>
+          </div>
+        </div>
+
+        <!-- Supabase Info Section -->
+        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h4 class="fw-semibold mb-3 text-primary">Cloud Settings</h4>
+              <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#supabasemodal" style="min-width: 70px;">Edit</button>
+            </div>
+            <dl class="row mb-0">
+              <dt class="col-sm-4">URL</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['supabase']['url'] }}</dd>
+              <dt class="col-sm-4">API Key</dt>
+              <dd class="col-sm-8 text-muted">************</dd>
+              <dt class="col-sm-4">Last Uploaded to Cloud</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['supabase']['last_uploaded'] }}</dd>
+            </dl>
+          </div>
+        </div>
+
+        <!-- Modals -->
+        <!-- Business Modal -->
+        <div class="modal fade" id="businessModal" tabindex="-1" aria-labelledby="businessModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 1rem;">
+              <form method="post" autocomplete="off" action="{{ url_for('config') }}">
+                <input type="hidden" name="section" value="business">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title fw-semibold" id="businessModalLabel">Edit Business</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <dl>
+                        <dt>Name</dt>
+                        <dd class="text-muted">{{ app_info['business']['name'] }}</dd>
+                        <dt>Owner</dt>
+                        <dd class="text-muted">{{ app_info['business']['owner'] }}</dd>
+                        <dt>Address</dt>
+                        <dd class="text-muted">{{ app_info['business']['address'] }}</dd>
+                        <dt>Email</dt>
+                        <dd class="text-muted">{{ app_info['business']['email'] }}</dd>
+                        <dt>Phone</dt>
+                        <dd class="text-muted">{{ app_info['business']['phone'] }}</dd>
+                        <dt>GSTIN</dt>
+                        <dd class="text-muted">{{ app_info['business']['gstin'] }}</dd>
+                        <dt>UPI ID</dt>
+                        <dd class="text-muted">{{ app_info['business']['upi_id'] }}</dd>
+                        <dt>Established</dt>
+                        <dd class="text-muted">{{ app_info['business']['estd'] }}</dd>
+                      </dl>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" name="name" class="form-control" value="{{ app_info['business']['name'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Owner</label>
+                        <input type="text" name="owner" class="form-control" value="{{ app_info['business']['owner'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Address</label>
+                        <input type="text" name="address" class="form-control" value="{{ app_info['business']['address'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="email" class="form-control" value="{{ app_info['business']['email'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Phone</label>
+                        <input type="text" name="phone" class="form-control" value="{{ app_info['business']['phone'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">GSTIN</label>
+                        <input type="text" name="gstin" class="form-control" value="{{ app_info['business']['gstin'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">UPI ID</label>
+                        <input type="text" name="upi_id" class="form-control" value="{{ app_info['business']['upi_id'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Established</label>
+                        <input type="text" name="estd" class="form-control" value="{{ app_info['business']['estd'] }}">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Backup Modal -->
+        <div class="modal fade" id="backupModal" tabindex="-1" aria-labelledby="backupModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 1rem;">
+              <form method="post" autocomplete="off" action="{{ url_for('config') }}">
+                <input type="hidden" name="section" value="file_location">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title fw-semibold" id="backupModalLabel">Backup Folder</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="mb-3">
+                    <label for="file_location" class="form-label fw-semibold">Folder Path</label>
+                    <input type="text" class="form-control" id="file_location" name="file_location" value="{{ app_info.get('file_location') or '' }}" placeholder="e.g. /Users/me/Documents/BillGeneratorBackups">
+                    <div class="form-text">Choose a writable folder where you want local database copies stored. A timestamped <code>.bak</code> file will be created each time.</div>
+                  </div>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary">Save Folder</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bank Modal -->
+        <div class="modal fade" id="bankModal" tabindex="-1" aria-labelledby="bankModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 1rem;">
+              <form method="post" autocomplete="off" action="{{ url_for('config') }}">
+                <input type="hidden" name="section" value="bank">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title fw-semibold" id="bankModalLabel">Edit Bank</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <dl>
+                        <dt>Account Name</dt>
+                        <dd class="text-muted">{{ app_info['bank']['account_name'] }}</dd>
+                        <dt>Bank Name</dt>
+                        <dd class="text-muted">{{ app_info['bank']['bank_name'] }}</dd>
+                        <dt>Branch</dt>
+                        <dd class="text-muted">{{ app_info['bank']['branch'] }}</dd>
+                        <dt>Account Number</dt>
+                        <dd class="text-muted">{{ app_info['bank']['account_number'] }}</dd>
+                        <dt>IFSC</dt>
+                        <dd class="text-muted">{{ app_info['bank']['ifsc'] }}</dd>
+                        <dt>BHIM</dt>
+                        <dd class="text-muted">{{ app_info['bank']['bhim'] }}</dd>
+                      </dl>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label class="form-label">Account Name</label>
+                        <input type="text" name="account_name" class="form-control" value="{{ app_info['bank']['account_name'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Bank Name</label>
+                        <input type="text" name="bank_name" class="form-control" value="{{ app_info['bank']['bank_name'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Branch</label>
+                        <input type="text" name="branch" class="form-control" value="{{ app_info['bank']['branch'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Account Number</label>
+                        <input type="text" name="account_number" class="form-control" value="{{ app_info['bank']['account_number'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">IFSC</label>
+                        <input type="text" name="ifsc" class="form-control" value="{{ app_info['bank']['ifsc'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">BHIM</label>
+                        <input type="text" name="bhim" class="form-control" value="{{ app_info['bank']['bhim'] }}">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- UPI Info Modal -->
+        <div class="modal fade" id="upiModal" tabindex="-1" aria-labelledby="upiModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 1rem;">
+              <form method="post" autocomplete="off" action="{{ url_for('config') }}">
+                <input type="hidden" name="section" value="upi_info">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title fw-semibold" id="upiModalLabel">Edit UPI Info</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <dl>
+                        <dt>UPI ID</dt>
+                        <dd class="text-muted">{{ app_info['upi_info']['upi_id'] }}</dd>
+                        <dt>Currency</dt>
+                        <dd class="text-muted">{{ app_info['upi_info']['currency'] }}</dd>
+                        <dt>UPI Name</dt>
+                        <dd class="text-muted">{{ app_info['upi_info']['upi_name'] }}</dd>
+                      </dl>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label class="form-label">UPI ID</label>
+                        <input type="text" name="upi_id" class="form-control" value="{{ app_info['upi_info']['upi_id'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Currency</label>
+                        <input type="text" name="currency" class="form-control" value="{{ app_info['upi_info']['currency'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">UPI Name</label>
+                        <input type="text" name="upi_name" class="form-control" value="{{ app_info['upi_info']['upi_name'] }}">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Supabase Modal -->
+        <div class="modal fade" id="supabasemodal" tabindex="-1" aria-labelledby="upiModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 1rem;">
+              <form method="post" autocomplete="off" action="{{ url_for('config') }}">
+                <input type="hidden" name="section" value="Cloud Settings">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title fw-semibold" id="supabasemodellabel">Edit Cloud Auth</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <dl>
+                        <dt>URL</dt>
+                        <dd class="text-muted">{{ app_info['supabase']['url'] }}</dd>
+                        <dt>Key</dt>
+                        <dd class="text-muted">************</dd>
+                        <dt>Last Uploaded</dt>
+                        <dd class="text-muted">{{ app_info['supabase']['last_uploaded'] }}</dd>
+                      </dl>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label class="form-label">URL</label>
+                        <input type="text" name="url" class="form-control" value="{{ app_info['supabase']['url'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">API Key</label>
+                        <input type="password" name="key" class="form-control" value="{{ app_info['supabase']['key'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Last Uploaded</label>
+                        <input type="text" name="last_uploaded" class="form-control" value="{{ app_info['supabase']['last_uploaded'] }}" readonly>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Statement Modal -->
+        <div class="modal fade" id="statementModal" tabindex="-1" aria-labelledby="statementModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 1rem;">
+              <form method="post" autocomplete="off" action="{{ url_for('config') }}">
+                <input type="hidden" name="section" value="statement">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title fw-semibold" id="statementModalLabel">Edit Statement</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <dl>
+                        <dt>Header Title</dt>
+                        <dd class="text-muted">{{ app_info['statement']['header_title'] }}</dd>
+                        <dt>Disclaimer</dt>
+                        <dd class="text-muted">{{ app_info['statement']['disclaimer'] }}</dd>
+                      </dl>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label class="form-label">Header Title</label>
+                        <input type="text" name="header_title" class="form-control" value="{{ app_info['statement']['header_title'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Disclaimer</label>
+                        <input type="text" name="disclaimer" class="form-control" value="{{ app_info['statement']['disclaimer'] }}">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Invoice Settings Modal (formerly Bill Config Modal) -->
+        <div class="modal fade" id="invoiceSettingsModal" tabindex="-1" aria-labelledby="invoiceSettingsModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 1rem;">
+              <form method="post" autocomplete="off" action="{{ url_for('config') }}">
+                <input type="hidden" name="section" value="bill_config">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title fw-semibold" id="invoiceSettingsModalLabel">Edit Invoice Settings</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <dl>
+                        <dt>Heading</dt>
+                        <dd class="text-muted">{{ app_info['bill_config']['heading'] }}</dd>
+                        <dt>Footer</dt>
+                        <dd class="text-muted">{{ app_info['bill_config']['footer'] }}</dd>
+                        <dt>Payment Footer</dt>
+                        <dd class="text-muted">{{ app_info['bill_config']['payment-footer'] }}</dd>
+                      </dl>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label class="form-label">Heading</label>
+                        <input type="text" name="heading" class="form-control" value="{{ app_info['bill_config']['heading'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Footer</label>
+                        <input type="text" name="footer" class="form-control" value="{{ app_info['bill_config']['footer'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Payment Footer</label>
+                        <input type="text" name="payment-footer" class="form-control" value="{{ app_info['bill_config']['payment-footer'] }}">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Services Modal -->
+        <div class="modal fade" id="servicesModal" tabindex="-1" aria-labelledby="servicesModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 1rem;">
+              <form method="post" autocomplete="off" action="{{ url_for('config') }}">
+                <input type="hidden" name="section" value="services">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title fw-semibold" id="servicesModalLabel">Edit Services</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <label class="form-label">Current Services</label>
+                      <ul class="mb-0 ps-3">
+                        {% for service in app_info['services'] %}
+                          <li class="text-muted">{{ service }}</li>
+                        {% endfor %}
+                      </ul>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Edit Services (one per line)</label>
+                      <textarea class="form-control" name="services" rows="6">{% for service in app_info['services'] %}{{ service }}{% if not loop.last %}&#10;{% endif %}{% endfor %}</textarea>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+
+{% endblock %}

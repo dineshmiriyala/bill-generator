@@ -1,9 +1,14 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import event, func, select
 import json
 
 db = SQLAlchemy()
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
+
 
 class customer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -14,8 +19,8 @@ class customer(db.Model):
     gst = db.Column(db.String(30))
     address = db.Column(db.Text)
     businessType = db.Column(db.String(50))
-    invoices = db.relationship("invoice", backref="customer", lazy= True)
-    createdAt = db.Column(db.DateTime, default=datetime.utcnow)
+    invoices = db.relationship("invoice", backref="customer", lazy=True)
+    createdAt = db.Column(db.DateTime, default=_utcnow)
     isDeleted = db.Column(db.Boolean, nullable=False, default=False, index=True)
     deletedAt = db.Column(db.DateTime, nullable=True, index=True)
 
@@ -23,24 +28,25 @@ class customer(db.Model):
     def alive(cls):
         return cls.query.filter_by(isDeleted=False)
 
+
 class invoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoiceId = db.Column(db.String(50), unique=True, nullable=False)
     customerId = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=False, index=True)
-    createdAt = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    createdAt = db.Column(db.DateTime, default=_utcnow, index=True)
     pdfPath = db.Column(db.String(255), nullable=False)
     totalAmount = db.Column(db.Float, nullable=False)
     items = db.relationship("invoiceItem", backref="invoice", lazy=True)
     isDeleted = db.Column(db.Boolean, nullable=False, default=False, index=True)
-    deletedAt = db.Column(db.DateTime, nullable = True, index=True)
+    deletedAt = db.Column(db.DateTime, nullable=True, index=True)
     exclude_phone = db.Column(db.Boolean, default=False)
     exclude_gst = db.Column(db.Boolean, default=False)
     exclude_addr = db.Column(db.Boolean, default=False)
 
-
     @classmethod
     def alive(cls):
         return cls.query.filter_by(isDeleted=False)
+
 
 class item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -50,6 +56,7 @@ class item(db.Model):
     quantity = db.Column(db.Float, default=1)
     taxPercentage = db.Column(db.Float)
 
+
 # Auto-assign an incrementing SKU if not provided
 @event.listens_for(item, 'before_insert')
 def set_incremental_sku(mapper, connection, target):
@@ -57,47 +64,52 @@ def set_incremental_sku(mapper, connection, target):
         max_sku = connection.execute(select(func.max(item.sku))).scalar()
         target.sku = (max_sku or 0) + 1
 
+
 class invoiceItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoiceId = db.Column(db.String, db.ForeignKey("invoice.id"), nullable=False, index=True)
     itemId = db.Column(db.Integer, db.ForeignKey("item.id"), nullable=False, index=True)
     dcNo = db.Column(db.String(64), nullable=True, index=True)
     quantity = db.Column(db.Integer, default=1)
-    rate = db.Column(db.Float, nullable = False)
-    discount = db.Column(db.Float, default = 0.0)
-    taxPercentage = db.Column(db.Float, default = 0.0)
+    rate = db.Column(db.Float, nullable=False)
+    discount = db.Column(db.Float, default=0.0)
+    taxPercentage = db.Column(db.Float, default=0.0)
     line_total = db.Column(db.Float, nullable=False)
+
 
 class role(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique = True , nullable=False)
+    name = db.Column(db.String(50), unique=True, nullable=False)
     description = db.Column(db.String(255))
     users = db.relationship("user", backref="role", lazy=True)
 
+
 class user(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique = True , nullable=False)
+    username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    email = db.Column(db.String(50), unique = True)
+    email = db.Column(db.String(50), unique=True)
     role_id = db.Column(db.Integer, db.ForeignKey("role.id"))
-    is_active = db.Column(db.Boolean, default = True)
-    is_admin = db.Column(db.Boolean, default = False)
+    is_active = db.Column(db.Boolean, default=True)
+    is_admin = db.Column(db.Boolean, default=False)
+
 
 class lastBackup(db.Model):
     __tablename__ = "last_backup"
 
     id = db.Column(db.Integer, primary_key=True)
-    occurred_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index = True)
+    occurred_at = db.Column(db.DateTime, default=_utcnow, nullable=False, index=True)
     note = db.Column(db.String(255))
 
     # audit fields
-    created_at = db.Column(db.DateTime, nullable = False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utcnow)
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow
+        default=_utcnow,
+        onupdate=_utcnow
     )
+
 
 class layoutConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -110,11 +122,11 @@ class layoutConfig(db.Model):
         "footer": 10,
         "invoice_info": 13
     }))
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utcnow)
     updated_at = db.Column(
         db.DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=_utcnow,
+        onupdate=_utcnow,
         nullable=False
     )
 
@@ -154,5 +166,6 @@ class layoutConfig(db.Model):
             db.session.add(instance)
             db.session.commit()
         return instance
+
 
 db.Index('ix_invoiceItem_invoice_item', invoiceItem.invoiceId, invoiceItem.itemId)

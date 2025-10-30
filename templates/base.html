@@ -37,7 +37,9 @@
   <div class="container d-flex align-items-center justify-content-between w-100">
     <!-- Left side: Back + Menu -->
     <div class="d-flex align-items-center">
-      {% if back_to_select_customer %}
+      {% if back_to_url %}
+        <a href="{{ back_to_url }}" class="btn btn-sm me-2" style="background-color: #30363d; color: #f0f6fc; border: 1px solid #484f58;">←</a>
+      {% elif back_to_select_customer %}
         <a href="{{ url_for('select_customer') }}" class="btn btn-sm me-2" style="background-color: #30363d; color: #f0f6fc; border: 1px solid #484f58;">←</a>
       {% elif back_two_pages %}
         <button class="btn btn-sm me-2" onclick="history.go(-3)" style="background-color: #30363d; color: #f0f6fc; border: 1px solid #484f58;">←</button>
@@ -90,6 +92,7 @@
   <div class="offcanvas-body">
     <ul class="list-unstyled">
       <li><a class="text-white text-decoration-none d-block py-2" href="/view_bills">View Bills</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/qr_code">Generate UPI QR</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/select_customer">Create Bill</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/view_customers">View Customers</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/view_inventory">Inventory</a></li>
@@ -97,7 +100,7 @@
       <li><a class="text-white text-decoration-none d-block py-2" href="/statements_company">Company Statements</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/analytics">Business Analytics</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/recover">Data Recovery</a></li>
-      <li><a class="text-white text-decoration-none d-block py-2" href="/about_user?section=about">About Application</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/config">Account Settings</a></li>
     </ul>
   </div>
 </div>
@@ -159,10 +162,10 @@
     { name: "Company Statements", url: "/statements_company" },
     { name: "Invoice Layout Editor", url: "/test-pre-preview" },
     { name: "Data Recovery", url: "/recover" },
-    { name: "Data Recovery", url: "/recover" },
     { name: "Home", url: "/" },
-    { name: "About Application", url: "/about_user?section=about" },
-    { name: "Analytics", url: "/analytics" }
+    { name: "Analytics", url: "/analytics" },
+    { name: "Generate UPI QR", url: "/qr_code" },
+    { name: "Account Settings", url: "/config" },
   ];
 
   const searchInput = document.getElementById('globalSearch');
@@ -201,6 +204,54 @@
     const offcanvasEl = document.getElementById('offcanvasMenu');
     const bsOffcanvas = new bootstrap.Offcanvas(offcanvasEl);
     document.getElementById('menuToggle').addEventListener('click', () => bsOffcanvas.toggle());
+  });
+</script>
+
+<script>
+  // User Interaction Analytics Script
+  const pageStartTime = Date.now();
+
+  function sendAnalytics(activity, details = {}) {
+    const payload = {
+      timestamp: new Date().toISOString(),
+      current_page: window.location.pathname,
+      activity: activity,
+      click: details.click || null,
+      time_spent: (Date.now() - pageStartTime) / 1000,
+      previous_page: document.referrer || null,
+      user: "{{ session.get('username', 'guest') }}"
+    };
+    fetch('/analytics_event', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    }).catch(function(error) {
+      // Optionally log error, or silently ignore
+      // console.error('Analytics error:', error);
+    });
+  }
+
+  window.addEventListener('load', function() {
+    sendAnalytics('page_load');
+  });
+
+  document.addEventListener('click', function(event) {
+    const target = event.target;
+    if (target.tagName === 'BUTTON' || target.tagName === 'A') {
+      let clickInfo = null;
+      if (target.tagName === 'A') {
+        clickInfo = target.getAttribute('href') || target.textContent.trim() || null;
+      } else {
+        clickInfo = target.textContent.trim() || null;
+      }
+      sendAnalytics('click', { click: clickInfo });
+    }
+  });
+
+  window.addEventListener('beforeunload', function() {
+    sendAnalytics('page_exit');
   });
 </script>
 

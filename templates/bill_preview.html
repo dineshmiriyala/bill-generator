@@ -31,6 +31,7 @@
           width: auto !important;
           max-width: none !important;
         }
+        .qr-wrapper[style*="display: none"] { display: none !important; }
       }
       .signature-img {
         max-width: 160px; /* reduced size */
@@ -85,6 +86,8 @@
         .services small { font-weight: 400 !important; line-height: 0.75rem !important; }
         .fs-5 { font-size: 1.15rem !important; }
         .fs-4 { font-size: 1.25rem !important; }
+        .payment-info { display: block !important; }
+        #toggleQrBtn { display: none !important; }
       }
       /* Apply layoutConfig sizes */
       .bill-heading { font-size: var(--hdr-fs) !important; }
@@ -104,22 +107,24 @@
 
     <div class="container">
         <div class="masthead mb-2">
-          <h1 class="visually-hidden">Sri Lakshmi Offset Printers — ESTD: 1973</h1>
-          <img class="brand-logo" src="{{ url_for('static', filename='img/brand-wordmark.svg') }}" alt="Sri Lakshmi Offset Printers — ESTD: 1973">
-          <h2 class="bill-heading">Bill of Supply</h2>
+          <h1 class="visually-hidden">{{ app_info['business']['name'] }} — ESTD: {{ app_info['business']['estd'] }}</h1>
+          <img class="brand-logo"
+               src="/{{ app_info['business']['logo_path'] }}"
+               alt="{{ app_info['business']['name'] }} — ESTD: {{ app_info['business']['estd'] }}">
+          <h2 class="bill-heading">{{ app_info['bill_config']['heading'] }}</h2>
         </div>
 
         <div class="row mb-4 from-to-block">
             <div class="col-sm-6">
                 <h5>From:</h5>
                 <p class="fs-5">
-                    <strong class="fs-4">Sri Lakshmi Offset Printers</strong><br>
-                    PAMARRU, Krishna Dist - 521157<br>
-                    GST: 37AVEPM5991R3ZG<br>
-                    Cell: 9848992207<br>
-                    email: haripress@gmail.com<br>
+                    <strong class="fs-4">{{ app_info['business']['name'] }}</strong><br>
+                    {{ app_info['business']['address'] }}<br>
+                    GST: {{ app_info['business']['gstin'] }}<br>
+                    Cell: {{ app_info['business']['phone'] }}<br>
+                    email: {{ app_info['business']['email'] }}<br>
                 </p>
-                <small class="text-muted footer-note">Composition Taxable Person. Not eligible to collect Tax on supplies.</small>
+                <small class="text-muted footer-note">{{ app_info['bill_config']['footer'] }}</small>
             </div>
             <div class="col-sm-6 text-end">
                 <h5>To:</h5>
@@ -188,18 +193,35 @@
         </div>
 
         <div class="mt-3 text-end">
-          <small class="text-muted footer-note">Computer generated receipt – signature not required</small>
+          <small class="text-muted footer-note">{{ app_info['bill_config']['payment-footer'] }}</small>
         </div>
 
         <div class="row mt-5">
           <div class="col-12 payment-info border rounded p-3 bg-light-subtle">
             <h6 class="mb-2">Payment Information</h6>
-            <div>
-              Account Name: <strong>Sri Lakshmi Offset Printers</strong><br>
-              Bank: <strong>State Bank of India, Pamarru</strong><br>
-              Account Number: <strong>38588014977</strong><br>
-              IFSC: <strong>SBIN0002776</strong><br>
-              PhonePe/GPay: <strong>9848992207</strong>
+            <div class="d-flex justify-content-between align-items-start">
+              <div class="flex-grow-1">
+                Account Name: <strong>{{ app_info['bank']['account_name'] }}</strong><br>
+                Bank: <strong>{{ app_info['bank']['bank_name'] }}, {{ app_info['bank']['branch'] }}</strong><br>
+                Account Number: <strong>{{ app_info['bank']['account_number'] }}</strong><br>
+                IFSC: <strong>{{ app_info['bank']['ifsc'] }}</strong><br>
+                PhonePe/GPay: <strong>{{ app_info['bank']['bhim'] }}</strong>
+              </div>
+              {% if qr_svg_base64 %}
+              <div class="qr-wrapper text-end d-print-block" style="flex-shrink:0; margin-top:-0.5rem;">
+                <div class="qr-box d-flex align-items-center justify-content-end" style="font-size: inherit;">
+                  <div class="qr-inner d-flex align-items-center justify-content-center" style="gap:0.75rem;">
+                    <img src="data:image/svg+xml;base64,{{ qr_svg_base64 }}" alt="UPI QR Code"
+                         style="width:calc(var(--payment-fs) * 7); height:calc(var(--payment-fs) * 7); border-radius:8px; background:#fff; box-shadow:0 1px 5px rgba(0,0,0,0.05);">
+                    <div class="text-muted text-start" style="font-size:calc(var(--payment-fs) * 0.8); line-height:1.2;">
+                      <div><strong>{{ upi_name }}</strong></div>
+                      <div>UPI: {{ upi_id }}</div>
+                      <div>Total: <strong>&#8377; {{ total }}</strong></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -207,18 +229,22 @@
         <hr class="my-3" style="border:0;border-top:2px solid #c8c8c8;" />
         <div class="services text-center mt-2">
           <small class="text-muted">
-            Services: Multi‑colour Offset Printing • Digital Printing • Brochures • Stickers • Invitations • Pamphlets • All Printing Works
+            Services:
+            {% for service in app_info['services'] %}
+              {{ service }}{% if not loop.last %} • {% endif %}
+            {% endfor %}
           </small>
         </div>
 
         <div class="text-center mt-3">
           <small class="text-muted thanks-note">
-            Thank you for your business! For inquiries or bulk orders, reach us at <strong>9848992207</strong> or <strong>haripress@gmail.com</strong>.
+            Thank you for your business! For inquiries or bulk orders, reach us at <strong>{{ app_info['business']['phone'] }}</strong> or <strong>{{ app_info['business']['email'] }}</strong>.
           </small>
         </div>
 
         <div class="text-center mt-4 d-print-none">
             <button onclick="window.print()" class="btn btn-primary">Print / Save as PDF</button>
+            <button id="toggleQrBtn" class="btn btn-secondary ms-2">Hide UPI QR</button>
             <p class="mt-2 text-muted" style="font-size: 0.9rem;">Tip: Uncheck “Headers and footers” in print dialog for a clean copy.</p>
         </div>
     </div>
@@ -251,4 +277,17 @@
 </script>
 
 </body>
+<script>
+  document.getElementById("toggleQrBtn").addEventListener("click", function() {
+    const qrSection = document.querySelector(".qr-wrapper");
+    if (!qrSection) return;
+    if (qrSection.style.display === "none") {
+      qrSection.style.display = "";
+      this.textContent = "Hide UPI QR";
+    } else {
+      qrSection.style.display = "none";
+      this.textContent = "Show UPI QR";
+    }
+  });
+</script>
 </html>
