@@ -1631,7 +1631,7 @@ def view_bill_locked(invoicenumber):
     dcno = any((x or '').strip() for x in dc_numbers)
 
     new_bill = request.args.get('new_bill', '').lower() in ('yes', 'true', '1')
-    back_to_select_customer = new_bill
+    back_to_select_customer = False  # avoid loop; use history back on client
     edit_bill = request.args.get('edit_bill', '').lower() in ('yes', 'true', '1')
     back_two_pages = edit_bill
 
