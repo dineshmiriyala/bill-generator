@@ -342,6 +342,21 @@ def _is_onboarding_complete() -> bool:
     return bool(ONBOARDING_COMPLETE)
 
 
+def _clean_analytics_payload(data: dict) -> dict:
+    """Remove empty values and normalise strings from analytics payloads."""
+    if not isinstance(data, dict):
+        return {}
+
+    cleaned = {}
+    for key, value in data.items():
+        if isinstance(value, str):
+            value = value.strip()
+        if value in (None, ""):
+            continue
+        cleaned[key] = value
+    return cleaned
+
+
 @app.before_request
 def _enforce_onboarding_flow():
     if _is_onboarding_complete():
@@ -553,12 +568,25 @@ def more():
 @app.route('/analytics_event', methods=['GET', 'POST'])
 def analytics_event():
     try:
-        data = request.get_json(force=True)
-        if not data:
-            return jsonify({"status": "error", "message": "No data provided"}), 400
+        data = request.get_json(silent=True)
+
+        if not data and request.form:
+            data = request.form.to_dict(flat=True)
+
+        if not data and request.data:
+            try:
+                data = json.loads(request.data.decode('utf-8') or '{}')
+            except json.JSONDecodeError:
+                data = {}
+
+        normalized = _clean_analytics_payload(data or {})
+
+        if not normalized:
+            # Gracefully acknowledge empty analytics pings without treating them as errors
+            return jsonify({"status": "ignored", "message": "No analytics payload supplied."}), 204
 
         # Call the logger in analytics_tracking.py
-        log_user_event(data)
+        log_user_event(normalized)
 
         return jsonify({"status": "success"}), 200
     except Exception as e:
@@ -1732,8 +1760,11 @@ def update_bill(invoicenumber):
         total += line_total
         rows.append((desc, qty, rate, dc, line_total))
 
-    # 4) Replace all existing line items with the new set
-    invoiceItem.query.filter_by(invoiceId=current_invoice.id).delete()
+    # 4) Replace all existing line items with the new set using ORM deletes so sync events fire
+    existing_items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
+    for existing_item in existing_items:
+        db.session.delete(existing_item)
+    db.session.flush()
 
     for desc, qty, rate, dc, line_total in rows:
         # Reuse existing item by name, or create a placeholder item if not found
