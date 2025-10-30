@@ -1,263 +1,183 @@
-# Bill Generator v1.0
+# Bill Generator
+
+Bill Generator is a production-ready, local-first invoicing platform designed for print shops and small businesses that need fast, reliable billing without giving up ownership of their data. The application delivers a polished multi-step bill creation experience, deep configuration, detailed statements, analytics, and multiple backup strategies while remaining easy to deploy on a workstation or packaged as a desktop app.
+
+## Table of Contents
+- [Overview](#overview)
+- [Feature Highlights](#feature-highlights)
+- [Architecture Overview](#architecture-overview)
+- [Getting Started](#getting-started)
+- [Configuration and Onboarding](#configuration-and-onboarding)
+- [Daily Operations](#daily-operations)
+- [Data Management and Recovery](#data-management-and-recovery)
+- [Supabase Synchronisation](#supabase-synchronisation)
+- [API Reference](#api-reference)
+- [Project Layout](#project-layout)
+- [Development Notes](#development-notes)
+- [License](#license)
 
 ## Overview
 
-Bill Generator is a lightweight, local-first invoice generation tool designed to support small businesses with quick, professional, and customizable billing capabilities. Built using Flask, SQLAlchemy, and HTML/CSS, the application allows users to manage customers, inventory, and generate printable invoices with minimal friction.
+Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Bootstrap/Jinja front end. The application stores everything locally by default, but supports cloud mirroring via Supabase and automated off-site backups. Key use cases include:
 
----
+- High-volume invoice creation with configurable rounding logic and printable previews.
+- Customer, inventory, and payment management with role-aware edit controls.
+- Statement exports (CSV/XLSX) and analytics suited for monthly or annual reporting.
+- Self-service recovery tools, automated backup retention, and remote sync for peace of mind.
 
-## Features in Version 1.0
+## Feature Highlights
 
-### Core Functionalities
+### Onboarding and Configuration
+- Guided onboarding wizard populates core business identity, banking, and payment preferences.
+- `info.json` stores all account settings; a dedicated Account Settings screen provides modal editors for each section.
+- “Reload Settings” action hot-reloads configuration into the running app without a restart.
+- Configurable `file_location` tells the system where to mirror database backups outside the application directory.
 
-- **Customer Management**
-  - Add new customers with GST and contact details
-  - View customers with search and filter capabilities
-  - Duplicate phone number prevention with UI feedback
+### Billing and Inventory
+- Three-step bill creation flow: select/create customer, add items with live totals, preview and confirm.
+- Smart rounding: individual line items can be rounded to the nearest 10 with visual indicators and precise Decimal back-end calculations.
+- Editable totals with automatic recomputation of rate/quantity depending on the last edited field.
+- Inventory manager with SKU auto-assignment and duplicate detection.
 
-- **Inventory Management**
-  - Add inventory items with name, HSN, price, quantity, and tax
-  - View inventory with live filtering and item editing (future-ready)
+### Customer Management
+- Full CRUD for customers with soft-delete support and duplicate prevention (phone + company/name).
+- Dedicated “About Customer” view summarises history and a recovery centre for restoring deleted customers or invoices.
 
-- **Invoice Creation**
-  - Guided 3-step invoice creation process:
-    1. Select or create customer
-    2. Enter item details
-    3. Preview and generate invoice
-  - Item dropdown with auto-fill for price and tax
-  - New items can be typed and will be saved automatically
-  - Automatic calculation of subtotal, tax, and total
-  - Invoice IDs follow `SLP-DDMMYY-XXXXX` format
+### Statements and Analytics
+- Date-range and company statements with CSV/XLSX export that include payment summaries and disclaimers.
+- Statement APIs for dashboards and raw invoice exports.
+- Analytics dashboard summarising trends by day, month, year, weekday, and top customers using precomputed aggregates.
 
-- **Invoice Management**
-  - View invoices with filters for phone, date range, and text search
-  - Each invoice opens in a printable HTML preview format
-  - Print/download invoice directly from the browser
+### Document Layout and Rendering
+- Live preview (`/test-pre-preview`) and layout editor allow tuning of section font sizes stored in the database (`layoutConfig`).
+- Print-ready HTML templates for invoice previews and final statements.
+- Optional exclusion of customer contact details on rendered invoices.
 
-- **Data Handling**
-  - All data stored in SQLite using SQLAlchemy ORM
-  - Auto-increment IDs and foreign key relationships managed via ORM
-  - Timezone-aware timestamps and readable date formatting
+### Payments and Integrations
+- Built-in UPI QR generator (UI + REST endpoint) for instant payment links.
+- Supabase integration for full or incremental database + analytics uploads, with health checks and detailed feedback.
 
----
----
+### Backups and Recovery
+- Automatic SQLite backups retained in `db/backups` (latest 10 copies) with 7-day freshness checks at shutdown.
+- Optional mirroring of every backup (automatic and manual) to the configured `file_location` outside the application sandbox.
+- Manual “Make Local DB Copy” action in the Account menu for on-demand mirroring.
 
-## Version 3.1 – Latest Release
+## Architecture Overview
 
-### Major Improvements
-- Added **rounding feature** for invoice line items:
-  - Round individual line totals to nearest 10 (half-up logic)
-  - “Round All” button to round all rows simultaneously
-  - Visual ✓ tick mark on rounded rows
-- Fixed backend rounding logic to exactly match frontend results
-- Added persistent hidden rounding flags (`rounded[]`) so that only manually rounded rows are affected
-- Updated edit mode behavior: totals are no longer recalculated automatically on page load, preserving rounded values
-- Updated "Create Bill" front-end with tick mark visual cues and better user feedback
-- Enhanced UI/UX:
-  - Wider and more aesthetically styled home page buttons with hover animations
-  - Centered text for Analytics and Invoice Editor buttons
-  - Added consistent Apple-style gradient buttons
-- Added role-based restrictions for editing/deleting invoices and customers (admin only)
-- Updated `.gitignore` for Flask + PyInstaller builds to avoid merge conflicts and remove unnecessary files
-- Improved EXE build process and PyInstaller command for Windows packaging
+- **Backend:** Flask application (`app.py`) with blueprints for AJAX/REST APIs (`api.py`).
+- **Database:** SQLite via SQLAlchemy models defined in `db/models.py`, with Flask-Migrate handling schema migrations.
+- **Front end:** Jinja templates under `templates/` paired with Bootstrap, custom JavaScript, and CSS assets in `static/`.
+- **Analytics:** Aggregation helpers in `analytics.py` and client-side views using Chart.js (bundled in static assets).
+- **Config storage:** `info.json` (in `db/` for server mode, user data directory for packaged desktop mode) governs business settings.
+- **Backups:** Local backup helpers in `app.py` create timestamped `.bak` files and handle pruning/local mirroring.
+- **Supabase upload:** `supabase_upload.py` orchestrates full/incremental sync with error reporting and metadata tracking.
 
-### Bug Fixes
-- Fixed edit-bill issue where rounded totals reverted after reloading
-- Fixed minor alignment issues in buttons and navigation
-- Fixed display inconsistencies between PDF and on-screen invoice
-- Fixed “Round All” not setting flags for all items properly
-- Fixed rounding not being respected after saving and reopening invoices
-
-### Developer Notes
-- Frontend and backend rounding are now in full sync (Decimal + JS Math.round)
-- Added edit mode condition to prevent premature recalculations
-- `.gitignore` now excludes build, dist, and environment folders
-- EXE build instructions updated to match PyInstaller 6.x format
-
-## Version 2.1.1 - Latest Update
-- Fixed a bug where total filed can't be edited in create bill page.
-- Fixed dependency on Customer name and added option to use the company name as customer name while creating a new customer.
-
----
-
-## Version 2.1 
-
-### Bug Fixes
-- "Bill generated successfully" button now stays visible until manually dismissed
-- Font sizes increased in the generated PDF for improved readability
-- Fixed "Edit User" form to match the style and functionality of "Add Customer"
-- Only admins can now access bill and customer edit/delete functions
-- Font rendering in preview and PDF made consistent (more Mac-like appearance)
-
-### New Features
-- Total field in Create Bill is now editable
-- Editing the Total auto-updates Unit Price
-- Smart field tracking: whichever field (Qty / Rate / Total) was edited last is used to compute others
-- Role-based access control with a login redirect for restricted actions
-- Toggle to include/exclude phone number from final invoice PDF
-- Admins have an Edit button for each customer in the UI
-- Added support for deleting and recovering customers and invoices.
-- Added support to edit customer after creation.
-- Many quality of life upgrades.
-- added a new about me page which can display info about customer. 
-
----
-
-## Roadmap: Version 3.0
-
-- Should add support for Delivery challan
-  - Basically multiple non-payment invoices can be clubbed into a single invoice with DC numbers populate.
-  - Road map includes: 1. Adding new model, making changes to already existing frontend pages to accommodate DC bills.
-- User Authentication & Roles
-  - Add login system with role-based access (admin, staff)
-- Export & Sharing
-  - Email or WhatsApp bills to customers directly
-
-## Roadmap: Version 4.0
-- Analytics & Reporting
-  - Generate insights from invoices, customer history, inventory
-- Inventory Enhancements
-  - Add item categories, units, and stock tracking
-- PDF Optimization
-  - Better formatting, logo support, watermark, and PDF download without extra dependencies
-- Hosting Options
-  - Deploy on local network with shared access
-- Testing & CI
-  - Add test suite and basic CI/CD workflow for deployments
-
----
-
-## Screenshots
-
-#### Homepage
-![Home Page](Images/HomePage.png)
-#### Bill Creation
-![Create Bill](Images/CreateBill.png)
-#### Customer Search
-![Customer Search](Images/CustomerSearch.png)
-#### Sample Invoice
-![Invoice Preview](Images/Invoice.png)
-
----
-## Tech Stack
-
-- **Backend:** Python, Flask, SQLAlchemy
-- **Frontend:** HTML5, CSS3, Jinja2, JavaScript (Vanilla)
-- **PDF (Preview):** HTML-based rendering with print support
-- **Database:** SQLite (for development), structure ready for PostgreSQL
-- **ORM Support:** Flask-Migrate for schema changes
-
----
-
-## Folder Structure
-
-```
-├── app.py
-├── desktop_launcher.py
-├── migration.py
-├── pdf.py
-├── requirements.txt
-├── README.md
-├── LICENSE
-├── .gitignore
-├── db/
-│   └── models.py
-├── Images/
-├── instance/
-├── migrations/
-│   ├── alembic.ini
-│   ├── env.py
-│   ├── README
-│   ├── script.py.mako
-│   └── versions/
-├── static/
-│   ├── css/
-│   ├── fonts/
-│   ├── img/
-│   ├── js/
-│   └── pdfs/
-├── templates/
-│   ├── about_user.html
-│   ├── add_customer.html
-│   ├── add_inventory.html
-│   ├── base.html
-│   ├── bill_preview.html
-│   ├── confirm_delete_customer.html
-│   ├── create_bill.html
-│   ├── edit_user.html
-│   ├── home.html
-│   ├── recover.html
-│   ├── select_customer.html
-│   ├── statement.html
-│   ├── view_bill_locked.html
-│   ├── view_bills.html
-│   ├── view_customers.html
-│   └── view_inventory.html
-```
-
----
-
-## How to Run
+## Getting Started
 
 ### Prerequisites
-
-- Python 3.8+
-- pip
-- Recommended: virtualenv or venv
+- Python 3.11 or later (exact version should match the environment used in production).
+- SQLite (bundled with Python on macOS, Windows, and most Linux distributions).
+- Node.js is **not** required; front-end assets are pre-built.
 
 ### Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/dineshmiriyala/bill-generator.git
+   cd bill-generator
+   ```
+2. Create and activate a virtual environment:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate   # On Windows use: .venv\Scripts\activate
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
+### Running the App
 ```bash
-python -m venv env
-source env/bin/activate  # On Windows: env\Scripts\activate
-pip install -r requirements.txt
-flask db init
-flask db migrate
-flask db upgrade
 python app.py
 ```
+The development server listens on `http://127.0.0.1:5000/` by default. On first launch, the onboarding workflow will guide you through initial setup.
 
-Then go to `http://127.0.0.1:5000` in your browser.
+### Desktop Packaging
+For Windows packaging the project ships a `build_exe.bat` script that wraps PyInstaller to produce a standalone executable. Ensure you run it from a clean virtual environment with all dependencies installed.
 
+## Configuration and Onboarding
 
+- **Onboarding screen:** Captures business name, owner details, GSTIN, address, UPI ID, and optional banking information. Completing onboarding writes `info.json`, marks onboarding as complete, and unlocks the rest of the application.
+- **Account Settings (`/config`):** Cards and modals expose each configuration slice (business, bank, UPI, invoice layout, payment terms, services, Supabase credentials, backup folder). Submit changes and refresh the live application state using “Reload Settings”.
+- **Configuration file (`info.json`):**
+  - `business`, `bank`, `payment`, `statement`, `services`, `bill_config`, `upi_info`, `appearance`, and `account_defaults` power the UI and exports.
+  - `supabase` holds `url`, `key`, and last upload timestamps.
+  - `file_location` identifies the external folder used for mirrored `.bak` files.
+  - `onboarding_complete` toggles access to the rest of the app.
 
-## How to Use
+## Daily Operations
 
-### For Windows Users
+1. **Create or edit customers** from `/create_customers` or `/view_customers`. Soft deletes can be reversed from the recovery centre.
+2. **Manage inventory** via `/add_inventory` and `/view_inventory`. SKUs are auto-generated if omitted.
+3. **Generate invoices:**
+   - Start at `/select_customer` to pick or create a customer.
+   - Add items, apply rounding, edit totals, and preview the invoice.
+   - Finalise to persist an `invoice`, individual `invoiceItem` records, and a printable HTML page accessible from `/view_bills`.
+4. **Edit or delete invoices** with admin privileges only. Edits respect previous rounding choices and preserve totals on reload.
+5. **Statements:** Use `/statements` (date range) or `/statements_company` (per customer) to review totals and export data.
+6. **Analytics:** `/analytics` surfaces trends, retention, and top customers for monitoring business health.
+7. **Layouts:** `/test-pre-preview` lets you adjust font sizes for invoice sections; settings persist through `layoutConfig`.
 
-- Navigate to the `desktop-build` branch.
-- Inside the `dist/` folder, you’ll find the `.exe` file (e.g., `BillGenerator.exe`).
-- Just run the `.exe` — it includes all dependencies and launches the app in your default browser.
+## Data Management and Recovery
 
-[→ Click here to download the latest Bill Generator EXE](https://github.com/dineshmiriyala/bill-generator/blob/desktop-build/dist/BillGenerator.exe)
+- **Automatic backups:** Every time a backup is created (before Supabase sync or during the seven-day staleness check) a timestamped copy lands in `db/backups/`. Old backups beyond the ten most recent are pruned automatically.
+- **External mirroring:** If `file_location` is set, each automatic backup is mirrored to that directory, and only the latest ten copies are retained. Manual backups triggered from the UI also use this folder.
+- **Manual copy:** From the “More → Account & Insights” menu, click “Make Local DB Copy” to immediately mirror the current database. The button is enabled once a backup folder has been configured.
+- **Recovery centre:** `/recover` lists soft-deleted customers and invoices with one-click restoration.
 
-- No Python or installation required.
+## Supabase Synchronisation
 
-> ⚠️ Make sure your system allows running `.exe` files from unknown developers if Windows Defender warns you.
+- **Full upload:** “Upload All Data to Supabase” performs a complete database sync, preceded by local backup creation. Connectivity is verified before transfer.
+- **Incremental sync:** `/supabase_sync_incremental` (invoked from the UI) sends only new or changed records along with analytics logs.
+- **Metadata tracking:** Successful uploads update `info.json` (`supabase.last_uploaded` / `last_incremental_uploaded`) so the home page can surface the last sync time.
 
----
+## API Reference
 
-### For Mac Users
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/bill_items/<invoice_no>` | GET | Returns customer, line items, and totals for an invoice as JSON. |
+| `/api/generate_upi_qr` | GET | Generates a base64 encoded SVG for a UPI payment QR code. Query params: `upi_id` (required), `amount`, `name`, `cur`. |
+| `/api/statements` | GET | JSON summary of statements for a date range or year/month scope, including totals and per-period breakdowns. |
+| `/api/statements/invoices` | GET | Paginated raw invoice data for reporting/export. |
+| `/analytics_event` | POST | Records analytics events emitted from the front end. |
 
-- Clone the repository and set up a virtual environment:
-  ```bash
-  python3 -m venv env
-  source env/bin/activate
-  pip install -r requirements.txt
-  python desktop_launcher.py
-  ```
-- This will launch the app in your default browser.
+All API endpoints require the application to be running locally. Authentication is not enforced because the app is intended for trusted LAN/desktop environments.
 
-> Note: macOS doesn’t support `.exe` files. Use the Python launcher script instead.
+## Project Layout
 
----
+```
+├── app.py                 # Main Flask application and routes
+├── analytics.py           # Analytics aggregation helpers
+├── analytics_tracking.py  # Event logging
+├── api.py                 # JSON/QR code endpoints
+├── bg_app/                # Future modular routes/services
+├── db/
+│   ├── models.py          # SQLAlchemy models
+│   └── migrations/        # Alembic migration scripts
+├── templates/             # Jinja templates (UI, onboarding, config, invoices)
+├── static/                # CSS/JS assets and images
+├── supabase_upload.py     # Supabase integration helpers
+├── requirements.txt       # Python dependencies
+└── build/ / dist/         # Build artefacts for packaged releases
+```
+
+## Development Notes
+
+- **Database migrations:** Use Flask-Migrate commands (e.g., `flask db migrate`, `flask db upgrade`) to evolve the schema. The app runs `migrate_db()` on startup to ensure the SQLite file is up to date.
+- **Testing:** The project currently relies on manual QA. Consider adding unit tests under a future `tests/` directory and wiring continuous integration as part of roadmap 4.0.
+- **Coding standards:** The codebase targets Python 3.11, uses type hints in newer modules, and prefers Decimal for currency math. Follow existing patterns when contributing.
+- **Packaging:** When building desktop distributions, set the `BG_DESKTOP_ENV=1` environment variable so the data directory resolves to the user’s application support folder.
 
 ## License
 
-MIT License. Modify and use freely.
+This project is licensed under the MIT License. See `LICENSE` for details.
 
----
-
-## Author
-
-Developed and maintained by Dinesh Miriyala
