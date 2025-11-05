@@ -254,10 +254,22 @@ def _ensure_file_writable(path: Path) -> None:
 
 
 def _desktop_data_dir(app_name: str) -> Path:
+    override_dir = os.getenv("BG_DATA_DIR")
+    if override_dir:
+        return Path(override_dir)
+
     if os.name == "nt":
         return Path(os.getenv("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / app_name
     if sys.platform == "darwin":
+        base_dir = os.getenv("APPDATA") or os.getenv("LOCALAPPDATA")
+        if base_dir:
+            return Path(base_dir) / app_name
         return Path.home() / "Library" / "Application Support" / app_name
+
+    linux_override = os.getenv("APPDATA") or os.getenv("LOCALAPPDATA") or os.getenv("XDG_DATA_HOME")
+    if linux_override:
+        return Path(linux_override) / app_name
+
     return Path.home() / ".local" / "share" / app_name
 
 
@@ -268,6 +280,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / DATABASE_FILENAME
 SEED_DB_PATH = BASE_DIR / "db" / DATABASE_FILENAME
 INFO_PATH = DATA_DIR / INFO_FILENAME
+
+_INFO_FALLBACK_PAYLOAD = None
 
 
 app = Flask(__name__)
@@ -345,11 +359,30 @@ def get_info_json_path():
     return INFO_PATH
 
 
+def _set_info_fallback(payload: dict, message: str, exc: Exception) -> None:
+    """Record an in-memory fallback payload when disk persistence fails."""
+    global _INFO_FALLBACK_PAYLOAD
+    _INFO_FALLBACK_PAYLOAD = deepcopy(payload)
+    print(f"{message}: {exc} — using in-memory defaults.")
+
+
+def _persist_info_payload(info_path: Path, payload: dict, context: str) -> bool:
+    """Attempt to persist the payload to disk, storing fallback if it fails."""
+    global _INFO_FALLBACK_PAYLOAD
+    try:
+        with open(info_path, "w", encoding='utf-8') as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+    except Exception as exc:
+        _set_info_fallback(payload, context, exc)
+        return False
+    else:
+        _INFO_FALLBACK_PAYLOAD = None
+        return True
+
+
 def ensure_info_json():
     """ensure db info.json exists or else creates it"""
     info_path = get_info_json_path()
-    if not info_path.parent.exists():
-        info_path.parent.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now(timezone.utc)
     determined_start = _determine_data_start(now)
@@ -370,26 +403,27 @@ def ensure_info_json():
         "data": default_sections,
     }
 
-    if not info_path.exists():
+    if not info_path.parent.exists():
         try:
-            with open(info_path, "w", encoding='utf-8') as f:
-                json.dump(default_payload, f, indent=2, ensure_ascii=False)
+            info_path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            _set_info_fallback(default_payload, f"[warn] could not prepare info.json directory {info_path.parent}", exc)
+            return None
+
+    if not info_path.exists():
+        if _persist_info_payload(info_path, default_payload, "[warn] could not create db info.json"):
             print("[info] Created info.json with default structure.")
-        except Exception as e:
-            print(f"[warn] could not create db info.json: {e}")
-        return info_path
+            return info_path
+        return None
 
     try:
         with open(info_path, "r", encoding='utf-8') as f:
             info_data = json.load(f)
     except Exception as exc:
         print(f"[warn] Failed to read info.json ({exc}); rewriting with defaults.")
-        try:
-            with open(info_path, "w", encoding='utf-8') as f:
-                json.dump(default_payload, f, indent=2, ensure_ascii=False)
-        except Exception as write_err:
-            print(f"[warn] could not rewrite db info.json: {write_err}")
-        return info_path
+        if _persist_info_payload(info_path, default_payload, "[warn] could not rewrite db info.json"):
+            return info_path
+        return None
 
     changed = False
     for key in ("created_on", "app_name", "version", "last_updated"):
@@ -474,7 +508,7 @@ def ensure_info_json():
             with open(info_path, "w", encoding='utf-8') as f:
                 json.dump(info_data, f, indent=2, ensure_ascii=False)
         except Exception as exc:
-            print(f"[warn] Failed to update info.json defaults: {exc}")
+            _set_info_fallback(info_data, f"[warn] Failed to update info.json defaults at {info_path}", exc)
 
     return info_path
 
@@ -482,9 +516,20 @@ def ensure_info_json():
 def loading_info():
     info_path = ensure_info_json()
 
-    with open(info_path, 'r', encoding='utf-8') as f:
-        json_loaded = json.load(f)
-        return json_loaded
+    if info_path and info_path.exists():
+        try:
+            with open(info_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as exc:
+            if _INFO_FALLBACK_PAYLOAD is not None:
+                print(f"[warn] Failed to read info.json from disk ({exc}); using in-memory fallback.")
+                return deepcopy(_INFO_FALLBACK_PAYLOAD)
+            raise
+
+    if _INFO_FALLBACK_PAYLOAD is not None:
+        return deepcopy(_INFO_FALLBACK_PAYLOAD)
+
+    raise FileNotFoundError(f"info.json not available at {info_path}")
 
 
 def refresh_info_json():
@@ -3003,10 +3048,8 @@ def load_supabase_config():
 
 
 def _update_supabase_last_uploaded(timestamp: str) -> None:
-    info_path = ensure_info_json()
     try:
-        with open(info_path, "r", encoding="utf-8") as fh:
-            payload = json.load(fh)
+        payload = loading_info()
     except Exception:
         payload = {"data": {}}
 
@@ -3015,21 +3058,18 @@ def _update_supabase_last_uploaded(timestamp: str) -> None:
     supabase_info["last_uploaded"] = timestamp
     payload["data"]["supabase"] = supabase_info
 
-    try:
-        with open(info_path, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, indent=2)
-    except Exception as exc:
-        print(f"[warn] Failed to update Supabase sync metadata: {exc}")
+    info_path = ensure_info_json()
+    if info_path is None:
+        _set_info_fallback(payload, "[warn] Failed to update Supabase sync metadata (disk unavailable)", RuntimeError("info.json path unavailable"))
+    elif not _persist_info_payload(info_path, payload, "[warn] Failed to update Supabase sync metadata"):
         return
 
     refresh_info_json()
 
 
 def _update_supabase_last_incremental(timestamp: str) -> None:
-    info_path = ensure_info_json()
     try:
-        with open(info_path, "r", encoding="utf-8") as fh:
-            payload = json.load(fh)
+        payload = loading_info()
     except Exception:
         payload = {"data": {}}
 
@@ -3038,11 +3078,10 @@ def _update_supabase_last_incremental(timestamp: str) -> None:
     supabase_info["last_incremental_uploaded"] = timestamp
     payload["data"]["supabase"] = supabase_info
 
-    try:
-        with open(info_path, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, indent=2)
-    except Exception as exc:
-        print(f"[warn] Failed to update Supabase incremental metadata: {exc}")
+    info_path = ensure_info_json()
+    if info_path is None:
+        _set_info_fallback(payload, "[warn] Failed to update Supabase incremental metadata (disk unavailable)", RuntimeError("info.json path unavailable"))
+    elif not _persist_info_payload(info_path, payload, "[warn] Failed to update Supabase incremental metadata"):
         return
 
     refresh_info_json()
