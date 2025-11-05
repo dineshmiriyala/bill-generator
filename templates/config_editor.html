@@ -54,6 +54,8 @@
               <dd class="col-sm-8 text-muted">{{ app_info['business']['upi_id'] }}</dd>
               <dt class="col-sm-4">Established</dt>
               <dd class="col-sm-8 text-muted">{{ app_info['business']['estd'] }}</dd>
+              <dt class="col-sm-4">Logo Tone</dt>
+              <dd class="col-sm-8 text-muted">{{ 'Blue' if app_info['business']['logo_color_mode'] == 'blue' else 'Black' }}</dd>
             </dl>
           </div>
         </div>
@@ -248,6 +250,16 @@
                       <div class="mb-3">
                         <label class="form-label">Established</label>
                         <input type="text" name="estd" class="form-control" value="{{ app_info['business']['estd'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label d-block">Logo & Recipient Color</label>
+                        <div class="btn-group" role="group" aria-label="Logo color option">
+                          <input type="radio" class="btn-check" name="logo_color_mode" id="logoColorBlue" value="blue" {% if app_info['business']['logo_color_mode'] == 'blue' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="logoColorBlue">Blue</label>
+                          <input type="radio" class="btn-check" name="logo_color_mode" id="logoColorBlack" value="black" {% if app_info['business']['logo_color_mode'] != 'blue' %}checked{% endif %}>
+                          <label class="btn btn-outline-secondary" for="logoColorBlack">Black</label>
+                        </div>
+                        <div class="form-text">Blue uses the watermark logo and highlights the recipient name; black keeps both neutral.</div>
                       </div>
                     </div>
                   </div>

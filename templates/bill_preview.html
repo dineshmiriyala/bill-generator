@@ -20,6 +20,7 @@
         --totals-fs: {{ (sizes.totals if sizes is defined and sizes.totals is defined else 15) }}px;
         --payment-fs: {{ (sizes.payment if sizes is defined and sizes.payment is defined else 13) }}px;
         --footer-fs: {{ (sizes.footer if sizes is defined and sizes.footer is defined else 10) }}px;
+        --recipient-name-color: {{ '#1a2a6c' if app_info['business'].get('logo_color_mode') == 'blue' else '#000000' }};
       }
       .brand-logo {
         height: calc(var(--hdr-fs) * 4);
@@ -101,6 +102,29 @@
       .bill-heading { text-align: center; margin-top:4px; font-weight:bold; color:#000; }
       .highlight-info { color:#1a2a6c; }
       .masthead { text-align: left; }
+      .recipient-name { color: var(--recipient-name-color); display: block; }
+      .to-block { display: inline-block; text-align: right; }
+      .phone-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.75rem;
+        color: #5a6570;
+        background: rgba(248,249,250,0.95);
+        border: 1px solid rgba(90,101,112,0.2);
+        border-radius: 999px;
+        padding: 0.25rem 0.75rem;
+        margin-top: 0.35rem;
+        margin-left: auto;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      }
+      .phone-toggle .form-check {
+        display: inline-flex;
+        align-items: center;
+        margin: 0;
+      }
+      .phone-toggle .form-check-input { cursor: pointer; }
+      .contact-line { display: block; }
     </style>
 </head>
 <body class="p-5">
@@ -127,13 +151,35 @@
                 <small class="text-muted footer-note">{{ app_info['bill_config']['footer'] }}</small>
             </div>
             <div class="col-sm-6 text-end">
-                <h5>To:</h5>
-                <p class="text-dark fs-5">
-                    {% if customer.company %}<strong class="fs-4">{{ customer.company }}</strong><br>{% endif %}
-                    {% if customer.address %}{{ customer["address"] }}<br>{% endif %}
-                    {% if customer.gst %}GST: {{ customer["gst"] }}<br>{% endif %}
-                    {% if customer.phone %}Phone: {{ customer["phone"] }}{% endif %}
-                </p>
+                <div class="to-block">
+                    <h5>To:</h5>
+                    <p class="text-dark fs-5 mb-0">
+                        {% set primary_name = customer.name or customer.company %}
+                        {% if primary_name %}
+                            <strong class="fs-4 recipient-name">{{ primary_name }}</strong>
+                        {% endif %}
+                        {% if customer.company and customer.company != primary_name %}
+                            <span class="contact-line">{{ customer.company }}</span>
+                        {% endif %}
+                        {% if customer.address %}
+                            <span class="contact-line">{{ customer["address"] }}</span>
+                        {% endif %}
+                        {% if customer.gst %}
+                            <span class="contact-line">GST: {{ customer["gst"] }}</span>
+                        {% endif %}
+                        {% if customer.phone %}
+                            <span class="contact-line" id="customerPhoneLine">Phone: {{ customer["phone"] }}</span>
+                        {% endif %}
+                    </p>
+                    {% if customer.phone %}
+                    <div class="phone-toggle d-print-none">
+                        <span>Phone</span>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="toggleCustomerPhone" checked>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
 
@@ -276,18 +322,37 @@
   console.log("Footer:", rootStyles.getPropertyValue('--footer-fs'));
 </script>
 
-</body>
 <script>
-  document.getElementById("toggleQrBtn").addEventListener("click", function() {
-    const qrSection = document.querySelector(".qr-wrapper");
-    if (!qrSection) return;
-    if (qrSection.style.display === "none") {
-      qrSection.style.display = "";
-      this.textContent = "Hide UPI QR";
-    } else {
-      qrSection.style.display = "none";
-      this.textContent = "Show UPI QR";
-    }
-  });
+  (function(){
+    const phoneToggle = document.getElementById('toggleCustomerPhone');
+    const phoneLine = document.getElementById('customerPhoneLine');
+    if (!phoneToggle || !phoneLine) return;
+
+    const syncPhoneVisibility = () => {
+      phoneLine.classList.toggle('d-none', !phoneToggle.checked);
+    };
+
+    syncPhoneVisibility();
+    phoneToggle.addEventListener('change', syncPhoneVisibility);
+  })();
 </script>
+
+<script>
+  (function(){
+    const toggleQrBtn = document.getElementById("toggleQrBtn");
+    if (!toggleQrBtn) return;
+    toggleQrBtn.addEventListener("click", function() {
+      const qrSection = document.querySelector(".qr-wrapper");
+      if (!qrSection) return;
+      if (qrSection.style.display === "none") {
+        qrSection.style.display = "";
+        this.textContent = "Hide UPI QR";
+      } else {
+        qrSection.style.display = "none";
+        this.textContent = "Show UPI QR";
+      }
+    });
+  })();
+</script>
+</body>
 </html>

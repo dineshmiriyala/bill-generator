@@ -61,6 +61,11 @@ BACKUP_RETENTION = 10
 BACKUP_MAX_AGE_DAYS = 7
 ISO_8601_UTC = "%Y-%m-%dT%H:%M:%SZ"
 HUMAN_DATE_FMT = "%d %B %Y"
+DEFAULT_LOGO_COLOR_MODE = "black"
+LOGO_COLOR_PATHS = {
+    "black": "static/img/brand-wordmark.svg",
+    "blue": "static/img/brand-water-mark-blue.svg",
+}
 
 
 def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
@@ -83,6 +88,7 @@ def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
             "pan": "",
             "estd": current_year,
             "logo_path": "static/img/brand-wordmark.svg",
+            "logo_color_mode": DEFAULT_LOGO_COLOR_MODE,
         },
         "bank": {
             "account_name": "",
@@ -403,6 +409,18 @@ def ensure_info_json():
             changed = True
 
     data_section = info_data["data"]
+
+    business_section = data_section.setdefault("business", {})
+    logo_mode_raw = (business_section.get("logo_color_mode") or "").strip().lower()
+    if logo_mode_raw not in LOGO_COLOR_PATHS:
+        inferred_mode = "blue" if "blue" in (business_section.get("logo_path") or "").lower() else DEFAULT_LOGO_COLOR_MODE
+        if business_section.get("logo_color_mode") != inferred_mode:
+            business_section["logo_color_mode"] = inferred_mode
+            changed = True
+    else:
+        if logo_mode_raw != business_section.get("logo_color_mode"):
+            business_section["logo_color_mode"] = logo_mode_raw
+            changed = True
 
     account_defaults = data_section.setdefault("account_defaults", {})
     existing_start = account_defaults.get("start_date")
@@ -902,7 +920,7 @@ def _flash_test():
 # Home Route
 @app.route('/')
 def home():
-    session['persistent_notice'] = None
+    session.pop('persistent_notice', None)
     supabase_meta = APP_INFO.get('supabase', {})
     last_incremental = supabase_meta.get('last_incremental_uploaded')
     last_full = supabase_meta.get('last_uploaded')
@@ -924,6 +942,14 @@ def config():
     if 'file_location' not in app_info:
         app_info['file_location'] = ''
 
+    business_info = app_info.setdefault("business", {})
+    existing_mode = (business_info.get("logo_color_mode") or "").strip().lower()
+    if existing_mode in LOGO_COLOR_PATHS:
+        business_info["logo_color_mode"] = existing_mode
+    else:
+        inferred_mode = "blue" if "blue" in (business_info.get("logo_path") or "").lower() else DEFAULT_LOGO_COLOR_MODE
+        business_info["logo_color_mode"] = inferred_mode
+
     # --- Handle POST (Save Changes) ---
     if request.method == 'POST':
         section = request.form.get('section')
@@ -944,6 +970,15 @@ def config():
         elif section in app_info:
             if isinstance(app_info[section], dict):
                 app_info[section].update(updates)
+                if section == 'business':
+                    candidate_mode = updates.get('logo_color_mode', app_info['business'].get('logo_color_mode'))
+                    candidate_mode = (candidate_mode or "").strip().lower()
+                    if candidate_mode not in LOGO_COLOR_PATHS:
+                        candidate_mode = "blue" if "blue" in (app_info['business'].get("logo_path") or "").lower() else DEFAULT_LOGO_COLOR_MODE
+                    app_info['business']['logo_color_mode'] = candidate_mode
+                    desired_logo_path = LOGO_COLOR_PATHS.get(candidate_mode)
+                    if desired_logo_path:
+                        app_info['business']['logo_path'] = desired_logo_path
             elif isinstance(app_info[section], list):
                 # handle lists (e.g., services textarea)
                 lines = updates.get('services', '').splitlines()
@@ -2082,6 +2117,7 @@ def latest_bill_preview():
 def _build_sample_invoice_context():
     # Get the most recent invoice
     recent_invoice = invoice.query.order_by(invoice.createdAt.desc()).first()
+    notice = session.get("persistent_notice")
 
     if not recent_invoice:
         # Fallback if no invoice exists
@@ -2096,7 +2132,7 @@ def _build_sample_invoice_context():
             "total_in_words": "",
             "sizes": layoutConfig().get_or_create().get_sizes(),
             "rows": 0,
-            "persistent_notice": session.get("persistent_notice"),
+            "persistent_notice": notice,
         }
 
     # Get customer info
@@ -2144,7 +2180,7 @@ def _build_sample_invoice_context():
         "total_in_words": recent_invoice.total_in_words if hasattr(recent_invoice, "total_in_words") else "",
         "sizes": current_sizes,
         "rows": len(sample_items),
-        "persistent_notice": session.get("persistent_notice"),
+        "persistent_notice": notice,
     }
 
 
@@ -2178,58 +2214,76 @@ def handle_layout(action=None, data=None):
     return _build_sample_invoice_context()
 
 
-# --- Routes ---
-@app.route('/test-pre-preview', methods=['GET', 'POST'])
-def test_pre_preview():
-    upi_id = APP_INFO["upi_info"]["upi_id"]
-    company_name = APP_INFO["business"]["name"]
-    upi_name = APP_INFO["upi_info"]["upi_name"]
+def _generate_preview_qr():
+    """Fetch a QR code for the layout preview panel."""
+    upi_info = APP_INFO.get("upi_info", {})
+    business = APP_INFO.get("business", {})
+    upi_id = upi_info.get("upi_id")
+    company_name = business.get("name")
+
+    if not upi_id or not company_name:
+        return None
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
-    params = {"upi_id": upi_id, "amount": "", "company_name": company_name}  # amount empty for preview
+    params = {"upi_id": upi_id, "amount": "", "company_name": company_name}
 
     try:
         resp = requests.get(api_url, params=params, timeout=5)
         if resp.status_code == 200:
             data = resp.json()
-            upi_qr = data.get('qr_svg_base64')
-        else:
-            upi_qr = None
-    except Exception as e:
-        print(f"[ERROR] Failed to fetch QR for preview: {e}")
-        upi_qr = None
+            return data.get('qr_svg_base64')
+    except Exception as exc:
+        print(f"[WARN] Failed to fetch preview QR: {exc}")
+    return None
 
+
+def _render_layout_preview(ctx: dict):
+    """Render the invoice layout editor with shared context."""
+    preview_context = {
+        "app_info": APP_INFO,
+        "upi_qr": _generate_preview_qr(),
+    }
+    preview_context.update(ctx or {})
+    if preview_context.get("persistent_notice") is None:
+        preview_context["persistent_notice"] = ""
+    return render_template('pre-preview-bill.html', **preview_context)
+
+
+# --- Routes ---
+@app.route('/test-pre-preview', methods=['GET', 'POST'])
+def test_pre_preview():
     ctx = handle_layout(action="view")
-    return render_template(
-        'pre-preview-bill.html',
-        app_info=APP_INFO,
-        upi_qr=upi_qr,
-        **ctx
-    )
+    session_notice = session.pop('persistent_notice', None)
+    if session_notice:
+        ctx['persistent_notice'] = session_notice
+    return _render_layout_preview(ctx)
 
 
 @app.route('/pre-pre-preview', methods=['GET'])
 def test_pre_preview_():
     try:
-        if session['persistent_notice']:
+        if session.get('persistent_notice'):
             pass  # keep notice, just no backup check
     except Exception:
         pass
     ctx = handle_layout(action="view")
-    return render_template("pre-preview-bill.html", app_info=APP_INFO, **ctx)
+    session_notice = session.pop('persistent_notice', None)
+    if session_notice:
+        ctx['persistent_notice'] = session_notice
+    return _render_layout_preview(ctx)
 
 
 @app.route('/update-layout', methods=['POST'])
 def update_layout():
     data = request.get_json(force=True) if request.is_json else request.form
     ctx = handle_layout(action="update", data=data)
-    return render_template("pre-preview-bill.html", **ctx)
+    return _render_layout_preview(ctx)
 
 
 @app.route('/reset-layout', methods=['POST'])
 def reset_layout():
     ctx = handle_layout(action="reset")
-    return render_template("pre-preview-bill.html", **ctx)
+    return _render_layout_preview(ctx)
 
 
 app.jinja_env.globals.update(zip=zip)
