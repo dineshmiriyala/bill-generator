@@ -1,6 +1,6 @@
 @echo off
 echo =====================================================
-echo   Building Bill Generator V4.0  —  Dinesh Miriyala
+echo   Building Bill Generator V4.0 Dinesh Miriyala
 echo =====================================================
 
 :: Activate virtual environment
