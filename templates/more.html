@@ -171,6 +171,7 @@
     padding: 32px;
     text-align: center;
     box-shadow: 0 25px 60px rgba(15, 23, 42, 0.2);
+    position: relative;
   }
   .sync-spinner {
     width: 48px;
@@ -201,6 +202,9 @@
     justify-content: center;
     font-weight: 600;
     color: #1f2937;
+  }
+  .sync-overlay[data-state="ready"] .sync-spinner {
+    display: none;
   }
   .hub-footer {
     text-align: center;
@@ -280,11 +284,13 @@
   </div>
 </div>
 
-<div id="supabaseSyncOverlay" class="sync-overlay" aria-live="polite" hidden>
+<div id="supabaseSyncOverlay" class="sync-overlay" aria-live="polite" hidden data-state="loading">
   <div class="sync-modal">
+    <button type="button" class="btn-close position-absolute top-0 end-0 m-2" aria-label="Close" id="fullSyncClose" style="display:none;"></button>
     <div class="sync-spinner" role="presentation"></div>
-    <p class="sync-status">Preparing upload…</p>
-    <p class="sync-subtext">Sit tight while we package your data for Supabase.</p>
+    <p class="sync-status" id="fullSyncStatus">Preparing upload…</p>
+    <p class="sync-subtext" id="fullSyncSubtext">Sit tight while we package your data for Supabase.</p>
+    <pre id="fullSyncLog" style="text-align:left; background:#f5f5f5; border-radius:12px; padding:12px; margin-top:12px; max-height:180px; overflow:auto; display:none;"></pre>
   </div>
 </div>
 
@@ -305,16 +311,85 @@
     const syncForm = document.getElementById('supabaseSyncForm');
     const overlay = document.getElementById('supabaseSyncOverlay');
     const statusLabel = overlay ? overlay.querySelector('.sync-status') : null;
-    if (syncForm && overlay && statusLabel) {
-      syncForm.addEventListener('submit', function() {
+    const subtext = document.getElementById('fullSyncSubtext');
+    const logBox = document.getElementById('fullSyncLog');
+    const closeBtn = document.getElementById('fullSyncClose');
+    if (syncForm && overlay && statusLabel && logBox && closeBtn && window.fetch) {
+      const submitButton = syncForm.querySelector('button[type="submit"]');
+      const resetOverlay = () => {
+        overlay.classList.remove('visible');
+        overlay.setAttribute('hidden', '');
+        overlay.dataset.state = 'loading';
+        statusLabel.textContent = 'Preparing upload…';
+        if (subtext) subtext.textContent = 'Sit tight while we package your data for Supabase.';
+        logBox.textContent = '';
+        logBox.style.display = 'none';
+        closeBtn.style.display = 'none';
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.classList.remove('disabled');
+        }
+      };
+      closeBtn.addEventListener('click', resetOverlay);
+
+      syncForm.addEventListener('submit', function(evt) {
+        evt.preventDefault();
+        overlay.dataset.state = 'loading';
         overlay.classList.add('visible');
         overlay.removeAttribute('hidden');
         statusLabel.textContent = 'Uploading data to Supabase…';
-        const submitButton = syncForm.querySelector('button[type="submit"]');
+        if (subtext) subtext.textContent = 'This may take a few minutes.';
+        logBox.textContent = '';
+        logBox.style.display = 'none';
+        closeBtn.style.display = 'none';
         if (submitButton) {
           submitButton.disabled = true;
           submitButton.classList.add('disabled');
         }
+
+        fetch(syncForm.action, {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(async response => {
+          let data;
+          try {
+            data = await response.json();
+          } catch (err) {
+            data = { status: 'error', message: 'Unexpected server response.' };
+          }
+          return { ok: response.ok, data };
+        })
+        .then(({ ok, data }) => {
+          overlay.dataset.state = 'ready';
+          const isSuccess = ok && data.status === 'success';
+          statusLabel.textContent = data.message || (isSuccess ? 'Upload complete.' : 'Upload failed.');
+          if (subtext) {
+            subtext.textContent = isSuccess
+              ? 'Review the summary below and close when you are ready.'
+              : 'Please review the error details below.';
+          }
+          const details = data.details || `Uploaded: ${data.uploaded ?? 'n/a'} • Failed: ${data.failed ?? 'n/a'}`;
+          logBox.textContent = details;
+          logBox.style.display = 'block';
+          closeBtn.style.display = 'inline-flex';
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.classList.remove('disabled');
+          }
+        })
+        .catch(() => {
+          overlay.dataset.state = 'ready';
+          statusLabel.textContent = 'Upload failed.';
+          if (subtext) subtext.textContent = 'Unable to reach Supabase. Please try again.';
+          logBox.textContent = '';
+          logBox.style.display = 'none';
+          closeBtn.style.display = 'inline-flex';
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.classList.remove('disabled');
+          }
+        });
       });
     }
 

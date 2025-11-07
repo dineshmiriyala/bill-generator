@@ -1332,7 +1332,7 @@ def _persist_accounting_transaction(form):
             tz_name = (APP_INFO.get('account_defaults') or {}).get('timezone') or DEFAULT_TIMEZONE
             local_tz = tz.gettz(tz_name) or timezone.utc
             parsed_date = datetime.strptime(txn_date_raw, '%Y-%m-%d')
-            local_dt = datetime(parsed_date.year, parsed_date.month, parsed_date.day, tzinfo=local_tz)
+            local_dt = datetime(parsed_date.year, parsed_date.month, parsed_date.day, 12, 0, tzinfo=local_tz)
             txn_created_at = local_dt.astimezone(timezone.utc)
         except Exception:
             txn_created_at = None
@@ -4024,15 +4024,23 @@ def _check_supabase_connectivity(url: str, timeout: float = 5.0) -> tuple[bool, 
 
 @app.post('/supabase_sync_all')
 def supabase_sync_all():
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    def _respond(status: str, message: str, category: str = 'info', code: int = 200, **extra):
+        if is_ajax:
+            payload = {"status": status, "message": message}
+            payload.update(extra)
+            return jsonify(payload), code
+        flash(message, category)
+        return redirect(url_for('more'))
+
     url, key, _ = load_supabase_config()
     if not url or not key:
-        flash('Supabase credentials are missing. Please update Account Settings.', 'danger')
-        return redirect(url_for('more'))
+        return _respond('error', 'Supabase credentials are missing. Please update Account Settings.', 'danger', 400)
 
     reachable, error_message = _check_supabase_connectivity(url)
     if not reachable:
-        flash('Cloud sync unavailable right now — check your internet connection and try again.', 'warning')
-        return redirect(url_for('more'))
+        return _respond('error', 'Cloud sync unavailable right now — check your internet connection and try again.', 'warning', 503, details=error_message)
 
     backup_path = _create_db_backup()
 
@@ -4044,23 +4052,19 @@ def supabase_sync_all():
     except SupabaseUploadError as exc:
         skipped = ', '.join(exc.skipped_tables) if exc.skipped_tables else 'none'
         detail = f" Reason: {exc.detail}" if exc.detail else ''
-        flash(
-            (
-                f"Supabase rejected {exc.failed_count} records in '{exc.failed_table}'. "
-                f"Upload stopped before tables: {skipped}.{detail}"
-            ),
-            'danger'
+        message = (
+            f"Supabase rejected {exc.failed_count} records in '{exc.failed_table}'. "
+            f"Upload stopped before tables: {skipped}.{detail}"
         )
-        return redirect(url_for('more'))
+        return _respond('error', message, 'danger', 500, details=message)
     except Exception as exc:
-        flash(f'Failed to sync with Supabase: {exc}', 'danger')
-        return redirect(url_for('more'))
+        return _respond('error', f'Failed to sync with Supabase: {exc}', 'danger', 500)
 
     timestamp = datetime.now(timezone.utc).isoformat()
     _update_supabase_last_uploaded(timestamp)
-    flash(f'Successfully uploaded {result.uploaded} records to Supabase.', 'success')
 
-    return redirect(url_for('more'))
+    success_message = f"Uploaded {result.uploaded} records to Supabase ({result.failed} failed)."
+    return _respond('success', success_message, 'success', 200, uploaded=result.uploaded, failed=result.failed)
 
 
 @app.post('/backup/local_copy')
