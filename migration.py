@@ -41,6 +41,48 @@ def migrate_db(db_path):
                 );
             """)
 
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='accounting_transaction';")
+        accounting_table_exists = cursor.fetchone()
+
+        if not accounting_table_exists:
+            print("[Migration] Creating missing table: accounting_transaction")
+            cursor.execute("""
+                CREATE TABLE accounting_transaction (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    txn_id TEXT NOT NULL UNIQUE,
+                    customerId INTEGER,
+                    amount REAL NOT NULL,
+                    txn_type TEXT NOT NULL DEFAULT 'income',
+                    mode TEXT,
+                    account TEXT,
+                    invoice_no TEXT,
+                    remarks TEXT,
+                    is_deleted INTEGER NOT NULL DEFAULT 0,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(customerId) REFERENCES customer(id)
+                );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS ix_accounting_transaction_customerId ON accounting_transaction(customerId);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS ix_accounting_transaction_invoice_no ON accounting_transaction(invoice_no);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS ix_accounting_transaction_txn_type ON accounting_transaction(txn_type);")
+
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='expense_item';")
+        expense_table_exists = cursor.fetchone()
+
+        if not expense_table_exists:
+            print("[Migration] Creating missing table: expense_item")
+            cursor.execute("""
+                CREATE TABLE expense_item (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    transactionId INTEGER NOT NULL,
+                    description TEXT,
+                    amount REAL,
+                    FOREIGN KEY(transactionId) REFERENCES accounting_transaction(id) ON DELETE CASCADE
+                );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS ix_expense_item_transactionId ON expense_item(transactionId);")
+
         conn.commit()
         print("[Migration] DB schema is up-to-date.")
     except Exception as e:

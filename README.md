@@ -48,6 +48,11 @@ Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Boots
 - Statement APIs for dashboards and raw invoice exports.
 - Analytics dashboard summarising trends by day, month, year, weekday, and top customers using precomputed aggregates.
 
+### Accounting & Cashflow
+- Dedicated `/accounting` workspace summarises outstanding invoices, total income/expenses, and recent ledger entries.
+- Record incoming payments or expenses (with itemised breakdowns) that link back to customers and invoices.
+- Automatic transaction IDs (`SLP-TXN-DDMMYY-######`) keep records ordered without manual effort.
+
 ### Document Layout and Rendering
 - Configurable “Invoice Visual Settings” (Config → Invoice Visual Settings) let you tune watermark colour and section font sizes stored in the database (`layoutConfig`).
 - Print-ready HTML templates for invoice previews and final statements.
@@ -132,6 +137,7 @@ The script installs/updates dependencies, clears previous artefacts, and emits `
 5. **Statements:** Use `/statements` (date range) or `/statements_company` (per customer) to review totals and export data.
 6. **Analytics:** `/analytics` surfaces trends, retention, and top customers for monitoring business health.
 7. **Invoice visuals:** Use the Config → Invoice Visual Settings panel to update watermark colour and section font sizes (persisted via `layoutConfig`).
+8. **Accounting:** Head to `/accounting` to monitor receivables and log payments/expenses against customers and invoices.
 
 ## Data Management and Recovery
 

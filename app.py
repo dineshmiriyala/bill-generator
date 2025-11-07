@@ -11,7 +11,7 @@ from collections import defaultdict
 from copy import deepcopy
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -44,7 +44,7 @@ from analytics import (
 from analytics_tracking import log_user_event
 from api import api_bp
 from db import db_events  # noqa: F401
-from db.models import db, customer, invoice, invoiceItem, item, layoutConfig
+from db.models import db, customer, invoice, invoiceItem, item, layoutConfig, accountingTransaction, expenseItem
 from migration import migrate_db
 from supabase_upload import SupabaseUploadError, upload_full_database, upload_to_supabase
 
@@ -1052,6 +1052,316 @@ def config_refresh():
     except Exception as exc:
         flash(f'Unable to refresh settings: {exc}', 'danger')
     return redirect(url_for('config'))
+
+
+def _accounting_totals():
+    base_query = db.session.query
+    income_total = base_query(func.coalesce(func.sum(accountingTransaction.amount), 0.0)).filter(
+        accountingTransaction.txn_type == 'income',
+        accountingTransaction.is_deleted.is_(False)
+    ).scalar() or 0.0
+
+    expense_total = base_query(func.coalesce(func.sum(accountingTransaction.amount), 0.0)).filter(
+        accountingTransaction.txn_type == 'expense',
+        accountingTransaction.is_deleted.is_(False)
+    ).scalar() or 0.0
+
+    outstanding_invoice_rows = _outstanding_invoice_rows()
+    general_payments = _general_customer_payments()
+    customer_expenses = _customer_expenses()
+    outstanding_entries = _group_outstanding_by_customer(
+        outstanding_invoice_rows,
+        general_payments,
+        customer_expenses
+    )
+    outstanding_total = sum(entry['balance'] for entry in outstanding_entries)
+
+    return {
+        'income_total': income_total,
+        'expense_total': expense_total,
+        'net_flow': income_total - expense_total,
+        'outstanding_total': outstanding_total,
+        'outstanding_entries': outstanding_entries,
+        'outstanding_invoices_raw': outstanding_invoice_rows,
+    }
+
+
+def _outstanding_invoice_rows():
+    payments_subq = (
+        db.session.query(
+            accountingTransaction.invoice_no.label('invoice_no'),
+            func.coalesce(func.sum(accountingTransaction.amount), 0.0).label('paid_amount')
+        )
+        .filter(
+            accountingTransaction.is_deleted.is_(False),
+            accountingTransaction.txn_type == 'income',
+            accountingTransaction.invoice_no.isnot(None)
+        )
+        .group_by(accountingTransaction.invoice_no)
+        .subquery()
+    )
+
+    rows = (
+        db.session.query(
+            invoice.invoiceId.label('invoice_no'),
+            invoice.createdAt,
+            invoice.totalAmount,
+            customer.id.label('customer_id'),
+            customer.name.label('customer_name'),
+            customer.company.label('customer_company'),
+            func.coalesce(payments_subq.c.paid_amount, 0.0).label('paid_amount')
+        )
+        .join(customer, invoice.customerId == customer.id)
+        .outerjoin(payments_subq, payments_subq.c.invoice_no == invoice.invoiceId)
+        .filter(invoice.isDeleted.is_(False))
+        .order_by(invoice.createdAt.desc())
+    )
+
+    invoice_rows = []
+    for row in rows:
+        balance = float(max((row.totalAmount or 0) - (row.paid_amount or 0), 0))
+        if balance <= 0.01:
+            continue
+        invoice_rows.append({
+            'invoice_no': row.invoice_no,
+            'created_at': row.createdAt,
+            'customer_id': row.customer_id,
+            'customer': row.customer_name or row.customer_company or 'Customer',
+            'company': row.customer_company,
+            'total': float(row.totalAmount or 0),
+            'paid': float(row.paid_amount or 0),
+            'balance': balance,
+        })
+    return invoice_rows
+
+
+def _general_customer_payments():
+    rows = (
+        db.session.query(
+            accountingTransaction.customerId,
+            func.coalesce(func.sum(accountingTransaction.amount), 0.0).label('amt')
+        )
+        .filter(
+            accountingTransaction.is_deleted.is_(False),
+            accountingTransaction.txn_type == 'income',
+            accountingTransaction.invoice_no.is_(None),
+            accountingTransaction.customerId.isnot(None)
+        )
+        .group_by(accountingTransaction.customerId)
+        .all()
+    )
+    return {row.customerId: float(row.amt or 0) for row in rows}
+
+
+def _customer_expenses():
+    rows = (
+        db.session.query(
+            accountingTransaction.customerId,
+            func.coalesce(func.sum(accountingTransaction.amount), 0.0).label('amt')
+        )
+        .filter(
+            accountingTransaction.is_deleted.is_(False),
+            accountingTransaction.txn_type == 'expense',
+            accountingTransaction.customerId.isnot(None)
+        )
+        .group_by(accountingTransaction.customerId)
+        .all()
+    )
+    return {row.customerId: float(row.amt or 0) for row in rows}
+
+
+def _group_outstanding_by_customer(invoice_rows, general_payments, customer_expenses):
+    grouped = {}
+    for entry in invoice_rows:
+        cust_id = entry.get('customer_id')
+        key = cust_id or (entry['customer'], entry.get('company'))
+        bucket = grouped.setdefault(key, {
+            'customer_id': cust_id,
+            'customer': entry['customer'],
+            'company': entry.get('company'),
+            'total': 0.0,
+            'paid': 0.0,
+            'expenses': 0.0,
+            'invoice_count': 0,
+            'latest_invoice_date': entry.get('created_at'),
+        })
+        bucket['total'] += entry['total']
+        bucket['paid'] += entry['paid']
+        bucket['invoice_count'] += 1
+        existing_date = bucket.get('latest_invoice_date')
+        created_at = entry.get('created_at')
+        if existing_date is None or (created_at and created_at > existing_date):
+            bucket['latest_invoice_date'] = created_at
+    for bucket in grouped.values():
+        cust_id = bucket.get('customer_id')
+        general = general_payments.get(cust_id)
+        if general:
+            bucket['paid'] += general
+
+        expense_sum = customer_expenses.get(cust_id)
+        if expense_sum:
+            bucket['expenses'] += expense_sum
+
+        total_due = bucket['total'] + bucket['expenses']
+        bucket['balance'] = max(total_due - bucket['paid'], 0.0)
+
+    result = list(grouped.values())
+    result.sort(key=lambda row: row['balance'], reverse=True)
+    return result
+
+
+def _ensure_business_expense_customer():
+    cust = (
+        customer.query
+        .filter(
+            customer.name == "Business Expense",
+            customer.isDeleted == False
+        )
+        .first()
+    )
+    if cust:
+        return cust
+    synthetic_phone = f"EXP-{int(datetime.now(timezone.utc).timestamp())}"
+    cust = customer(
+        name="Business Expense",
+        company="Internal Ledger",
+        phone=synthetic_phone,
+        email="",
+        gst="",
+        address="",
+        businessType="Expense",
+        isDeleted=False
+    )
+    db.session.add(cust)
+    db.session.flush()
+    return cust
+
+
+def _persist_accounting_transaction(form):
+    txn_type = (form.get('txn_type') or 'income').strip().lower()
+    if txn_type not in ('income', 'expense'):
+        txn_type = 'income'
+
+    amount_raw = (form.get('amount') or '').strip()
+    try:
+        amount_decimal = Decimal(amount_raw)
+    except (InvalidOperation, TypeError):
+        return "Enter a valid amount."
+    if amount_decimal <= 0:
+        return "Amount must be greater than zero."
+
+    customer_id_val = form.get('customer_id')
+    customer_obj = None
+    if customer_id_val:
+        try:
+            customer_obj = customer.query.get(int(customer_id_val))
+        except (TypeError, ValueError):
+            customer_obj = None
+        if not customer_obj or customer_obj.isDeleted:
+            return "Selected customer could not be found."
+
+    customer_name = None
+    if txn_type == 'income' and not customer_obj:
+        return "Select a customer for payments received."
+    if txn_type == 'expense' and not customer_obj:
+        customer_obj = _ensure_business_expense_customer()
+
+    invoice_no = (form.get('invoice_no') or '').strip() or None
+    if invoice_no:
+        invoice_obj = invoice.query.filter_by(invoiceId=invoice_no).first()
+        if not invoice_obj:
+            return "Invoice number could not be located."
+        if customer_obj and invoice_obj.customerId != customer_obj.id:
+            return "Invoice does not belong to the selected customer."
+
+    txn = accountingTransaction(
+        customerId=customer_obj.id if customer_obj else None,
+        amount=float(amount_decimal),
+        txn_type=txn_type,
+        mode=(form.get('mode') or '').strip().lower() or 'cash',
+        account=(form.get('account') or '').strip().lower() or 'cash',
+        invoice_no=invoice_no,
+        remarks=(form.get('remarks') or '').strip() or None,
+    )
+
+    db.session.add(txn)
+    db.session.flush()
+
+    if txn_type == 'expense':
+        descriptions = form.getlist('expense_desc[]')
+        amounts = form.getlist('expense_amount[]')
+        for idx, desc in enumerate(descriptions):
+            desc_text = (desc or '').strip()
+            if not desc_text:
+                continue
+            amount_val = None
+            if idx < len(amounts):
+                amt_raw = (amounts[idx] or '').strip()
+                if amt_raw:
+                    try:
+                        amount_val = float(Decimal(amt_raw))
+                    except (InvalidOperation, TypeError):
+                        amount_val = None
+            expense_entry = expenseItem(
+                transactionId=txn.id,
+                description=desc_text,
+                amount=amount_val
+            )
+            db.session.add(expense_entry)
+
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return f"Unable to record transaction: {exc}"
+    return None
+
+
+# Accounting dashboard
+@app.route('/accounting', methods=['GET', 'POST'])
+def accounting_dashboard():
+    if request.method == 'POST':
+        error = _persist_accounting_transaction(request.form)
+        if error:
+            db.session.rollback()
+            flash(error, 'danger')
+        else:
+            flash('Transaction recorded successfully.', 'success')
+        return redirect(url_for('accounting_dashboard'))
+
+    totals = _accounting_totals()
+    outstanding = totals['outstanding_entries']
+    customers_list = customer.alive().order_by(customer.name.asc()).all()
+    recent_transactions = (
+        accountingTransaction.query
+        .options(joinedload(accountingTransaction.expense_items), joinedload(accountingTransaction.customer))
+        .filter(accountingTransaction.is_deleted.is_(False))
+        .order_by(accountingTransaction.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    invoice_choices = []
+    seen_invoices = set()
+    for entry in totals.get('outstanding_invoices_raw', []):
+        inv_code = entry.get('invoice_no')
+        if inv_code and inv_code not in seen_invoices:
+            seen_invoices.add(inv_code)
+            invoice_choices.append(inv_code)
+
+    payment_modes = ['cash', 'bank', 'upi']
+    account_options = ['cash', 'savings', 'current']
+
+    return render_template(
+        'accounting.html',
+        totals=totals,
+        outstanding=outstanding,
+        customers=customers_list,
+        recent_transactions=recent_transactions,
+        invoice_choices=invoice_choices,
+        payment_modes=payment_modes,
+        account_options=account_options,
+    )
 
 
 # customers page (temperory placeholder)
