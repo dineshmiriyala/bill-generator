@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="fw-semibold mb-1">Accounting</h2>
+      <p class="text-muted mb-0">Track receivables, record payments, and log expenses in one place.</p>
+    </div>
+    <a href="{{ url_for('home') }}" class="btn btn-outline-secondary btn-sm">← Back to Home</a>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <p class="text-muted text-uppercase small mb-1">Total Outstanding</p>
+          <h4 class="mb-0">₹ {{ '{:,.2f}'.format(totals.outstanding_total) }}</h4>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <p class="text-muted text-uppercase small mb-1">Income</p>
+          <h4 class="mb-0 text-success">₹ {{ '{:,.2f}'.format(totals.income_total) }}</h4>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <p class="text-muted text-uppercase small mb-1">Expenses</p>
+          <h4 class="mb-0 text-danger">₹ {{ '{:,.2f}'.format(totals.expense_total) }}</h4>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <p class="text-muted text-uppercase small mb-1">Net Flow</p>
+          <h4 class="mb-0 {{ 'text-success' if totals.net_flow >= 0 else 'text-danger' }}">
+            ₹ {{ '{:,.2f}'.format(totals.net_flow) }}
+          </h4>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-semibold mb-0">Outstanding Bills</h5>
+            <span class="badge bg-light text-dark">{{ outstanding|length }} open</span>
+          </div>
+          {% if outstanding %}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr class="text-muted small text-uppercase">
+                    <th>Invoice</th>
+                    <th>Customer</th>
+                    <th class="text-end">Amount</th>
+                    <th class="text-end">Paid</th>
+                    <th class="text-end">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for invoice_row in outstanding %}
+                    <tr>
+                      <td>
+                        <div class="fw-semibold">{{ invoice_row.invoice_no }}</div>
+                        <small class="text-muted">{{ invoice_row.created_at | datetimeformat('%d %b %Y') }}</small>
+                      </td>
+                      <td>
+                        <div>{{ invoice_row.customer }}</div>
+                        {% if invoice_row.company %}
+                          <small class="text-muted">{{ invoice_row.company }}</small>
+                        {% endif %}
+                      </td>
+                      <td class="text-end">₹ {{ '{:,.2f}'.format(invoice_row.total) }}</td>
+                      <td class="text-end text-success">₹ {{ '{:,.2f}'.format(invoice_row.paid) }}</td>
+                      <td class="text-end text-danger fw-semibold">₹ {{ '{:,.2f}'.format(invoice_row.balance) }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="text-center text-muted py-4">
+              <p class="mb-0">All caught up! No outstanding invoices.</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <h5 class="fw-semibold mb-3">Record Payment / Expense</h5>
+          <form method="post">
+            <div class="mb-3">
+              <label class="form-label">Transaction Type</label>
+              <select class="form-select" name="txn_type" id="txnType">
+                <option value="income">Payment Received</option>
+                <option value="expense">Expense</option>
+              </select>
+            </div>
+            <div class="mb-3" data-block="customer-fields">
+              <label class="form-label">Customer</label>
+              <select class="form-select" name="customer_id">
+                <option value="">Select customer</option>
+                {% for cust in customers %}
+                  <option value="{{ cust.id }}">{{ cust.name }}{% if cust.company %} — {{ cust.company }}{% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3" data-block="invoice-fields">
+              <label class="form-label">Invoice (optional)</label>
+              <select class="form-select" name="invoice_no">
+                <option value="">Select invoice</option>
+                {% for inv in invoice_choices %}
+                  <option value="{{ inv }}">{{ inv }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Amount</label>
+              <input type="number" name="amount" step="0.01" min="0" class="form-control" required>
+            </div>
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label">Mode</label>
+                <select class="form-select" name="mode">
+                  {% for mode in payment_modes %}
+                    <option value="{{ mode }}">{{ mode|capitalize }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Account</label>
+                <select class="form-select" name="account">
+                  {% for acct in account_options %}
+                    <option value="{{ acct }}">{{ acct|capitalize }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Remarks</label>
+              <textarea class="form-control" rows=2 name="remarks" placeholder="Notes or references"></textarea>
+            </div>
+            <div id="expenseItemsWrapper" class="mb-3 d-none">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0">Expense Items</label>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="addExpenseRow">Add Item</button>
+              </div>
+              <div id="expenseItemsRepeater"></div>
+            </div>
+            <div class="text-end">
+              <button type="submit" class="btn btn-primary">Save Transaction</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 mt-4">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-semibold mb-0">Recent Transactions</h5>
+      </div>
+      {% if recent_transactions %}
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead>
+              <tr class="text-muted text-uppercase small">
+                <th>Txn ID</th>
+                <th>Type</th>
+                <th>Customer / Invoice</th>
+                <th>Mode</th>
+                <th class="text-end">Amount</th>
+                <th>Recorded</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for txn in recent_transactions %}
+                <tr>
+                  <td class="fw-semibold">{{ txn.txn_id }}</td>
+                  <td>
+                    <span class="badge {{ 'bg-success-subtle text-success' if txn.txn_type == 'income' else 'bg-danger-subtle text-danger' }}">
+                      {{ txn.txn_type|capitalize }}
+                    </span>
+                    {% if txn.expense_items and txn.txn_type == 'expense' %}
+                      <div class="small text-muted mt-1">
+                        {% for item in txn.expense_items %}
+                          <div>• {{ item.description }}{% if item.amount %} — ₹ {{ '{:,.2f}'.format(item.amount) }}{% endif %}</div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if txn.customer %}
+                      <div>{{ txn.customer.name }}</div>
+                      {% if txn.customer.company %}
+                        <small class="text-muted">{{ txn.customer.company }}</small>
+                      {% endif %}
+                    {% else %}
+                      <div class="text-muted">—</div>
+                    {% endif %}
+                    {% if txn.invoice_no %}
+                      <small class="text-muted">Invoice: {{ txn.invoice_no }}</small>
+                    {% endif %}
+                    {% if txn.remarks %}
+                      <div class="small text-muted">{{ txn.remarks }}</div>
+                    {% endif %}
+                  </td>
+                  <td class="text-capitalize">{{ txn.mode or '—' }}</td>
+                  <td class="text-end {{ 'text-success' if txn.txn_type == 'income' else 'text-danger' }}">
+                    ₹ {{ '{:,.2f}'.format(txn.amount) }}
+                  </td>
+                  <td>{{ txn.created_at | datetimeformat('%d %b %Y %I:%M %p') }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-center text-muted py-4">
+          <p class="mb-0">No transactions recorded yet.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<template id="expenseRowTemplate">
+  <div class="row g-2 align-items-end expense-item-row mb-2">
+    <div class="col-7">
+      <label class="form-label small text-muted">Description</label>
+      <input type="text" class="form-control" name="expense_desc[]" placeholder="e.g., Paper stock">
+    </div>
+    <div class="col-4">
+      <label class="form-label small text-muted">Amount</label>
+      <input type="number" class="form-control" step="0.01" name="expense_amount[]" placeholder="0.00">
+    </div>
+    <div class="col-1 text-end">
+      <button type="button" class="btn btn-outline-danger btn-sm remove-expense-row">&times;</button>
+    </div>
+  </div>
+</template>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const txnTypeSelect = document.getElementById('txnType');
+    const customerBlock = document.querySelector('[data-block="customer-fields"]');
+    const invoiceBlock = document.querySelector('[data-block="invoice-fields"]');
+    const expenseWrapper = document.getElementById('expenseItemsWrapper');
+    const expenseRepeater = document.getElementById('expenseItemsRepeater');
+    const expenseTemplate = document.getElementById('expenseRowTemplate').content;
+
+    function toggleBlocks() {
+      const isExpense = txnTypeSelect.value === 'expense';
+      customerBlock.classList.toggle('d-none', isExpense);
+      invoiceBlock.classList.toggle('d-none', isExpense);
+      expenseWrapper.classList.toggle('d-none', !isExpense);
+      if (isExpense && !expenseRepeater.children.length) {
+        addExpenseRow();
+      }
+    }
+
+    function addExpenseRow() {
+      const clone = document.importNode(expenseTemplate, true);
+      const row = clone.querySelector('.expense-item-row');
+      row.querySelector('.remove-expense-row').addEventListener('click', function () {
+        row.remove();
+      });
+      expenseRepeater.appendChild(clone);
+    }
+
+    document.getElementById('addExpenseRow').addEventListener('click', addExpenseRow);
+    txnTypeSelect.addEventListener('change', toggleBlocks);
+    toggleBlocks();
+  });
+</script>
+{% endblock %}
