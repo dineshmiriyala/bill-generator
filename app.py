@@ -9,7 +9,7 @@ import sqlite3
 import uuid
 from collections import defaultdict
 from copy import deepcopy
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from pathlib import Path
@@ -576,6 +576,51 @@ def onboarding():
 
 def _normalize_account_number(value: str) -> str:
     return ''.join(ch for ch in value if ch.isalnum())
+
+
+def _get_upi_variants() -> List[Dict[str, str]]:
+    """Return configured UPI variants with display metadata."""
+    upi_info = APP_INFO.get('upi_info', {}) if isinstance(APP_INFO.get('upi_info'), dict) else {}
+    business_info = APP_INFO.get('business', {}) if isinstance(APP_INFO.get('business'), dict) else {}
+
+    def _clean(value: Optional[str]) -> Optional[str]:
+        if not value:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    variants: List[Dict[str, str]] = []
+
+    primary_id = _clean(upi_info.get('upi_id') or business_info.get('upi_id'))
+    primary_name = _clean(upi_info.get('upi_name') or business_info.get('upi_name') or business_info.get('owner'))
+    if primary_id:
+        variants.append({
+            'key': 'primary',
+            'label': 'Savings Account UPI',
+            'upi_id': primary_id,
+            'upi_name': primary_name or '',
+        })
+
+    current_id = _clean(upi_info.get('upi_current_id'))
+    current_name = _clean(upi_info.get('upi_current_name') or primary_name)
+    if current_id:
+        variants.append({
+            'key': 'current',
+            'label': 'Current Account UPI',
+            'upi_id': current_id,
+            'upi_name': current_name or '',
+        })
+
+    return variants
+
+
+def _find_upi_variant(choice: Optional[str]) -> Optional[Dict[str, str]]:
+    if not choice:
+        return None
+    for variant in _get_upi_variants():
+        if variant.get('key') == choice:
+            return variant
+    return None
 
 
 @app.route('/onboarding/submit', methods=['POST'])
@@ -3753,24 +3798,38 @@ def accounting_statement():
 
 @app.route('/qr_code', methods=['GET', 'POST'])
 def qr_code():
+    upi_variants = _get_upi_variants()
+    default_variant = upi_variants[0] if upi_variants else {
+        'key': 'primary',
+        'upi_id': APP_INFO.get('upi_info', {}).get('upi_id') or APP_INFO.get('business', {}).get('upi_id', ''),
+        'upi_name': APP_INFO.get('upi_info', {}).get('upi_name') or APP_INFO.get('business', {}).get('upi_name', ''),
+    }
+
     return render_template('QR_code.html',
-                           upi_id=APP_INFO['upi_info']['upi_id'],
-                           upi_name=APP_INFO['upi_info']['upi_name'],
+                           upi_id=default_variant.get('upi_id', ''),
+                           upi_name=default_variant.get('upi_name', ''),
+                           selected_variant=default_variant.get('key', 'primary'),
+                           upi_variants=upi_variants,
                            qr_image=False)
 
 
 @app.route('/generate_qr', methods=['GET', 'POST'])
 def generate_qr():
-    if request.method == 'POST':
-        amount = request.form.get('amount')
-        upi_id = request.form.get('upi_id') or APP_INFO['business']['upi_id']
-        upi_name = request.form.get('upi_name') or APP_INFO['business']['upi_name']
-    else:
-        amount = request.args.get('amount')
-        upi_id = request.args.get('upi_id') or APP_INFO['business']['upi_id']
-        upi_name = request.args.get('upi_name') or APP_INFO['business']['upi_name']
+    source = request.form if request.method == 'POST' else request.args
+    amount = source.get('amount')
 
-    company_name = APP_INFO['business']['name']
+    upi_info_defaults = APP_INFO.get('upi_info', {}) if isinstance(APP_INFO.get('upi_info'), dict) else {}
+    business_defaults = APP_INFO.get('business', {}) if isinstance(APP_INFO.get('business'), dict) else {}
+
+    selected_variant = _find_upi_variant(source.get('upi_variant'))
+    if selected_variant:
+        upi_id = selected_variant.get('upi_id') or upi_info_defaults.get('upi_id') or business_defaults.get('upi_id')
+        upi_name = selected_variant.get('upi_name') or upi_info_defaults.get('upi_name') or business_defaults.get('upi_name') or business_defaults.get('owner')
+    else:
+        upi_id = source.get('upi_id') or upi_info_defaults.get('upi_id') or business_defaults.get('upi_id')
+        upi_name = source.get('upi_name') or upi_info_defaults.get('upi_name') or business_defaults.get('upi_name') or business_defaults.get('owner')
+
+    company_name = business_defaults.get('name') or APP_INFO['business']['name']
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
     params = {"upi_id": upi_id, "amount": amount, "company_name": company_name}

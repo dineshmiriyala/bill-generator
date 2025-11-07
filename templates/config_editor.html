@@ -185,19 +185,23 @@
         </div>
 
         <!-- UPI Info Section -->
-        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+        <div id="upi-info-section" class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
               <h4 class="fw-semibold mb-3 text-primary">UPI Info</h4>
               <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#upiModal" style="min-width: 70px;">Edit</button>
             </div>
             <dl class="row mb-0">
-              <dt class="col-sm-4">UPI ID</dt>
-              <dd class="col-sm-8 text-muted">{{ app_info['upi_info']['upi_id'] }}</dd>
+              <dt class="col-sm-4">Primary UPI ID</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info.get('upi_info', {}).get('upi_id', 'Not set') }}</dd>
+              <dt class="col-sm-4">Primary UPI Name</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info.get('upi_info', {}).get('upi_name', 'Not set') }}</dd>
               <dt class="col-sm-4">Currency</dt>
-              <dd class="col-sm-8 text-muted">{{ app_info['upi_info']['currency'] }}</dd>
-              <dt class="col-sm-4">UPI Name</dt>
-              <dd class="col-sm-8 text-muted">{{ app_info['upi_info']['upi_name'] }}</dd>
+              <dd class="col-sm-8 text-muted">{{ app_info.get('upi_info', {}).get('currency', 'Not set') }}</dd>
+              <dt class="col-sm-4">Current Account UPI ID</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info.get('upi_info', {}).get('upi_current_id', 'Not set') }}</dd>
+              <dt class="col-sm-4">Current Account UPI Name</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info.get('upi_info', {}).get('upi_current_name', 'Not set') }}</dd>
             </dl>
           </div>
         </div>
@@ -525,26 +529,38 @@
                   <div class="row">
                     <div class="col-md-6">
                       <dl>
-                        <dt>UPI ID</dt>
-                        <dd class="text-muted">{{ app_info['upi_info']['upi_id'] }}</dd>
+                        <dt>Primary UPI ID</dt>
+                        <dd class="text-muted">{{ app_info.get('upi_info', {}).get('upi_id') }}</dd>
                         <dt>Currency</dt>
-                        <dd class="text-muted">{{ app_info['upi_info']['currency'] }}</dd>
-                        <dt>UPI Name</dt>
-                        <dd class="text-muted">{{ app_info['upi_info']['upi_name'] }}</dd>
+                        <dd class="text-muted">{{ app_info.get('upi_info', {}).get('currency') }}</dd>
+                        <dt>Primary UPI Name</dt>
+                        <dd class="text-muted">{{ app_info.get('upi_info', {}).get('upi_name') }}</dd>
+                        <dt>Current Account UPI ID</dt>
+                        <dd class="text-muted">{{ app_info.get('upi_info', {}).get('upi_current_id', 'N/A') }}</dd>
+                        <dt>Current Account UPI Name</dt>
+                        <dd class="text-muted">{{ app_info.get('upi_info', {}).get('upi_current_name', 'N/A') }}</dd>
                       </dl>
                     </div>
                     <div class="col-md-6">
                       <div class="mb-3">
-                        <label class="form-label">UPI ID</label>
-                        <input type="text" name="upi_id" class="form-control" value="{{ app_info['upi_info']['upi_id'] }}">
+                        <label class="form-label">Primary UPI ID</label>
+                        <input type="text" name="upi_id" class="form-control" value="{{ app_info.get('upi_info', {}).get('upi_id', '') }}">
                       </div>
                       <div class="mb-3">
                         <label class="form-label">Currency</label>
-                        <input type="text" name="currency" class="form-control" value="{{ app_info['upi_info']['currency'] }}">
+                        <input type="text" name="currency" class="form-control" value="{{ app_info.get('upi_info', {}).get('currency', '') }}">
                       </div>
                       <div class="mb-3">
-                        <label class="form-label">UPI Name</label>
-                        <input type="text" name="upi_name" class="form-control" value="{{ app_info['upi_info']['upi_name'] }}">
+                        <label class="form-label">Primary UPI Name</label>
+                        <input type="text" name="upi_name" class="form-control" value="{{ app_info.get('upi_info', {}).get('upi_name', '') }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Current Account UPI ID</label>
+                        <input type="text" name="upi_current_id" class="form-control" value="{{ app_info.get('upi_info', {}).get('upi_current_id', '') }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Current Account UPI Name</label>
+                        <input type="text" name="upi_current_name" class="form-control" value="{{ app_info.get('upi_info', {}).get('upi_current_name', '') }}">
                       </div>
                     </div>
                   </div>
@@ -756,6 +772,16 @@
         }
       });
     });
+
+    const targetHash = '#upi-info-section';
+    if (window.location.hash === targetHash) {
+      const upiSection = document.getElementById('upi-info-section');
+      if (upiSection) {
+        setTimeout(function () {
+          upiSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      }
+    }
   });
 </script>
 
