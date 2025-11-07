@@ -70,6 +70,7 @@ LOGO_COLOR_VALUES = {
     "black": "#111111",
     "blue": "#1b4ea0",
 }
+ACCOUNTING_STATEMENT_DEFAULT_START = datetime(2025, 9, 1).date()
 
 
 def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
@@ -773,6 +774,7 @@ def more():
         last_sync_display=last_sync_display,
         last_backup_display=last_backup_display,
         last_backup_name=last_backup_name,
+        APP_INFO=APP_INFO,
     )
 
 
@@ -1323,6 +1325,23 @@ def _persist_accounting_transaction(form):
         if customer_obj and invoice_obj.customerId != customer_obj.id:
             return "Invoice does not belong to the selected customer."
 
+    txn_created_at = None
+    txn_date_raw = (form.get('txn_date') or '').strip()
+    if txn_date_raw:
+        try:
+            tz_name = (APP_INFO.get('account_defaults') or {}).get('timezone') or DEFAULT_TIMEZONE
+            local_tz = tz.gettz(tz_name) or timezone.utc
+            parsed_date = datetime.strptime(txn_date_raw, '%Y-%m-%d')
+            local_dt = datetime(parsed_date.year, parsed_date.month, parsed_date.day, tzinfo=local_tz)
+            txn_created_at = local_dt.astimezone(timezone.utc)
+        except Exception:
+            txn_created_at = None
+
+    txn_kwargs = {}
+    if txn_created_at:
+        txn_kwargs['created_at'] = txn_created_at
+        txn_kwargs['updated_at'] = txn_created_at
+
     txn = accountingTransaction(
         customerId=customer_obj.id if customer_obj else None,
         amount=float(amount_decimal),
@@ -1331,6 +1350,7 @@ def _persist_accounting_transaction(form):
         account=(form.get('account') or '').strip().lower() or 'cash',
         invoice_no=invoice_no,
         remarks=(form.get('remarks') or '').strip() or None,
+        **txn_kwargs
     )
 
     db.session.add(txn)
@@ -1396,7 +1416,7 @@ def accounting_dashboard():
         accountingTransaction.query
         .options(joinedload(accountingTransaction.expense_items), joinedload(accountingTransaction.customer))
         .filter(accountingTransaction.is_deleted.is_(False))
-        .order_by(accountingTransaction.created_at.desc())
+        .order_by(accountingTransaction.id.desc())
         .limit(6)
         .all()
     )
@@ -1428,12 +1448,44 @@ def accounting_dashboard():
     )
 
 
+@app.route('/accounting/quick_clear/<int:customer_id>', methods=['POST'])
+def accounting_quick_clear(customer_id):
+    cust = customer.query.filter_by(id=customer_id, isDeleted=False).first()
+    if not cust:
+        flash('Customer not found.', 'warning')
+        return redirect(url_for('accounting_dashboard'))
+
+    snapshot = _customer_financial_snapshot(customer_id)
+    balance = float(snapshot.get('balance') or 0.0)
+    if balance <= 0:
+        flash('No outstanding balance to clear for this customer.', 'info')
+        return redirect(url_for('accounting_dashboard'))
+
+    txn = accountingTransaction(
+        customerId=customer_id,
+        amount=balance,
+        txn_type='income',
+        mode='bank',
+        account='current',
+        remarks='Quick clear via dashboard',
+    )
+    db.session.add(txn)
+    try:
+        db.session.commit()
+        flash(f"Cleared ₹{balance:,.2f} for {cust.name}.", 'success')
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Unable to clear dues: {exc}", 'danger')
+
+    return redirect(url_for('accounting_dashboard'))
+
+
 @app.route('/accounting/transactions')
 def accounting_transactions_list():
-    sort_by = (request.args.get('sort') or 'date').lower()
+    sort_by = (request.args.get('sort') or 'id').lower()
     sort_dir = (request.args.get('dir') or 'desc').lower()
-    if sort_by not in {'date', 'amount', 'customer', 'type'}:
-        sort_by = 'date'
+    if sort_by not in {'date', 'amount', 'customer', 'type', 'id'}:
+        sort_by = 'id'
     if sort_dir not in {'asc', 'desc'}:
         sort_dir = 'desc'
 
@@ -1453,7 +1505,8 @@ def accounting_transactions_list():
         q = q.filter(
             or_(
                 func.lower(customer.name).like(like_value),
-                func.lower(customer.company).like(like_value)
+                func.lower(customer.company).like(like_value),
+                func.lower(accountingTransaction.txn_id).like(like_value)
             )
         )
 
@@ -1479,13 +1532,15 @@ def accounting_transactions_list():
         sort_column = func.lower(customer.name)
     elif sort_by == 'type':
         sort_column = accountingTransaction.txn_type
+    elif sort_by == 'id':
+        sort_column = accountingTransaction.id
     else:
         sort_column = accountingTransaction.created_at
 
     if sort_dir == 'asc':
-        q = q.order_by(sort_column.asc())
+        q = q.order_by(sort_column.asc(), accountingTransaction.id.asc())
     else:
-        q = q.order_by(sort_column.desc())
+        q = q.order_by(sort_column.desc(), accountingTransaction.id.desc())
 
     transactions = q.all()
 
@@ -1582,6 +1637,303 @@ def _customer_financial_snapshot(customer_id: int) -> dict:
         'total_expenses': float(total_expenses or 0.0),
         'balance': float(balance),
     }
+
+
+def _build_accounting_statement_context(
+    start_dt: datetime,
+    end_dt: datetime,
+    start_date_display,
+    end_date_display,
+    txn_type_filter: str = 'all',
+    customer_query: str = ''
+) -> dict:
+    """
+    Aggregate accounting transactions for the printable accounting statement view.
+    Returns totals, breakdowns, and the matching transaction rows.
+    """
+    txn_filter = txn_type_filter if txn_type_filter in {'income', 'expense'} else 'all'
+    customer_filter = (customer_query or '').strip()
+
+    tz_name = (APP_INFO.get('account_defaults') or {}).get('timezone') or DEFAULT_TIMEZONE
+    display_tz = tz.gettz(tz_name) or timezone.utc
+
+    q = (
+        accountingTransaction.query
+        .options(joinedload(accountingTransaction.customer))
+        .filter(
+            accountingTransaction.is_deleted.is_(False),
+            accountingTransaction.created_at >= start_dt,
+            accountingTransaction.created_at <= end_dt,
+        )
+    )
+
+    if txn_filter in {'income', 'expense'}:
+        q = q.filter(accountingTransaction.txn_type == txn_filter)
+
+    if customer_filter:
+        like_value = f"%{customer_filter.lower()}%"
+        q = q.join(customer, accountingTransaction.customerId == customer.id)
+        q = q.filter(
+            or_(
+                func.lower(func.coalesce(customer.name, '')).like(like_value),
+                func.lower(func.coalesce(customer.company, '')).like(like_value),
+                func.lower(func.coalesce(customer.phone, '')).like(like_value),
+            )
+        )
+    else:
+        q = q.outerjoin(customer, accountingTransaction.customerId == customer.id)
+
+    transactions = q.order_by(accountingTransaction.created_at.desc()).all()
+
+    selected_customer = None
+    normalized_filter = customer_filter.lower()
+    if customer_filter:
+        selected_customer = (
+            customer.query
+            .filter(
+                customer.isDeleted == False,
+                func.lower(customer.phone) == normalized_filter
+            )
+            .first()
+        )
+        if not selected_customer:
+            try:
+                customer_id_match = int(customer_filter)
+            except (TypeError, ValueError):
+                customer_id_match = None
+            if customer_id_match:
+                selected_customer = (
+                    customer.query
+                    .filter(
+                        customer.isDeleted == False,
+                        customer.id == customer_id_match
+                    )
+                    .first()
+                )
+        if not selected_customer:
+            like_value = f"%{normalized_filter}%"
+            selected_customer = (
+                customer.query
+                .filter(
+                    customer.isDeleted == False,
+                    or_(
+                        func.lower(customer.name).like(like_value),
+                        func.lower(customer.company).like(like_value)
+                    )
+                )
+                .order_by(customer.name.asc())
+                .first()
+            )
+    if customer_filter and not selected_customer:
+        for txn in transactions:
+            if txn.customer:
+                selected_customer = txn.customer
+                break
+
+    income_total = 0.0
+    expense_total = 0.0
+    income_count = 0
+    expense_count = 0
+    daily_totals = defaultdict(lambda: {'income': 0.0, 'expense': 0.0})
+    mode_totals = defaultdict(lambda: {'income': 0.0, 'expense': 0.0})
+    account_totals = defaultdict(lambda: {'income': 0.0, 'expense': 0.0})
+    customer_totals = {}
+
+    for txn in transactions:
+        amount = float(txn.amount or 0.0)
+        if amount <= 0:
+            continue
+        created_at = txn.created_at or start_dt
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        local_created = created_at.astimezone(display_tz)
+        date_key = local_created.date()
+        day_bucket = daily_totals[date_key]
+
+        if txn.txn_type == 'income':
+            income_total += amount
+            income_count += 1
+            day_bucket['income'] += amount
+        else:
+            expense_total += amount
+            expense_count += 1
+            day_bucket['expense'] += amount
+
+        mode_label = (txn.mode or 'Unspecified').strip() or 'Unspecified'
+        account_label = (txn.account or 'Unspecified').strip() or 'Unspecified'
+        mode_bucket = mode_totals[mode_label.upper()]
+        account_bucket = account_totals[account_label.title()]
+        if txn.txn_type == 'income':
+            mode_bucket['income'] += amount
+            account_bucket['income'] += amount
+        else:
+            mode_bucket['expense'] += amount
+            account_bucket['expense'] += amount
+
+        cust_key = txn.customerId if txn.customerId else 'unassigned'
+        customer_bucket = customer_totals.get(cust_key)
+        if not customer_bucket:
+            label = txn.customer.name if txn.customer else 'Unassigned'
+            customer_bucket = {
+                'customer_id': txn.customer.id if txn.customer else None,
+                'customer': label,
+                'company': txn.customer.company if txn.customer else '',
+                'phone': txn.customer.phone if txn.customer else '',
+                'income': 0.0,
+                'expense': 0.0,
+                'transactions': 0,
+                'last_txn_at': local_created,
+            }
+            customer_totals[cust_key] = customer_bucket
+
+        customer_bucket['transactions'] += 1
+        if txn.txn_type == 'income':
+            customer_bucket['income'] += amount
+        else:
+            customer_bucket['expense'] += amount
+
+        if local_created > customer_bucket['last_txn_at']:
+            customer_bucket['last_txn_at'] = local_created
+
+    def _format_breakdown(source):
+        rows = []
+        for label, values in source.items():
+            total = values['income'] + values['expense']
+            rows.append({
+                'label': label,
+                'income': values['income'],
+                'expense': values['expense'],
+                'net': values['income'] - values['expense'],
+                'total': total,
+            })
+        rows.sort(key=lambda row: row['total'], reverse=True)
+        return rows
+
+    customer_summary = []
+    for entry in customer_totals.values():
+        entry['net'] = entry['income'] - entry['expense']
+        customer_summary.append(entry)
+    customer_summary.sort(
+        key=lambda row: (row['customer_id'] is None, -row['net'])
+    )
+
+    daily_summary = []
+    for day, values in sorted(daily_totals.items()):
+        daily_summary.append({
+            'date': day,
+            'income': values['income'],
+            'expense': values['expense'],
+            'net': values['income'] - values['expense'],
+        })
+
+    show_income_columns = income_total > 0.0
+    show_expense_columns = expense_total > 0.0
+
+    customer_invoices = []
+    customer_payments = []
+    customer_adjustments = []
+    customer_statement_summary = None
+    selected_customer_info = None
+    if selected_customer:
+        selected_customer_info = {
+            'id': selected_customer.id,
+            'name': selected_customer.name,
+            'company': selected_customer.company,
+            'phone': selected_customer.phone,
+        }
+        invoice_rows = (
+            invoice.query
+            .filter(
+                invoice.customerId == selected_customer.id,
+                invoice.isDeleted == False,
+                invoice.createdAt >= start_dt,
+                invoice.createdAt <= end_dt
+            )
+            .order_by(invoice.createdAt.desc())
+            .all()
+        )
+        for inv in invoice_rows:
+            inv_created = inv.createdAt or start_dt
+            if inv_created.tzinfo is None:
+                inv_created = inv_created.replace(tzinfo=timezone.utc)
+            local_inv = inv_created.astimezone(display_tz)
+            customer_invoices.append({
+                'invoice_no': inv.invoiceId,
+                'date': local_inv,
+                'total': float(inv.totalAmount or 0),
+            })
+
+        for txn in transactions:
+            if txn.customerId != selected_customer.id:
+                continue
+            local_created = (txn.created_at or start_dt)
+            if local_created.tzinfo is None:
+                local_created = local_created.replace(tzinfo=timezone.utc)
+            local_created = local_created.astimezone(display_tz)
+            entry = {
+                'txn_id': txn.txn_id,
+                'date': local_created,
+                'mode': txn.mode or '—',
+                'account': txn.account or '—',
+                'amount': float(txn.amount or 0),
+                'remarks': txn.remarks,
+            }
+            if txn.txn_type == 'income':
+                customer_payments.append(entry)
+            else:
+                customer_adjustments.append(entry)
+
+        invoice_total = sum(inv['total'] for inv in customer_invoices)
+        payment_total = sum(p['amount'] for p in customer_payments)
+        adjustment_total = sum(adj['amount'] for adj in customer_adjustments)
+        customer_statement_summary = {
+            'invoice_total': round(invoice_total, 2),
+            'payment_total': round(payment_total, 2),
+            'adjustment_total': round(adjustment_total, 2),
+            'balance': round(invoice_total + adjustment_total - payment_total, 2),
+            'invoice_count': len(customer_invoices),
+            'payment_count': len(customer_payments),
+        }
+
+    context = {
+        'transactions': transactions,
+        'income_total': round(income_total, 2),
+        'expense_total': round(expense_total, 2),
+        'net_flow': round(income_total - expense_total, 2),
+        'transaction_count': len(transactions),
+        'income_count': income_count,
+        'expense_count': expense_count,
+        'filters': {
+            'start': start_date_display.isoformat(),
+            'end': end_date_display.isoformat(),
+            'customer': customer_filter,
+            'type': txn_filter,
+        },
+        'customer_filter': customer_filter,
+        'selected_type': txn_filter,
+        'customer_summary': customer_summary,
+        'mode_breakdown': _format_breakdown(mode_totals),
+        'account_breakdown': _format_breakdown(account_totals),
+        'daily_summary': daily_summary,
+        'display_timezone': tz_name,
+        'generated_at': datetime.now(timezone.utc).astimezone(display_tz),
+        'start_date': start_date_display,
+        'end_date': end_date_display,
+        'start_local': start_dt.astimezone(display_tz),
+        'end_local': end_dt.astimezone(display_tz),
+        'overall_totals': _accounting_totals(),
+        'customer_invoices': customer_invoices,
+        'selected_customer': selected_customer_info,
+        'customer_payments': customer_payments,
+        'customer_adjustments': customer_adjustments,
+        'customer_statement_summary': customer_statement_summary,
+        'show_income_columns': show_income_columns,
+        'show_expense_columns': show_expense_columns,
+    }
+    context['statement_range_label'] = (
+        f"{context['start_local'].strftime('%d %b %Y')} — {context['end_local'].strftime('%d %b %Y')}"
+    )
+    return context
 
 
 @app.route('/accounting/customer_summary/<int:customer_id>')
@@ -3345,6 +3697,58 @@ def statements_company():
         customer_company=customer_company,
         customer_phone=customer_phone,
     )
+
+
+@app.route('/statements/accounting', methods=['GET'])
+def accounting_statement():
+    """
+    Accounting-ledger statement with optional printable PDF view.
+    """
+    today = datetime.now(timezone.utc).date()
+    min_start = get_default_statement_start().date()
+
+    default_start = ACCOUNTING_STATEMENT_DEFAULT_START
+
+    start_date = _parse_date(request.args.get('start')) or default_start
+    end_date = _parse_date(request.args.get('end')) or today
+    if start_date < min_start:
+        start_date = min_start
+    if end_date < start_date:
+        end_date = start_date
+
+    txn_type = (request.args.get('type') or 'all').lower()
+    customer_query = (request.args.get('customer') or '').strip()
+    export = (request.args.get('export') or 'html').lower()
+
+    start_dt = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+    end_dt = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+
+    context = _build_accounting_statement_context(
+        start_dt,
+        end_dt,
+        start_date,
+        end_date,
+        txn_type_filter=txn_type,
+        customer_query=customer_query,
+    )
+
+    suggestions = []
+    try:
+        suggestions = [
+            {"company": c.company or "", "phone": c.phone}
+            for c in customer.query.filter(customer.isDeleted == False).all()
+            if (c.company or c.phone)
+        ]
+    except Exception as e:
+        print("[warn] Failed to load accounting suggestions:", e)
+
+    template_payload = dict(context, APP_INFO=APP_INFO)
+    template_payload["suggestions"] = suggestions
+
+    if export == 'pdf':
+        return render_template('print_accounting_statement.html', **template_payload)
+
+    return render_template('accounting_statement.html', **template_payload)
 
 
 @app.route('/qr_code', methods=['GET', 'POST'])

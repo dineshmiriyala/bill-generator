@@ -46,6 +46,7 @@ Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Boots
 ### Statements and Analytics
 - Date-range and company statements with CSV/XLSX export that include payment summaries and disclaimers.
 - Statement APIs for dashboards and raw invoice exports.
+- Accounting statement view that blends ledger totals, per-customer breakdowns, and a print-friendly PDF export.
 - Analytics dashboard summarising trends by day, month, year, weekday, and top customers using precomputed aggregates.
 
 ### Accounting & Cashflow

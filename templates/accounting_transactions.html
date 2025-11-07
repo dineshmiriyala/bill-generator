@@ -20,8 +20,9 @@
       <h2 class="fw-semibold mb-0">All Transactions</h2>
       <p class="text-muted mb-0">Payments and expenses recorded in the ledger.</p>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
       <a href="{{ url_for('accounting_dashboard') }}" class="btn btn-outline-secondary btn-sm">← Accounting Dashboard</a>
+      <a href="{{ url_for('accounting_statement') }}" class="btn btn-outline-primary btn-sm">Accounting Statement</a>
       <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#recordTxnModal">Record New</button>
     </div>
   </div>
@@ -29,7 +30,7 @@
   <form class="card shadow-sm border-0 mb-4" method="get">
     <div class="card-body row g-3 align-items-end">
       <div class="col-md-4">
-        <label class="form-label text-muted small text-uppercase">Customer</label>
+        <label class="form-label text-muted small text-uppercase">Customer / Txn ID</label>
         <input type="text" class="form-control" name="customer" value="{{ filter_customer }}">
       </div>
       <div class="col-md-3">
@@ -55,7 +56,7 @@
           <table class="table align-middle">
             <thead class="table-light text-muted text-uppercase small">
               <tr>
-                <th>Txn ID</th>
+                <th>{{ sort_link('Txn ID', 'id') }}</th>
                 <th>{{ sort_link('Type', 'type') }}</th>
                 <th>Customer / Invoice</th>
                 <th>Mode / Account</th>
