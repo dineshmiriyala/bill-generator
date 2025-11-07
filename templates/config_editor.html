@@ -1,5 +1,62 @@
 {% extends "base.html" %}
 {% block content %}
+{% set logo_color_options = [
+  {'value': 'black', 'label': 'Black', 'hex': '#111111'},
+  {'value': 'blue', 'label': 'Blue', 'hex': '#1b4ea0'}
+] %}
+{% set current_logo_mode = app_info['business'].get('logo_color_mode', 'black') %}
+<style>
+  .logo-color-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .logo-color-chip {
+    border: 1px solid #d0d7de;
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    background-color: #fff;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    font-size: 0.9rem;
+  }
+  .logo-color-chip.active {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+    background-color: rgba(13, 110, 253, 0.05);
+  }
+  .logo-color-chip .color-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+    color: #fff;
+    font-weight: 600;
+  }
+  .logo-color-chip .checkmark {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .logo-color-chip.active .checkmark {
+    opacity: 1;
+  }
+  .logo-color-chip button,
+  .logo-color-chip input {
+    border: none;
+  }
+  .logo-color-chip button:focus-visible,
+  .logo-color-chip:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+  }
+</style>
 <div class="container py-5">
   <div class="d-flex justify-content-end mb-3">
     <form method="post" action="{{ url_for('config_refresh') }}" class="d-inline">
@@ -55,6 +112,29 @@
               <dt class="col-sm-4">Established</dt>
               <dd class="col-sm-8 text-muted">{{ app_info['business']['estd'] }}</dd>
             </dl>
+            <div class="mt-3">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                  <span class="text-uppercase text-muted small">Watermark Color</span>
+                  <div class="fw-semibold text-capitalize">{{ current_logo_mode }}</div>
+                </div>
+                <form method="post" action="{{ url_for('config') }}" class="logo-color-picker align-items-center">
+                  <input type="hidden" name="section" value="business">
+                  {% for option in logo_color_options %}
+                    <button type="submit"
+                            name="logo_color_mode"
+                            value="{{ option.value }}"
+                            class="logo-color-chip {% if current_logo_mode == option.value %}active{% endif %}"
+                            aria-label="Use {{ option.label }} watermark">
+                      <span class="color-dot" style="background: {{ option.hex }};">
+                        <span class="checkmark">✓</span>
+                      </span>
+                      <span class="chip-label">{{ option.label }}</span>
+                    </button>
+                  {% endfor %}
+                </form>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -214,6 +294,10 @@
                         <dd class="text-muted">{{ app_info['business']['upi_id'] }}</dd>
                         <dt>Established</dt>
                         <dd class="text-muted">{{ app_info['business']['estd'] }}</dd>
+                        <dt>Watermark Color</dt>
+                        <dd class="text-muted text-capitalize">
+                          {{ app_info['business'].get('logo_color_mode', 'black') }}
+                        </dd>
                       </dl>
                     </div>
                     <div class="col-md-6">
@@ -248,6 +332,25 @@
                       <div class="mb-3">
                         <label class="form-label">Established</label>
                         <input type="text" name="estd" class="form-control" value="{{ app_info['business']['estd'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Watermark Color</label>
+                        <div class="logo-color-picker">
+                          {% for option in logo_color_options %}
+                            <label class="logo-color-chip {% if current_logo_mode == option.value %}active{% endif %}">
+                              <input type="radio"
+                                     name="logo_color_mode"
+                                     value="{{ option.value }}"
+                                     class="visually-hidden"
+                                     {% if current_logo_mode == option.value %}checked{% endif %}>
+                              <span class="color-dot" style="background: {{ option.hex }};">
+                                <span class="checkmark">✓</span>
+                              </span>
+                              <span class="chip-label">{{ option.label }}</span>
+                            </label>
+                          {% endfor %}
+                        </div>
+                        <div class="form-text">Controls the watermark tint used inside the invoice preview.</div>
                       </div>
                     </div>
                   </div>

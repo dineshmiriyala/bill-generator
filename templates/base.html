@@ -7,6 +7,9 @@
   <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
   <style>
+    :root {
+      --navbar-height: 0px;
+    }
     .btn-back {
       background-color: #0056b3;
       color: #fff;
@@ -25,15 +28,32 @@
       background-color: #146c43;
       color: #fff;
     }
+    .app-navbar .btn,
+    .app-navbar .form-control,
+    .app-navbar .btn-close {
+      border-radius: 999px;
+    }
     html {
       overflow-y: scroll;
     }
+    .app-navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1050;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    body.has-navbar {
+      --navbar-height: 72px;
+      padding-top: var(--navbar-height);
+    }
   </style>
 </head>
-<body class="d-flex flex-column min-vh-100">
+<body class="d-flex flex-column min-vh-100 {% if not hide_navbar %}has-navbar{% endif %}">
 
 {% if not hide_navbar %}
-<nav class="navbar navbar-expand-lg" style="background-color: #24292f; padding: 0.5rem 1rem;">
+<nav class="navbar navbar-expand-lg app-navbar" style="background-color: #24292f; padding: 0.5rem 1rem;">
   <div class="container d-flex align-items-center justify-content-between w-100">
     <!-- Left side: Back + Menu -->
     <div class="d-flex align-items-center">

@@ -12,6 +12,7 @@
       body {
         font-family: 'Poppins', sans-serif;
       }
+      {% set brand_accent = brand_accent_color if brand_accent_color is defined else '#111111' %}
       :root {
         --hdr-fs: {{ (sizes.header if sizes is defined and sizes.header is defined else 13) }}px;
         --cust-fs: {{ (sizes.customer if sizes is defined and sizes.customer is defined else 16) }}px;
@@ -20,16 +21,45 @@
         --totals-fs: {{ (sizes.totals if sizes is defined and sizes.totals is defined else 15) }}px;
         --payment-fs: {{ (sizes.payment if sizes is defined and sizes.payment is defined else 13) }}px;
         --footer-fs: {{ (sizes.footer if sizes is defined and sizes.footer is defined else 10) }}px;
+        --brand-accent: {{ brand_accent }};
       }
       .brand-logo {
         height: calc(var(--hdr-fs) * 4);
         width: auto;
+      }
+      .invoice-wrapper {
+        position: relative;
+        background: #fff;
+        overflow: hidden;
+      }
+      .invoice-content {
+        position: relative;
+        z-index: 1;
+      }
+      .invoice-watermark {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 70%;
+        max-width: 420px;
+        opacity: 0.05;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        z-index: 0;
+      }
+      .accent-text {
+        color: var(--brand-accent);
       }
       @media print {
         .brand-logo {
           height: calc(var(--hdr-fs) * 4) !important;
           width: auto !important;
           max-width: none !important;
+        }
+        .invoice-watermark {
+          opacity: 0.08;
         }
         .qr-wrapper[style*="display: none"] { display: none !important; }
       }
@@ -104,12 +134,15 @@
     </style>
 </head>
 <body class="p-5">
+    {% set watermark_color = app_info['business'].get('logo_color_mode', 'black') %}
+    {% set watermark_path = brand_watermark_path if brand_watermark_path is defined else ('static/img/brand-water-mark-blue.svg' if watermark_color == 'blue' else 'static/img/brand-water-mark-black.svg') %}
 
-    <div class="container">
+    <div class="container invoice-wrapper">
+      <div class="invoice-content">
         <div class="masthead mb-2">
           <h1 class="visually-hidden">{{ app_info['business']['name'] }} — ESTD: {{ app_info['business']['estd'] }}</h1>
           <img class="brand-logo"
-               src="/{{ app_info['business']['logo_path'] }}"
+               src="/{{ watermark_path }}"
                alt="{{ app_info['business']['name'] }} — ESTD: {{ app_info['business']['estd'] }}">
           <h2 class="bill-heading">{{ app_info['bill_config']['heading'] }}</h2>
         </div>
@@ -129,7 +162,7 @@
             <div class="col-sm-6 text-end">
                 <h5>To:</h5>
                 <p class="text-dark fs-5">
-                    {% if customer.company %}<strong class="fs-4">{{ customer.company }}</strong><br>{% endif %}
+                    {% if customer.company %}<strong class="fs-4 accent-text">{{ customer.company }}</strong><br>{% endif %}
                     {% if customer.address %}{{ customer["address"] }}<br>{% endif %}
                     {% if customer.gst %}GST: {{ customer["gst"] }}<br>{% endif %}
                     {% if customer.phone %}Phone: {{ customer["phone"] }}{% endif %}
@@ -247,6 +280,7 @@
             <button id="toggleQrBtn" class="btn btn-secondary ms-2">Hide UPI QR</button>
             <p class="mt-2 text-muted" style="font-size: 0.9rem;">Tip: Uncheck “Headers and footers” in print dialog for a clean copy.</p>
         </div>
+      </div>
     </div>
 
 

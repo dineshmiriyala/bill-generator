@@ -61,6 +61,15 @@ BACKUP_RETENTION = 10
 BACKUP_MAX_AGE_DAYS = 7
 ISO_8601_UTC = "%Y-%m-%dT%H:%M:%SZ"
 HUMAN_DATE_FMT = "%d %B %Y"
+DEFAULT_LOGO_COLOR_MODE = "black"
+LOGO_COLOR_PATHS = {
+    "black": "static/img/brand-water-mark-black.svg",
+    "blue": "static/img/brand-water-mark-blue.svg",
+}
+LOGO_COLOR_VALUES = {
+    "black": "#111111",
+    "blue": "#1b4ea0",
+}
 
 
 def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
@@ -83,6 +92,7 @@ def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
             "pan": "",
             "estd": current_year,
             "logo_path": "static/img/brand-wordmark.svg",
+            "logo_color_mode": DEFAULT_LOGO_COLOR_MODE,
         },
         "bank": {
             "account_name": "",
@@ -175,6 +185,22 @@ def _format_iso_utc(dt: datetime) -> str:
 
 def _format_human_date(dt: datetime) -> str:
     return _ensure_utc(dt).strftime(HUMAN_DATE_FMT)
+
+
+def _resolve_brand_watermark_path(business_section: Optional[dict]) -> str:
+    """Return the static asset path for the selected brand watermark color."""
+    if not isinstance(business_section, dict):
+        business_section = {}
+    color_mode = (business_section.get("logo_color_mode") or DEFAULT_LOGO_COLOR_MODE).lower()
+    return LOGO_COLOR_PATHS.get(color_mode, LOGO_COLOR_PATHS[DEFAULT_LOGO_COLOR_MODE])
+
+
+def _resolve_brand_accent_color(business_section: Optional[dict]) -> str:
+    """Return the hex color used for accent text."""
+    if not isinstance(business_section, dict):
+        business_section = {}
+    color_mode = (business_section.get("logo_color_mode") or DEFAULT_LOGO_COLOR_MODE).lower()
+    return LOGO_COLOR_VALUES.get(color_mode, LOGO_COLOR_VALUES[DEFAULT_LOGO_COLOR_MODE])
 
 
 def _get_earliest_invoice_created_at() -> Optional[datetime]:
@@ -1788,6 +1814,8 @@ def bill_preview(invoicenumber):
     upi_id = APP_INFO["upi_info"]["upi_id"]
     company_name = APP_INFO["business"]["name"]
     upi_name = APP_INFO["upi_info"]["upi_name"]
+    brand_watermark_path = _resolve_brand_watermark_path(APP_INFO.get("business"))
+    brand_accent_color = _resolve_brand_accent_color(APP_INFO.get("business"))
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
     params = {"upi_id": upi_id, "amount": current_invoice.totalAmount, "company_name": company_name}
@@ -1821,6 +1849,8 @@ def bill_preview(invoicenumber):
         company_name=company_name,
         total=current_invoice.totalAmount,
         app_info=APP_INFO,
+        brand_watermark_path=brand_watermark_path,
+        brand_accent_color=brand_accent_color,
     )
 
 
@@ -2037,6 +2067,8 @@ def latest_bill_preview():
     upi_id = APP_INFO["upi_info"]["upi_id"]
     company_name = APP_INFO["business"]["name"]
     upi_name = APP_INFO["upi_info"]["upi_name"]
+    brand_watermark_path = _resolve_brand_watermark_path(APP_INFO.get("business"))
+    brand_accent_color = _resolve_brand_accent_color(APP_INFO.get("business"))
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
     params = {
@@ -2073,7 +2105,9 @@ def latest_bill_preview():
         upi_id=upi_id,
         upi_name=upi_name,
         company_name=company_name,
-        total=current_invoice.totalAmount
+        total=current_invoice.totalAmount,
+        brand_watermark_path=brand_watermark_path,
+        brand_accent_color=brand_accent_color,
     )
 
 
@@ -2097,6 +2131,8 @@ def _build_sample_invoice_context():
             "sizes": layoutConfig().get_or_create().get_sizes(),
             "rows": 0,
             "persistent_notice": session.get("persistent_notice"),
+            "brand_watermark_path": _resolve_brand_watermark_path(APP_INFO.get("business")),
+            "brand_accent_color": _resolve_brand_accent_color(APP_INFO.get("business")),
         }
 
     # Get customer info
@@ -2145,6 +2181,8 @@ def _build_sample_invoice_context():
         "sizes": current_sizes,
         "rows": len(sample_items),
         "persistent_notice": session.get("persistent_notice"),
+        "brand_watermark_path": _resolve_brand_watermark_path(APP_INFO.get("business")),
+        "brand_accent_color": _resolve_brand_accent_color(APP_INFO.get("business")),
     }
 
 

@@ -1,6 +1,9 @@
 {% extends 'base.html' %}
 
 {% block content %}
+{% set watermark_color = app_info['business'].get('logo_color_mode', 'black') %}
+{% set watermark_path = brand_watermark_path if brand_watermark_path is defined else ('static/img/brand-water-mark-blue.svg' if watermark_color == 'blue' else 'static/img/brand-water-mark-black.svg') %}
+{% set brand_accent = brand_accent_color if brand_accent_color is defined else '#111111' %}
 <head>
     <title>{{ invoice.invoiceId }} - Invoice</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -21,6 +24,7 @@
         --payment-fs: {{ sizes.payment }}px;
         --footer-fs: {{ sizes.footer }}px;
         --invinfo-fs: {{ sizes.invoice_info }}px;
+        --brand-accent: {{ brand_accent }};
       }
       .invoice-info, .invoice-info * { font-size: var(--invinfo-fs) !important; }
       .bill-header, .bill-header * { font-size: var(--hdr-fs) !important; }
@@ -87,10 +91,29 @@
         padding: 20mm;
         box-shadow: 0 0 5px rgba(0,0,0,0.1);
         border: 1px solid #ccc;
+        position: relative;
+        overflow: hidden;
+      }
+      .accent-text { color: var(--brand-accent); }
+      .a4-preview .invoice-watermark {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 70%;
+        max-width: 420px;
+        opacity: 0.05;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+      .a4-preview .invoice-content {
+        position: relative;
+        z-index: 1;
       }
       .apple-panel {
         position: fixed;
-        top: 20px;
+        top: calc(var(--navbar-height, 0px) + 20px);
         right: 20px;
         background: #fff;
         border-radius: 8px;
@@ -299,6 +322,8 @@
         <!-- Hidden invoice template at bottom for pagination (not visible, used as template) -->
         <div id="page-content" style="display:none">
   <div class="a4-preview">
+    <img class="invoice-watermark" src="/{{ watermark_path }}" alt="" aria-hidden="true">
+    <div class="invoice-content">
     <div class="masthead mb-2 bill-header">
       <h1 class="visually-hidden">{{ app_info['business']['name'] }} — ESTD: {{ app_info['business']['estd'] }}</h1>
       <img class="brand-logo" src="{{ app_info['business']['logo_path'] }}" alt="{{ app_info['business']['name'] }} — ESTD: {{ app_info['business']['estd'] }}">
@@ -319,7 +344,7 @@
       <div class="col-sm-6 text-end customer-block">
         <h5>To:</h5>
         <p class="text-dark fs-5">
-          {% if customer.company %}<strong class="fs-4">{{ customer.company }}</strong><br>{% endif %}
+          {% if customer.company %}<strong class="fs-4 accent-text">{{ customer.company }}</strong><br>{% endif %}
           {% if customer.address %}{{ customer["address"] }}<br>{% endif %}
           {% if customer.gst %}GST: {{ customer["gst"] }}<br>{% endif %}
           {% if customer.phone %}Phone: {{ customer["phone"] }}{% endif %}
@@ -431,6 +456,7 @@
         <strong>{{ app_info['business']['phone'] }}</strong> or
         <strong>{{ app_info['business']['email'] }}</strong>.
       </small>
+    </div>
     </div>
   </div>
         </div>
