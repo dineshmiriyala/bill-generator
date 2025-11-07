@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+{% macro sort_link(label, field, current_sort, current_dir) %}
+  {% set is_active = current_sort == field %}
+  {% if is_active %}
+    {% set icon = '↑' if current_dir == 'asc' else '↓' %}
+    {% set next_dir = 'desc' if current_dir == 'asc' else 'asc' %}
+  {% else %}
+    {% set icon = '' %}
+    {% set next_dir = 'desc' %}
+  {% endif %}
+  <a href="{{ url_for('accounting_dashboard', sort=field, dir=next_dir) }}"
+     class="text-decoration-none text-muted fw-semibold">
+    {{ label }}{% if icon %}<span class="ms-1">{{ icon }}</span>{% endif %}
+  </a>
+{% endmacro %}
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <h2 class="fw-semibold mb-1">Accounting</h2>
+      <p class="text-muted mb-0">Track receivables, record payments, and log expenses in one place.</p>
+    </div>
+    <a href="{{ url_for('home') }}" class="btn btn-outline-secondary btn-sm">← Back to Home</a>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <p class="text-muted text-uppercase small mb-1">Total Outstanding</p>
+          <h4 class="mb-0">&#8377; {{ '{:,.2f}'.format(totals.outstanding_total) }}</h4>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <p class="text-muted text-uppercase small mb-1">Income</p>
+          <h4 class="mb-0 text-success">&#8377; {{ '{:,.2f}'.format(totals.income_total) }}</h4>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <p class="text-muted text-uppercase small mb-1">Expenses</p>
+          <h4 class="mb-0 text-danger">&#8377; {{ '{:,.2f}'.format(totals.expense_total) }}</h4>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <p class="text-muted text-uppercase small mb-1">Net Flow</p>
+          <h4 class="mb-0 {{ 'text-success' if totals.net_flow >= 0 else 'text-danger' }}">
+            &#8377; {{ '{:,.2f}'.format(totals.net_flow) }}
+          </h4>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+          <h5 class="fw-semibold mb-0">Outstanding Balances by Customer</h5>
+          <small class="text-muted">{{ outstanding|length }} customers with dues</small>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a class="btn btn-outline-secondary" href="{{ url_for('accounting_transactions_list') }}">View All Transactions</a>
+          <a class="btn btn-outline-primary" href="{{ url_for('accounting_statement') }}">Accounting Statement</a>
+          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#recordTxnModal">
+            Record Payment / Expense
+          </button>
+        </div>
+      </div>
+      {% if outstanding %}
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <colgroup>
+              <col style="width:28%">
+              <col style="width:10%">
+              <col style="width:18%">
+              <col style="width:18%">
+              <col style="width:13%">
+              <col style="width:13%">
+              <col style="width:12%">
+            </colgroup>
+            <thead class="table-light text-muted text-uppercase small">
+              <tr>
+                <th>Customer</th>
+                <th class="text-center">{{ sort_link('Invoices', 'invoices', current_sort, current_dir) }}</th>
+                <th class="text-end">{{ sort_link('Invoiced', 'invoiced', current_sort, current_dir) }}</th>
+                <th class="text-end">{{ sort_link('Paid', 'paid', current_sort, current_dir) }}</th>
+                <th class="text-end">{{ sort_link('Expenses', 'expenses', current_sort, current_dir) }}</th>
+                <th class="text-end">{{ sort_link('Balance', 'balance', current_sort, current_dir) }}</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in outstanding %}
+                <tr>
+                  <td>
+                    <div class="fw-semibold">{{ entry.customer }}</div>
+                    {% if entry.company %}
+                      <small class="text-muted text-truncate d-block" style="max-width: 260px;">
+                        {{ entry.company }}
+                      </small>
+                    {% endif %}
+                    {% if entry.latest_invoice_date %}
+                      <small class="text-muted d-block">Latest: {{ entry.latest_invoice_date | datetimeformat('%d %b %Y') }}</small>
+                    {% endif %}
+                  </td>
+                  <td class="text-center fw-semibold">{{ entry.invoice_count }}</td>
+                  <td class="text-end">&#8377; {{ '{:,.2f}'.format(entry.total) }}</td>
+                  <td class="text-end text-success">&#8377; {{ '{:,.2f}'.format(entry.paid) }}</td>
+                  <td class="text-end text-warning">&#8377; {{ '{:,.2f}'.format(entry.expenses or 0) }}</td>
+                  <td class="text-end text-danger fw-semibold">&#8377; {{ '{:,.2f}'.format(entry.balance) }}</td>
+                  <td class="text-end">
+                    <form method="post"
+                          action="{{ url_for('accounting_quick_clear', customer_id=entry.customer_id) }}"
+                          class="d-inline">
+                      <button type="submit"
+                              class="btn btn-sm btn-outline-success"
+                              {% if not entry.customer_id or entry.balance <= 0 %}disabled{% endif %}
+                              onclick="return confirm('Clear all dues for {{ entry.customer }}?');">
+                        Clear Dues
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-center text-muted py-4">
+          <p class="mb-0">All caught up! No outstanding invoices.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 mt-4">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-semibold mb-0">Recent Transactions</h5>
+        <a href="{{ url_for('accounting_transactions_list') }}" class="btn btn-outline-primary btn-sm">View All</a>
+      </div>
+      {% if recent_transactions %}
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light text-muted text-uppercase small">
+              <tr>
+                <th>Txn ID</th>
+                <th>Type</th>
+                <th>Customer / Invoice</th>
+                <th>Mode</th>
+                <th class="text-end">Amount</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for txn in recent_transactions %}
+                <tr>
+                  <td class="fw-semibold">{{ txn.txn_id }}</td>
+                  <td>
+                    <span class="badge {{ 'bg-success-subtle text-success' if txn.txn_type == 'income' else 'bg-danger-subtle text-danger' }}">
+                      {{ txn.txn_type|capitalize }}
+                    </span>
+                  </td>
+                  <td>
+                    {% if txn.customer %}
+                      <div>{{ txn.customer.name }}</div>
+                      {% if txn.customer.company %}
+                        <small class="text-muted">{{ txn.customer.company }}</small>
+                      {% endif %}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                    {% if txn.invoice_no %}
+                      <small class="text-muted d-block">Invoice: {{ txn.invoice_no }}</small>
+                    {% endif %}
+                    {% if txn.remarks %}
+                      <small class="text-muted d-block">{{ txn.remarks }}</small>
+                    {% endif %}
+                  </td>
+                  <td class="text-capitalize">{{ txn.mode or '—' }}</td>
+                  <td class="text-end {{ 'text-success' if txn.txn_type == 'income' else 'text-danger' }}">
+                    &#8377; {{ '{:,.2f}'.format(txn.amount) }}
+                  </td>
+                  <td>{{ txn.created_at | datetimeformat('%d %b %Y') }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-center text-muted py-4">
+          <p class="mb-0">No transactions recorded yet.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% include 'partials/accounting_modal.html' %}
+{% include 'partials/accounting_modal_script.html' %}
+{% endblock %}

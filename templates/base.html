@@ -7,6 +7,9 @@
   <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
   <style>
+    :root {
+      --navbar-height: 0px;
+    }
     .btn-back {
       background-color: #0056b3;
       color: #fff;
@@ -25,15 +28,32 @@
       background-color: #146c43;
       color: #fff;
     }
+    .app-navbar .btn,
+    .app-navbar .form-control,
+    .app-navbar .btn-close {
+      border-radius: 999px;
+    }
     html {
       overflow-y: scroll;
     }
+    .app-navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1050;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    body.has-navbar {
+      --navbar-height: 72px;
+      padding-top: var(--navbar-height);
+    }
   </style>
 </head>
-<body class="d-flex flex-column min-vh-100">
+<body class="d-flex flex-column min-vh-100 {% if not hide_navbar %}has-navbar{% endif %}">
 
 {% if not hide_navbar %}
-<nav class="navbar navbar-expand-lg" style="background-color: #24292f; padding: 0.5rem 1rem;">
+<nav class="navbar navbar-expand-lg app-navbar" style="background-color: #24292f; padding: 0.5rem 1rem;">
   <div class="container d-flex align-items-center justify-content-between w-100">
     <!-- Left side: Back + Menu -->
     <div class="d-flex align-items-center">
@@ -68,7 +88,7 @@
       </div>
 
       <!-- GitHub-style "+" Dropdown -->
-      <div class="dropdown">
+      <div class="dropdown me-2">
         <button class="btn btn-sm" type="button" id="newDropdown" data-bs-toggle="dropdown" aria-expanded="false"
                 style="background-color: #21262d; border: 1px solid #30363d; color: #f0f6fc; font-size: 1.3rem; line-height: 1;">
           +
@@ -79,6 +99,11 @@
           <li><a class="dropdown-item" href="/add_inventory">New Inventory Item</a></li>
         </ul>
       </div>
+      <a href="{{ url_for('config') }}"
+         class="btn btn-sm d-flex align-items-center justify-content-center"
+         style="width: 40px; height: 40px; background-color: #21262d; border: 1px solid #30363d; color: #f0f6fc;">
+        <img src="{{ url_for('static', filename='logos/config.svg') }}" alt="Settings" style="width: 18px; height: 18px; filter: invert(1) brightness(2);">
+      </a>
     </div>
   </div>
 </nav>
@@ -98,6 +123,9 @@
       <li><a class="text-white text-decoration-none d-block py-2" href="/view_inventory">Inventory</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/statements">Statements</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/statements_company">Company Statements</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/statements/accounting">Accounting Statement</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/accounting">Accounting</a></li>
+      <li><a class="text-white text-decoration-none d-block py-2" href="/accounting/transactions">All Transactions</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/analytics">Business Analytics</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/recover">Data Recovery</a></li>
       <li><a class="text-white text-decoration-none d-block py-2" href="/config">Account Settings</a></li>
@@ -160,7 +188,9 @@
     { name: "Add Item", url: "/add_inventory" },
     { name: "Statements (Date-wise)", url: "/statements" },
     { name: "Company Statements", url: "/statements_company" },
-    { name: "Invoice Layout Editor", url: "/test-pre-preview" },
+    { name: "Accounting Statement", url: "/statements/accounting" },
+    { name: "All Transactions", url: "/accounting/transactions" },
+    { name: "Accounting", url: "/accounting" },
     { name: "Data Recovery", url: "/recover" },
     { name: "Home", url: "/" },
     { name: "Analytics", url: "/analytics" },

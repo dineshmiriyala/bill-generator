@@ -8,7 +8,7 @@ import json
 import requests
 
 from db.db_events import get_sync_folder, obj_to_dict
-from db.models import customer, invoice, invoiceItem, item
+from db.models import customer, invoice, invoiceItem, item, accountingTransaction
 
 FAILED_DIR_NAME = "failed"
 FAILED_EVENTS_FILE = "upload_events.json"
@@ -25,6 +25,7 @@ FULL_SYNC_MODELS: Sequence[Tuple[Any, str]] = (
     (item, item.__tablename__),
     (invoice, invoice.__tablename__),
     (invoiceItem, invoiceItem.__tablename__),
+    (accountingTransaction, accountingTransaction.__tablename__),
 )
 
 

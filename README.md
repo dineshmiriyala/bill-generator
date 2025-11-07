@@ -46,10 +46,16 @@ Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Boots
 ### Statements and Analytics
 - Date-range and company statements with CSV/XLSX export that include payment summaries and disclaimers.
 - Statement APIs for dashboards and raw invoice exports.
+- Accounting statement view that blends ledger totals, per-customer breakdowns, printable invoices, and export-ready PDF/CSV output with per-customer invoice & payment tables.
 - Analytics dashboard summarising trends by day, month, year, weekday, and top customers using precomputed aggregates.
 
+### Accounting & Cashflow
+- Dedicated `/accounting` workspace summarises outstanding invoices, total income/expenses, and recent ledger entries.
+- Record incoming payments or expenses (with itemised breakdowns) that link back to customers and invoices.
+- Automatic transaction IDs (`SLP-TXN-DDMMYY-######`) keep records ordered without manual effort.
+
 ### Document Layout and Rendering
-- Live preview (`/test-pre-preview`) and layout editor allow tuning of section font sizes stored in the database (`layoutConfig`).
+- Configurable “Invoice Visual Settings” (Config → Invoice Visual Settings) let you tune watermark colour and section font sizes stored in the database (`layoutConfig`).
 - Print-ready HTML templates for invoice previews and final statements.
 - Optional exclusion of customer contact details on rendered invoices.
 
@@ -131,7 +137,8 @@ The script installs/updates dependencies, clears previous artefacts, and emits `
 4. **Edit or delete invoices** with admin privileges only. Edits respect previous rounding choices and preserve totals on reload.
 5. **Statements:** Use `/statements` (date range) or `/statements_company` (per customer) to review totals and export data.
 6. **Analytics:** `/analytics` surfaces trends, retention, and top customers for monitoring business health.
-7. **Layouts:** `/test-pre-preview` lets you adjust font sizes for invoice sections; settings persist through `layoutConfig`.
+7. **Invoice visuals:** Use the Config → Invoice Visual Settings panel to update watermark colour and section font sizes (persisted via `layoutConfig`).
+8. **Accounting:** Head to `/accounting` to monitor receivables and log payments/expenses against customers and invoices.
 
 ## Data Management and Recovery
 
@@ -142,7 +149,7 @@ The script installs/updates dependencies, clears previous artefacts, and emits `
 
 ## Supabase Synchronisation
 
-- **Full upload:** “Upload All Data to Supabase” performs a complete database sync, preceded by local backup creation. Connectivity is verified before transfer.
+- **Full upload:** “Upload All Data to Supabase” performs a complete database sync, preceded by local backup creation, and now includes `accounting_transaction` rows alongside customers/items/invoices. Connectivity is verified before transfer and the modal keeps the sync log visible until you dismiss it.
 - **Incremental sync:** `/supabase_sync_incremental` (invoked from the UI) sends only new or changed records along with analytics logs.
 - **Metadata tracking:** Successful uploads update `info.json` (`supabase.last_uploaded` / `last_incremental_uploaded`) so the home page can surface the last sync time.
 
@@ -152,6 +159,8 @@ The script installs/updates dependencies, clears previous artefacts, and emits `
 |----------|--------|-------------|
 | `/api/bill_items/<invoice_no>` | GET | Returns customer, line items, and totals for an invoice as JSON. |
 | `/api/generate_upi_qr` | GET | Generates a base64 encoded SVG for a UPI payment QR code. Query params: `upi_id` (required), `amount`, `name`, `cur`. |
+| `/accounting/customer_summary/<customer_id>` | GET | Returns a JSON snapshot of invoiced/paid/outgoing totals and balance for a specific customer. |
+| `/accounting/amount_to_words` | GET | Converts a numeric amount to words (Rupees). Query param: `amount`. |
 | `/api/statements` | GET | JSON summary of statements for a date range or year/month scope, including totals and per-period breakdowns. |
 | `/api/statements/invoices` | GET | Paginated raw invoice data for reporting/export. |
 | `/analytics_event` | POST | Records analytics events emitted from the front end. |

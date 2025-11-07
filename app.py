@@ -9,9 +9,9 @@ import sqlite3
 import uuid
 from collections import defaultdict
 from copy import deepcopy
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -44,7 +44,7 @@ from analytics import (
 from analytics_tracking import log_user_event
 from api import api_bp
 from db import db_events  # noqa: F401
-from db.models import db, customer, invoice, invoiceItem, item, layoutConfig
+from db.models import db, customer, invoice, invoiceItem, item, layoutConfig, accountingTransaction, expenseItem
 from migration import migrate_db
 from supabase_upload import SupabaseUploadError, upload_full_database, upload_to_supabase
 
@@ -61,6 +61,16 @@ BACKUP_RETENTION = 10
 BACKUP_MAX_AGE_DAYS = 7
 ISO_8601_UTC = "%Y-%m-%dT%H:%M:%SZ"
 HUMAN_DATE_FMT = "%d %B %Y"
+DEFAULT_LOGO_COLOR_MODE = "black"
+LOGO_COLOR_PATHS = {
+    "black": "static/img/brand-water-mark-black.svg",
+    "blue": "static/img/brand-water-mark-blue.svg",
+}
+LOGO_COLOR_VALUES = {
+    "black": "#111111",
+    "blue": "#1b4ea0",
+}
+ACCOUNTING_STATEMENT_DEFAULT_START = datetime(2025, 9, 1).date()
 
 
 def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
@@ -83,6 +93,7 @@ def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
             "pan": "",
             "estd": current_year,
             "logo_path": "static/img/brand-wordmark.svg",
+            "logo_color_mode": DEFAULT_LOGO_COLOR_MODE,
         },
         "bank": {
             "account_name": "",
@@ -175,6 +186,22 @@ def _format_iso_utc(dt: datetime) -> str:
 
 def _format_human_date(dt: datetime) -> str:
     return _ensure_utc(dt).strftime(HUMAN_DATE_FMT)
+
+
+def _resolve_brand_watermark_path(business_section: Optional[dict]) -> str:
+    """Return the static asset path for the selected brand watermark color."""
+    if not isinstance(business_section, dict):
+        business_section = {}
+    color_mode = (business_section.get("logo_color_mode") or DEFAULT_LOGO_COLOR_MODE).lower()
+    return LOGO_COLOR_PATHS.get(color_mode, LOGO_COLOR_PATHS[DEFAULT_LOGO_COLOR_MODE])
+
+
+def _resolve_brand_accent_color(business_section: Optional[dict]) -> str:
+    """Return the hex color used for accent text."""
+    if not isinstance(business_section, dict):
+        business_section = {}
+    color_mode = (business_section.get("logo_color_mode") or DEFAULT_LOGO_COLOR_MODE).lower()
+    return LOGO_COLOR_VALUES.get(color_mode, LOGO_COLOR_VALUES[DEFAULT_LOGO_COLOR_MODE])
 
 
 def _get_earliest_invoice_created_at() -> Optional[datetime]:
@@ -551,6 +578,51 @@ def _normalize_account_number(value: str) -> str:
     return ''.join(ch for ch in value if ch.isalnum())
 
 
+def _get_upi_variants() -> List[Dict[str, str]]:
+    """Return configured UPI variants with display metadata."""
+    upi_info = APP_INFO.get('upi_info', {}) if isinstance(APP_INFO.get('upi_info'), dict) else {}
+    business_info = APP_INFO.get('business', {}) if isinstance(APP_INFO.get('business'), dict) else {}
+
+    def _clean(value: Optional[str]) -> Optional[str]:
+        if not value:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    variants: List[Dict[str, str]] = []
+
+    primary_id = _clean(upi_info.get('upi_id') or business_info.get('upi_id'))
+    primary_name = _clean(upi_info.get('upi_name') or business_info.get('upi_name') or business_info.get('owner'))
+    if primary_id:
+        variants.append({
+            'key': 'primary',
+            'label': 'Savings Account UPI',
+            'upi_id': primary_id,
+            'upi_name': primary_name or '',
+        })
+
+    current_id = _clean(upi_info.get('upi_current_id'))
+    current_name = _clean(upi_info.get('upi_current_name') or primary_name)
+    if current_id:
+        variants.append({
+            'key': 'current',
+            'label': 'Current Account UPI',
+            'upi_id': current_id,
+            'upi_name': current_name or '',
+        })
+
+    return variants
+
+
+def _find_upi_variant(choice: Optional[str]) -> Optional[Dict[str, str]]:
+    if not choice:
+        return None
+    for variant in _get_upi_variants():
+        if variant.get('key') == choice:
+            return variant
+    return None
+
+
 @app.route('/onboarding/submit', methods=['POST'])
 def onboarding_submit():
     if _is_onboarding_complete():
@@ -702,10 +774,18 @@ def _parse_date(date_str):
 def recover_page():
     deleted_customers = customer.query.filter_by(isDeleted=True).all()
     deleted_invoices = invoice.query.filter_by(isDeleted=True).all()
+    deleted_transactions = (
+        accountingTransaction.query
+        .options(joinedload(accountingTransaction.customer))
+        .filter(accountingTransaction.is_deleted.is_(True))
+        .order_by(accountingTransaction.updated_at.desc())
+        .all()
+    )
     return render_template(
         'recover.html',
         deleted_customers=deleted_customers,
-        deleted_invoices=deleted_invoices
+        deleted_invoices=deleted_invoices,
+        deleted_transactions=deleted_transactions,
     )
 
 
@@ -739,6 +819,7 @@ def more():
         last_sync_display=last_sync_display,
         last_backup_display=last_backup_display,
         last_backup_name=last_backup_name,
+        APP_INFO=APP_INFO,
     )
 
 
@@ -873,6 +954,15 @@ def recover_invoice(id):
     return redirect(url_for('recover_page'))
 
 
+@app.route('/recover_transaction/<int:txn_id>')
+def recover_transaction(txn_id):
+    txn = accountingTransaction.query.get_or_404(txn_id)
+    txn.is_deleted = False
+    db.session.commit()
+    flash('Transaction recovered successfully.', 'success')
+    return redirect(url_for('recover_page'))
+
+
 # Custom Jinja filter to format dates as DD Month YYYY (e.g., '14 October 2025')
 @app.template_filter('datetimeformat')
 def datetimeformat(value, format='%d %B %Y'):
@@ -913,6 +1003,8 @@ def home():
 @app.route('/config', methods=['GET', 'POST'])
 def config():
     info_path = get_info_json_path()
+    layout_config = layoutConfig.get_or_create()
+    layout_sizes = layout_config.get_sizes()
 
     # --- Load existing info.json ---
     with open(info_path, 'r', encoding='utf-8') as f:
@@ -923,6 +1015,12 @@ def config():
         app_info = {}
     if 'file_location' not in app_info:
         app_info['file_location'] = ''
+    # Merge legacy Cloud Settings block into supabase if present
+    legacy_cloud = app_info.pop('Cloud Settings', None)
+    if legacy_cloud:
+        supabase_section = app_info.setdefault('supabase', {})
+        if isinstance(legacy_cloud, dict):
+            supabase_section.update(legacy_cloud)
 
     # --- Handle POST (Save Changes) ---
     if request.method == 'POST':
@@ -941,9 +1039,41 @@ def config():
         if section == 'file_location':
             new_path = updates.get('file_location') or updates.get('value') or ''
             app_info['file_location'] = new_path.strip()
+        elif section == 'invoice_visual':
+            business_section = app_info.setdefault('business', {})
+            color_mode = (updates.get('logo_color_mode') or '').lower()
+            if color_mode:
+                business_section['logo_color_mode'] = color_mode
+
+            size_fields = ('header', 'customer', 'invoice_info', 'table', 'totals', 'payment', 'footer')
+            sizes_changed = False
+            for field in size_fields:
+                raw_value = request.form.get(field)
+                if raw_value is None:
+                    continue
+                try:
+                    new_value = int(raw_value)
+                except (TypeError, ValueError):
+                    continue
+                if layout_sizes.get(field) != new_value:
+                    layout_sizes[field] = new_value
+                    sizes_changed = True
+            if sizes_changed:
+                layout_config.set_sizes(layout_sizes)
+                db.session.commit()
         elif section in app_info:
             if isinstance(app_info[section], dict):
-                app_info[section].update(updates)
+                target_section = app_info[section]
+                filtered_updates = {}
+                for key, new_value in updates.items():
+                    existing_value = target_section.get(key)
+                    if isinstance(existing_value, str) and new_value == existing_value:
+                        continue
+                    if new_value == '' and key in target_section:
+                        continue
+                    filtered_updates[key] = new_value
+                if filtered_updates:
+                    target_section.update(filtered_updates)
             elif isinstance(app_info[section], list):
                 # handle lists (e.g., services textarea)
                 lines = updates.get('services', '').splitlines()
@@ -974,7 +1104,8 @@ def config():
     # --- Default (GET) view ---
     return render_template('config_editor.html', app_info=app_info,
                            last_updated=info_data['last_updated'],
-                           created_on=info_data['created_on'])
+                           created_on=info_data['created_on'],
+                           layout_sizes=layout_sizes)
 
 
 @app.route('/config/refresh', methods=['POST'])
@@ -985,6 +1116,886 @@ def config_refresh():
     except Exception as exc:
         flash(f'Unable to refresh settings: {exc}', 'danger')
     return redirect(url_for('config'))
+
+
+def _accounting_totals(sort_by='balance', sort_dir='desc'):
+    base_query = db.session.query
+    income_total = base_query(func.coalesce(func.sum(accountingTransaction.amount), 0.0)).filter(
+        accountingTransaction.txn_type == 'income',
+        accountingTransaction.is_deleted.is_(False)
+    ).scalar() or 0.0
+
+    expense_total = base_query(func.coalesce(func.sum(accountingTransaction.amount), 0.0)).filter(
+        accountingTransaction.txn_type == 'expense',
+        accountingTransaction.is_deleted.is_(False)
+    ).scalar() or 0.0
+
+    outstanding_invoice_rows = _outstanding_invoice_rows()
+    general_payments = _general_customer_payments()
+    customer_expenses = _customer_expenses()
+    outstanding_entries = _group_outstanding_by_customer(
+        outstanding_invoice_rows,
+        general_payments,
+        customer_expenses,
+        sort_by,
+        sort_dir
+    )
+    outstanding_total = sum(entry['balance'] for entry in outstanding_entries)
+
+    return {
+        'income_total': income_total,
+        'expense_total': expense_total,
+        'net_flow': income_total - expense_total,
+        'outstanding_total': outstanding_total,
+        'outstanding_entries': outstanding_entries,
+        'outstanding_invoices_raw': outstanding_invoice_rows,
+        'sort_by': sort_by,
+        'sort_dir': sort_dir,
+    }
+
+
+def _outstanding_invoice_rows():
+    payments_subq = (
+        db.session.query(
+            accountingTransaction.invoice_no.label('invoice_no'),
+            func.coalesce(func.sum(accountingTransaction.amount), 0.0).label('paid_amount')
+        )
+        .filter(
+            accountingTransaction.is_deleted.is_(False),
+            accountingTransaction.txn_type == 'income',
+            accountingTransaction.invoice_no.isnot(None)
+        )
+        .group_by(accountingTransaction.invoice_no)
+        .subquery()
+    )
+
+    rows = (
+        db.session.query(
+            invoice.invoiceId.label('invoice_no'),
+            invoice.createdAt,
+            invoice.totalAmount,
+            customer.id.label('customer_id'),
+            customer.name.label('customer_name'),
+            customer.company.label('customer_company'),
+            func.coalesce(payments_subq.c.paid_amount, 0.0).label('paid_amount')
+        )
+        .join(customer, invoice.customerId == customer.id)
+        .outerjoin(payments_subq, payments_subq.c.invoice_no == invoice.invoiceId)
+        .filter(invoice.isDeleted.is_(False))
+        .order_by(invoice.createdAt.desc())
+    )
+
+    invoice_rows = []
+    for row in rows:
+        balance = float(max((row.totalAmount or 0) - (row.paid_amount or 0), 0))
+        if balance <= 0.01:
+            continue
+        invoice_rows.append({
+            'invoice_no': row.invoice_no,
+            'created_at': row.createdAt,
+            'customer_id': row.customer_id,
+            'customer': row.customer_name or row.customer_company or 'Customer',
+            'company': row.customer_company,
+            'total': float(row.totalAmount or 0),
+            'paid': float(row.paid_amount or 0),
+            'balance': balance,
+        })
+    return invoice_rows
+
+
+def _general_customer_payments():
+    rows = (
+        db.session.query(
+            accountingTransaction.customerId,
+            func.coalesce(func.sum(accountingTransaction.amount), 0.0).label('amt')
+        )
+        .filter(
+            accountingTransaction.is_deleted.is_(False),
+            accountingTransaction.txn_type == 'income',
+            accountingTransaction.invoice_no.is_(None),
+            accountingTransaction.customerId.isnot(None)
+        )
+        .group_by(accountingTransaction.customerId)
+        .all()
+    )
+    return {row.customerId: float(row.amt or 0) for row in rows}
+
+
+def _customer_expenses():
+    rows = (
+        db.session.query(
+            accountingTransaction.customerId,
+            func.coalesce(func.sum(accountingTransaction.amount), 0.0).label('amt')
+        )
+        .filter(
+            accountingTransaction.is_deleted.is_(False),
+            accountingTransaction.txn_type == 'expense',
+            accountingTransaction.customerId.isnot(None)
+        )
+        .group_by(accountingTransaction.customerId)
+        .all()
+    )
+    return {row.customerId: float(row.amt or 0) for row in rows}
+
+
+def _group_outstanding_by_customer(invoice_rows, general_payments, customer_expenses, sort_by='balance', sort_dir='desc'):
+    grouped = {}
+    for entry in invoice_rows:
+        cust_id = entry.get('customer_id')
+        key = cust_id or (entry['customer'], entry.get('company'))
+        bucket = grouped.setdefault(key, {
+            'customer_id': cust_id,
+            'customer': entry['customer'],
+            'company': entry.get('company'),
+            'total': 0.0,
+            'paid': 0.0,
+            'expenses': 0.0,
+            'invoice_count': 0,
+            'latest_invoice_date': entry.get('created_at'),
+        })
+        bucket['total'] += entry['total']
+        bucket['paid'] += entry['paid']
+        bucket['invoice_count'] += 1
+        existing_date = bucket.get('latest_invoice_date')
+        created_at = entry.get('created_at')
+        if existing_date is None or (created_at and created_at > existing_date):
+            bucket['latest_invoice_date'] = created_at
+    existing_ids = {bucket['customer_id'] for bucket in grouped.values() if bucket.get('customer_id')}
+    missing_expense_ids = [cid for cid in customer_expenses.keys() if cid and cid not in existing_ids]
+    missing_lookup = {}
+    if missing_expense_ids:
+        customer_rows = customer.query.filter(customer.id.in_(missing_expense_ids)).all()
+        missing_lookup = {row.id: row for row in customer_rows}
+    for cid in missing_expense_ids:
+        cust_obj = missing_lookup.get(cid)
+        grouped[cid] = {
+            'customer_id': cid,
+            'customer': cust_obj.name if cust_obj else 'Customer',
+            'company': cust_obj.company if cust_obj else None,
+            'total': 0.0,
+            'paid': 0.0,
+            'expenses': 0.0,
+            'invoice_count': 0,
+            'latest_invoice_date': None,
+        }
+
+    for bucket in grouped.values():
+        cust_id = bucket.get('customer_id')
+        general = general_payments.get(cust_id)
+        if general:
+            bucket['paid'] += general
+
+        expense_sum = customer_expenses.get(cust_id)
+        if expense_sum:
+            bucket['expenses'] += expense_sum
+
+        total_due = bucket['total'] + bucket['expenses']
+        bucket['balance'] = max(total_due - bucket['paid'], 0.0)
+
+    result = list(grouped.values())
+    sort_key_map = {
+        'invoices': lambda r: r['invoice_count'],
+        'balance': lambda r: r['balance'],
+        'expenses': lambda r: r['expenses'],
+        'paid': lambda r: r['paid'],
+        'invoiced': lambda r: r['total'],
+    }
+    sort_field = sort_key_map.get(sort_by, sort_key_map['balance'])
+    reverse = (sort_dir.lower() != 'asc')
+    result.sort(key=sort_field, reverse=reverse)
+    return result
+
+
+def _ensure_business_expense_customer():
+    cust = (
+        customer.query
+        .filter(
+            customer.name == "Business Expense",
+            customer.isDeleted == False
+        )
+        .first()
+    )
+    if cust:
+        return cust
+    synthetic_phone = f"EXP-{int(datetime.now(timezone.utc).timestamp())}"
+    cust = customer(
+        name="Business Expense",
+        company="Internal Ledger",
+        phone=synthetic_phone,
+        email="",
+        gst="",
+        address="",
+        businessType="Expense",
+        isDeleted=False
+    )
+    db.session.add(cust)
+    db.session.flush()
+    return cust
+
+
+def _persist_accounting_transaction(form):
+    txn_type = (form.get('txn_type') or 'income').strip().lower()
+    if txn_type not in ('income', 'expense'):
+        txn_type = 'income'
+
+    amount_raw = (form.get('amount') or '').strip()
+    try:
+        amount_decimal = Decimal(amount_raw)
+    except (InvalidOperation, TypeError):
+        return "Enter a valid amount."
+    if amount_decimal <= 0:
+        return "Amount must be greater than zero."
+
+    customer_id_val = form.get('customer_id')
+    customer_obj = None
+    if customer_id_val:
+        try:
+            customer_obj = customer.query.get(int(customer_id_val))
+        except (TypeError, ValueError):
+            customer_obj = None
+        if not customer_obj or customer_obj.isDeleted:
+            return "Selected customer could not be found."
+
+    customer_name = None
+    if txn_type == 'income' and not customer_obj:
+        return "Select a customer for payments received."
+    if txn_type == 'expense' and not customer_obj:
+        customer_obj = _ensure_business_expense_customer()
+
+    invoice_no = (form.get('invoice_no') or '').strip() or None
+    if invoice_no:
+        invoice_obj = invoice.query.filter_by(invoiceId=invoice_no).first()
+        if not invoice_obj:
+            return "Invoice number could not be located."
+        if customer_obj and invoice_obj.customerId != customer_obj.id:
+            return "Invoice does not belong to the selected customer."
+
+    txn_created_at = None
+    txn_date_raw = (form.get('txn_date') or '').strip()
+    if txn_date_raw:
+        try:
+            tz_name = (APP_INFO.get('account_defaults') or {}).get('timezone') or DEFAULT_TIMEZONE
+            local_tz = tz.gettz(tz_name) or timezone.utc
+            parsed_date = datetime.strptime(txn_date_raw, '%Y-%m-%d')
+            local_dt = datetime(parsed_date.year, parsed_date.month, parsed_date.day, 12, 0, tzinfo=local_tz)
+            txn_created_at = local_dt.astimezone(timezone.utc)
+        except Exception:
+            txn_created_at = None
+
+    txn_kwargs = {}
+    if txn_created_at:
+        txn_kwargs['created_at'] = txn_created_at
+        txn_kwargs['updated_at'] = txn_created_at
+
+    txn = accountingTransaction(
+        customerId=customer_obj.id if customer_obj else None,
+        amount=float(amount_decimal),
+        txn_type=txn_type,
+        mode=(form.get('mode') or '').strip().lower() or 'cash',
+        account=(form.get('account') or '').strip().lower() or 'cash',
+        invoice_no=invoice_no,
+        remarks=(form.get('remarks') or '').strip() or None,
+        **txn_kwargs
+    )
+
+    db.session.add(txn)
+    db.session.flush()
+
+    if txn_type == 'expense':
+        descriptions = form.getlist('expense_desc[]')
+        amounts = form.getlist('expense_amount[]')
+        for idx, desc in enumerate(descriptions):
+            desc_text = (desc or '').strip()
+            if not desc_text:
+                continue
+            amount_val = None
+            if idx < len(amounts):
+                amt_raw = (amounts[idx] or '').strip()
+                if amt_raw:
+                    try:
+                        amount_val = float(Decimal(amt_raw))
+                    except (InvalidOperation, TypeError):
+                        amount_val = None
+            expense_entry = expenseItem(
+                transactionId=txn.id,
+                description=desc_text,
+                amount=amount_val
+            )
+            db.session.add(expense_entry)
+
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return f"Unable to record transaction: {exc}"
+    return None
+
+
+# Accounting dashboard
+@app.route('/accounting', methods=['GET', 'POST'])
+def accounting_dashboard():
+    sort_by = (request.args.get('sort') or 'balance').lower()
+    sort_dir = (request.args.get('dir') or 'desc').lower()
+    if sort_by not in {'balance', 'expenses', 'paid', 'invoices', 'invoiced'}:
+        sort_by = 'balance'
+    if sort_dir not in {'asc', 'desc'}:
+        sort_dir = 'desc'
+
+    if request.method == 'POST':
+        next_url = request.form.get('next_url')
+        allowed_next = {url_for('accounting_dashboard'), url_for('accounting_transactions_list')}
+        if next_url not in allowed_next:
+            next_url = url_for('accounting_dashboard')
+        error = _persist_accounting_transaction(request.form)
+        if error:
+            db.session.rollback()
+            flash(error, 'danger')
+        else:
+            flash('Transaction recorded successfully.', 'success')
+        return redirect(next_url)
+
+    totals = _accounting_totals(sort_by=sort_by, sort_dir=sort_dir)
+    outstanding = totals['outstanding_entries']
+    customers_list = customer.alive().order_by(customer.name.asc()).all()
+    recent_transactions = (
+        accountingTransaction.query
+        .options(joinedload(accountingTransaction.expense_items), joinedload(accountingTransaction.customer))
+        .filter(accountingTransaction.is_deleted.is_(False))
+        .order_by(accountingTransaction.id.desc())
+        .limit(6)
+        .all()
+    )
+
+    invoice_choices = []
+    seen_invoices = set()
+    for entry in totals.get('outstanding_invoices_raw', []):
+        inv_code = entry.get('invoice_no')
+        if inv_code and inv_code not in seen_invoices:
+            seen_invoices.add(inv_code)
+            invoice_choices.append(inv_code)
+
+    payment_modes = ['cash', 'bank', 'upi']
+    account_options = ['cash', 'savings', 'current']
+    business_expense_id = _ensure_business_expense_customer().id
+
+    return render_template(
+        'accounting.html',
+        totals=totals,
+        outstanding=outstanding,
+        customers=customers_list,
+        recent_transactions=recent_transactions,
+        invoice_choices=invoice_choices,
+        payment_modes=payment_modes,
+        account_options=account_options,
+        current_sort=sort_by,
+        current_dir=sort_dir,
+        business_expense_id=business_expense_id,
+    )
+
+
+@app.route('/accounting/quick_clear/<int:customer_id>', methods=['POST'])
+def accounting_quick_clear(customer_id):
+    cust = customer.query.filter_by(id=customer_id, isDeleted=False).first()
+    if not cust:
+        flash('Customer not found.', 'warning')
+        return redirect(url_for('accounting_dashboard'))
+
+    snapshot = _customer_financial_snapshot(customer_id)
+    balance = float(snapshot.get('balance') or 0.0)
+    if balance <= 0:
+        flash('No outstanding balance to clear for this customer.', 'info')
+        return redirect(url_for('accounting_dashboard'))
+
+    txn = accountingTransaction(
+        customerId=customer_id,
+        amount=balance,
+        txn_type='income',
+        mode='bank',
+        account='current',
+        remarks='Quick clear via dashboard',
+    )
+    db.session.add(txn)
+    try:
+        db.session.commit()
+        flash(f"Cleared ₹{balance:,.2f} for {cust.name}.", 'success')
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Unable to clear dues: {exc}", 'danger')
+
+    return redirect(url_for('accounting_dashboard'))
+
+
+@app.route('/accounting/transactions')
+def accounting_transactions_list():
+    sort_by = (request.args.get('sort') or 'id').lower()
+    sort_dir = (request.args.get('dir') or 'desc').lower()
+    if sort_by not in {'date', 'amount', 'customer', 'type', 'id'}:
+        sort_by = 'id'
+    if sort_dir not in {'asc', 'desc'}:
+        sort_dir = 'desc'
+
+    customer_query = (request.args.get('customer') or '').strip()
+    date_query = (request.args.get('date') or '').strip()
+    amount_query = (request.args.get('amount') or '').strip()
+
+    q = (
+        accountingTransaction.query
+        .outerjoin(customer)
+        .options(joinedload(accountingTransaction.customer))
+        .filter(accountingTransaction.is_deleted.is_(False))
+    )
+
+    if customer_query:
+        like_value = f"%{customer_query.lower()}%"
+        q = q.filter(
+            or_(
+                func.lower(customer.name).like(like_value),
+                func.lower(customer.company).like(like_value),
+                func.lower(accountingTransaction.txn_id).like(like_value)
+            )
+        )
+
+    if date_query:
+        try:
+            parsed_date = datetime.strptime(date_query, '%Y-%m-%d')
+            start = parsed_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=1)
+            q = q.filter(accountingTransaction.created_at >= start, accountingTransaction.created_at < end)
+        except Exception:
+            pass
+
+    if amount_query:
+        try:
+            amt_value = float(Decimal(amount_query))
+            q = q.filter(accountingTransaction.amount == amt_value)
+        except (InvalidOperation, ValueError):
+            pass
+
+    if sort_by == 'amount':
+        sort_column = accountingTransaction.amount
+    elif sort_by == 'customer':
+        sort_column = func.lower(customer.name)
+    elif sort_by == 'type':
+        sort_column = accountingTransaction.txn_type
+    elif sort_by == 'id':
+        sort_column = accountingTransaction.id
+    else:
+        sort_column = accountingTransaction.created_at
+
+    if sort_dir == 'asc':
+        q = q.order_by(sort_column.asc(), accountingTransaction.id.asc())
+    else:
+        q = q.order_by(sort_column.desc(), accountingTransaction.id.desc())
+
+    transactions = q.all()
+
+    customers_list = customer.alive().order_by(customer.name.asc()).all()
+    invoice_choices = []
+    seen = set()
+    for row in _outstanding_invoice_rows():
+        inv = row.get('invoice_no')
+        if inv and inv not in seen:
+            seen.add(inv)
+            invoice_choices.append(inv)
+    payment_modes = ['cash', 'bank', 'upi']
+    account_options = ['cash', 'savings', 'current']
+    business_expense_id = _ensure_business_expense_customer().id
+
+    return render_template(
+        'accounting_transactions.html',
+        transactions=transactions,
+        filter_customer=customer_query,
+        filter_date=date_query,
+        filter_amount=amount_query,
+        current_sort=sort_by,
+        current_dir=sort_dir,
+        customers=customers_list,
+        invoice_choices=invoice_choices,
+        payment_modes=payment_modes,
+        account_options=account_options,
+        business_expense_id=business_expense_id,
+    )
+
+
+@app.route('/accounting/transactions/<int:txn_id>', methods=['GET', 'POST'])
+def accounting_transaction_detail(txn_id):
+    txn = (
+        accountingTransaction.query
+        .options(joinedload(accountingTransaction.customer), joinedload(accountingTransaction.expense_items))
+        .get_or_404(txn_id)
+    )
+
+    if request.method == 'POST':
+        if txn.is_deleted:
+            flash('Transaction already archived.', 'warning')
+        else:
+            txn.is_deleted = True
+            db.session.commit()
+            flash('Transaction deleted successfully.', 'success')
+        return redirect(url_for('accounting_transactions_list'))
+
+    return render_template('accounting_transaction_detail.html', txn=txn)
+
+
+def _customer_financial_snapshot(customer_id: int) -> dict:
+    total_invoiced, invoice_count = (
+        db.session.query(
+            func.coalesce(func.sum(invoice.totalAmount), 0.0),
+            func.count(invoice.id)
+        )
+        .filter(
+            invoice.customerId == customer_id,
+            invoice.isDeleted.is_(False)
+        )
+        .one()
+    )
+
+    total_payments = (
+        db.session.query(func.coalesce(func.sum(accountingTransaction.amount), 0.0))
+        .filter(
+            accountingTransaction.customerId == customer_id,
+            accountingTransaction.txn_type == 'income',
+            accountingTransaction.is_deleted.is_(False)
+        )
+        .scalar()
+        or 0.0
+    )
+
+    total_expenses = (
+        db.session.query(func.coalesce(func.sum(accountingTransaction.amount), 0.0))
+        .filter(
+            accountingTransaction.customerId == customer_id,
+            accountingTransaction.txn_type == 'expense',
+            accountingTransaction.is_deleted.is_(False)
+        )
+        .scalar()
+        or 0.0
+    )
+
+    balance = (total_invoiced + total_expenses) - total_payments
+
+    return {
+        'customer_id': customer_id,
+        'total_invoiced': float(total_invoiced or 0.0),
+        'invoice_count': int(invoice_count or 0),
+        'total_payments': float(total_payments or 0.0),
+        'total_expenses': float(total_expenses or 0.0),
+        'balance': float(balance),
+    }
+
+
+def _build_accounting_statement_context(
+    start_dt: datetime,
+    end_dt: datetime,
+    start_date_display,
+    end_date_display,
+    txn_type_filter: str = 'all',
+    customer_query: str = ''
+) -> dict:
+    """
+    Aggregate accounting transactions for the printable accounting statement view.
+    Returns totals, breakdowns, and the matching transaction rows.
+    """
+    txn_filter = txn_type_filter if txn_type_filter in {'income', 'expense'} else 'all'
+    customer_filter = (customer_query or '').strip()
+
+    tz_name = (APP_INFO.get('account_defaults') or {}).get('timezone') or DEFAULT_TIMEZONE
+    display_tz = tz.gettz(tz_name) or timezone.utc
+
+    q = (
+        accountingTransaction.query
+        .options(joinedload(accountingTransaction.customer))
+        .filter(
+            accountingTransaction.is_deleted.is_(False),
+            accountingTransaction.created_at >= start_dt,
+            accountingTransaction.created_at <= end_dt,
+        )
+    )
+
+    if txn_filter in {'income', 'expense'}:
+        q = q.filter(accountingTransaction.txn_type == txn_filter)
+
+    if customer_filter:
+        like_value = f"%{customer_filter.lower()}%"
+        q = q.join(customer, accountingTransaction.customerId == customer.id)
+        q = q.filter(
+            or_(
+                func.lower(func.coalesce(customer.name, '')).like(like_value),
+                func.lower(func.coalesce(customer.company, '')).like(like_value),
+                func.lower(func.coalesce(customer.phone, '')).like(like_value),
+            )
+        )
+    else:
+        q = q.outerjoin(customer, accountingTransaction.customerId == customer.id)
+
+    transactions = q.order_by(accountingTransaction.created_at.desc()).all()
+
+    selected_customer = None
+    normalized_filter = customer_filter.lower()
+    if customer_filter:
+        selected_customer = (
+            customer.query
+            .filter(
+                customer.isDeleted == False,
+                func.lower(customer.phone) == normalized_filter
+            )
+            .first()
+        )
+        if not selected_customer:
+            try:
+                customer_id_match = int(customer_filter)
+            except (TypeError, ValueError):
+                customer_id_match = None
+            if customer_id_match:
+                selected_customer = (
+                    customer.query
+                    .filter(
+                        customer.isDeleted == False,
+                        customer.id == customer_id_match
+                    )
+                    .first()
+                )
+        if not selected_customer:
+            like_value = f"%{normalized_filter}%"
+            selected_customer = (
+                customer.query
+                .filter(
+                    customer.isDeleted == False,
+                    or_(
+                        func.lower(customer.name).like(like_value),
+                        func.lower(customer.company).like(like_value)
+                    )
+                )
+                .order_by(customer.name.asc())
+                .first()
+            )
+    if customer_filter and not selected_customer:
+        for txn in transactions:
+            if txn.customer:
+                selected_customer = txn.customer
+                break
+
+    income_total = 0.0
+    expense_total = 0.0
+    income_count = 0
+    expense_count = 0
+    daily_totals = defaultdict(lambda: {'income': 0.0, 'expense': 0.0})
+    mode_totals = defaultdict(lambda: {'income': 0.0, 'expense': 0.0})
+    account_totals = defaultdict(lambda: {'income': 0.0, 'expense': 0.0})
+    customer_totals = {}
+
+    for txn in transactions:
+        amount = float(txn.amount or 0.0)
+        if amount <= 0:
+            continue
+        created_at = txn.created_at or start_dt
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        local_created = created_at.astimezone(display_tz)
+        date_key = local_created.date()
+        day_bucket = daily_totals[date_key]
+
+        if txn.txn_type == 'income':
+            income_total += amount
+            income_count += 1
+            day_bucket['income'] += amount
+        else:
+            expense_total += amount
+            expense_count += 1
+            day_bucket['expense'] += amount
+
+        mode_label = (txn.mode or 'Unspecified').strip() or 'Unspecified'
+        account_label = (txn.account or 'Unspecified').strip() or 'Unspecified'
+        mode_bucket = mode_totals[mode_label.upper()]
+        account_bucket = account_totals[account_label.title()]
+        if txn.txn_type == 'income':
+            mode_bucket['income'] += amount
+            account_bucket['income'] += amount
+        else:
+            mode_bucket['expense'] += amount
+            account_bucket['expense'] += amount
+
+        cust_key = txn.customerId if txn.customerId else 'unassigned'
+        customer_bucket = customer_totals.get(cust_key)
+        if not customer_bucket:
+            label = txn.customer.name if txn.customer else 'Unassigned'
+            customer_bucket = {
+                'customer_id': txn.customer.id if txn.customer else None,
+                'customer': label,
+                'company': txn.customer.company if txn.customer else '',
+                'phone': txn.customer.phone if txn.customer else '',
+                'income': 0.0,
+                'expense': 0.0,
+                'transactions': 0,
+                'last_txn_at': local_created,
+            }
+            customer_totals[cust_key] = customer_bucket
+
+        customer_bucket['transactions'] += 1
+        if txn.txn_type == 'income':
+            customer_bucket['income'] += amount
+        else:
+            customer_bucket['expense'] += amount
+
+        if local_created > customer_bucket['last_txn_at']:
+            customer_bucket['last_txn_at'] = local_created
+
+    def _format_breakdown(source):
+        rows = []
+        for label, values in source.items():
+            total = values['income'] + values['expense']
+            rows.append({
+                'label': label,
+                'income': values['income'],
+                'expense': values['expense'],
+                'net': values['income'] - values['expense'],
+                'total': total,
+            })
+        rows.sort(key=lambda row: row['total'], reverse=True)
+        return rows
+
+    customer_summary = []
+    for entry in customer_totals.values():
+        entry['net'] = entry['income'] - entry['expense']
+        customer_summary.append(entry)
+    customer_summary.sort(
+        key=lambda row: (row['customer_id'] is None, -row['net'])
+    )
+
+    daily_summary = []
+    for day, values in sorted(daily_totals.items()):
+        daily_summary.append({
+            'date': day,
+            'income': values['income'],
+            'expense': values['expense'],
+            'net': values['income'] - values['expense'],
+        })
+
+    show_income_columns = income_total > 0.0
+    show_expense_columns = expense_total > 0.0
+
+    customer_invoices = []
+    customer_payments = []
+    customer_adjustments = []
+    customer_statement_summary = None
+    selected_customer_info = None
+    if selected_customer:
+        selected_customer_info = {
+            'id': selected_customer.id,
+            'name': selected_customer.name,
+            'company': selected_customer.company,
+            'phone': selected_customer.phone,
+        }
+        invoice_rows = (
+            invoice.query
+            .filter(
+                invoice.customerId == selected_customer.id,
+                invoice.isDeleted == False,
+                invoice.createdAt >= start_dt,
+                invoice.createdAt <= end_dt
+            )
+            .order_by(invoice.createdAt.desc())
+            .all()
+        )
+        for inv in invoice_rows:
+            inv_created = inv.createdAt or start_dt
+            if inv_created.tzinfo is None:
+                inv_created = inv_created.replace(tzinfo=timezone.utc)
+            local_inv = inv_created.astimezone(display_tz)
+            customer_invoices.append({
+                'invoice_no': inv.invoiceId,
+                'date': local_inv,
+                'total': float(inv.totalAmount or 0),
+            })
+
+        for txn in transactions:
+            if txn.customerId != selected_customer.id:
+                continue
+            local_created = (txn.created_at or start_dt)
+            if local_created.tzinfo is None:
+                local_created = local_created.replace(tzinfo=timezone.utc)
+            local_created = local_created.astimezone(display_tz)
+            entry = {
+                'txn_id': txn.txn_id,
+                'date': local_created,
+                'mode': txn.mode or '—',
+                'account': txn.account or '—',
+                'amount': float(txn.amount or 0),
+                'remarks': txn.remarks,
+            }
+            if txn.txn_type == 'income':
+                customer_payments.append(entry)
+            else:
+                customer_adjustments.append(entry)
+
+        invoice_total = sum(inv['total'] for inv in customer_invoices)
+        payment_total = sum(p['amount'] for p in customer_payments)
+        adjustment_total = sum(adj['amount'] for adj in customer_adjustments)
+        customer_statement_summary = {
+            'invoice_total': round(invoice_total, 2),
+            'payment_total': round(payment_total, 2),
+            'adjustment_total': round(adjustment_total, 2),
+            'balance': round(invoice_total + adjustment_total - payment_total, 2),
+            'invoice_count': len(customer_invoices),
+            'payment_count': len(customer_payments),
+        }
+
+    context = {
+        'transactions': transactions,
+        'income_total': round(income_total, 2),
+        'expense_total': round(expense_total, 2),
+        'net_flow': round(income_total - expense_total, 2),
+        'transaction_count': len(transactions),
+        'income_count': income_count,
+        'expense_count': expense_count,
+        'filters': {
+            'start': start_date_display.isoformat(),
+            'end': end_date_display.isoformat(),
+            'customer': customer_filter,
+            'type': txn_filter,
+        },
+        'customer_filter': customer_filter,
+        'selected_type': txn_filter,
+        'customer_summary': customer_summary,
+        'mode_breakdown': _format_breakdown(mode_totals),
+        'account_breakdown': _format_breakdown(account_totals),
+        'daily_summary': daily_summary,
+        'display_timezone': tz_name,
+        'generated_at': datetime.now(timezone.utc).astimezone(display_tz),
+        'start_date': start_date_display,
+        'end_date': end_date_display,
+        'start_local': start_dt.astimezone(display_tz),
+        'end_local': end_dt.astimezone(display_tz),
+        'overall_totals': _accounting_totals(),
+        'customer_invoices': customer_invoices,
+        'selected_customer': selected_customer_info,
+        'customer_payments': customer_payments,
+        'customer_adjustments': customer_adjustments,
+        'customer_statement_summary': customer_statement_summary,
+        'show_income_columns': show_income_columns,
+        'show_expense_columns': show_expense_columns,
+    }
+    context['statement_range_label'] = (
+        f"{context['start_local'].strftime('%d %b %Y')} — {context['end_local'].strftime('%d %b %Y')}"
+    )
+    return context
+
+
+@app.route('/accounting/customer_summary/<int:customer_id>')
+def accounting_customer_summary(customer_id):
+    cust = customer.query.filter_by(id=customer_id, isDeleted=False).first()
+    if not cust:
+        return jsonify({'error': 'Customer not found'}), 404
+    summary = _customer_financial_snapshot(customer_id)
+    summary['customer_name'] = cust.name
+    summary['company'] = cust.company
+    return jsonify(summary)
+
+
+@app.route('/accounting/amount_to_words')
+def accounting_amount_to_words():
+    amount = request.args.get('amount', '0')
+    return jsonify({'words': amount_to_words(amount)})
 
 
 # customers page (temperory placeholder)
@@ -1788,6 +2799,8 @@ def bill_preview(invoicenumber):
     upi_id = APP_INFO["upi_info"]["upi_id"]
     company_name = APP_INFO["business"]["name"]
     upi_name = APP_INFO["upi_info"]["upi_name"]
+    brand_watermark_path = _resolve_brand_watermark_path(APP_INFO.get("business"))
+    brand_accent_color = _resolve_brand_accent_color(APP_INFO.get("business"))
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
     params = {"upi_id": upi_id, "amount": current_invoice.totalAmount, "company_name": company_name}
@@ -1821,6 +2834,8 @@ def bill_preview(invoicenumber):
         company_name=company_name,
         total=current_invoice.totalAmount,
         app_info=APP_INFO,
+        brand_watermark_path=brand_watermark_path,
+        brand_accent_color=brand_accent_color,
     )
 
 
@@ -2037,6 +3052,8 @@ def latest_bill_preview():
     upi_id = APP_INFO["upi_info"]["upi_id"]
     company_name = APP_INFO["business"]["name"]
     upi_name = APP_INFO["upi_info"]["upi_name"]
+    brand_watermark_path = _resolve_brand_watermark_path(APP_INFO.get("business"))
+    brand_accent_color = _resolve_brand_accent_color(APP_INFO.get("business"))
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
     params = {
@@ -2073,163 +3090,10 @@ def latest_bill_preview():
         upi_id=upi_id,
         upi_name=upi_name,
         company_name=company_name,
-        total=current_invoice.totalAmount
+        total=current_invoice.totalAmount,
+        brand_watermark_path=brand_watermark_path,
+        brand_accent_color=brand_accent_color,
     )
-
-
-# --- Common builder for sample invoice context ---
-
-def _build_sample_invoice_context():
-    # Get the most recent invoice
-    recent_invoice = invoice.query.order_by(invoice.createdAt.desc()).first()
-
-    if not recent_invoice:
-        # Fallback if no invoice exists
-        fallback_created_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        return {
-            "invoice": type("Invoice", (),
-                            {"invoiceId": "NO_DATA", "createdAt": fallback_created_at, "totalAmount": 0.0})(),
-            "customer": {},
-            "items": [],
-            "dcno": False,
-            "dc_numbers": [],
-            "total_in_words": "",
-            "sizes": layoutConfig().get_or_create().get_sizes(),
-            "rows": 0,
-            "persistent_notice": session.get("persistent_notice"),
-        }
-
-    # Get customer info
-    cust = customer.query.get(recent_invoice.customerId)
-
-    # Get items from invoiceItem joined with item
-    line_items = invoiceItem.query.filter_by(invoiceId=recent_invoice.id).all()
-    items = []
-    for li in line_items:
-        itm = item.query.get(li.itemId)
-        items.append({
-            "name": itm.name if itm else "Unknown",
-            "hsn": "N/A",
-            "qty": li.quantity,
-            "rate": li.rate,
-            "discount": li.discount,
-            "tax": li.taxPercentage,
-            "amount": li.line_total
-        })
-
-    sample_items = [
-        (i["name"], i["hsn"], i["qty"], i["rate"], i["discount"], i["tax"], i["amount"])
-        for i in items
-    ]
-
-    # Delivery challan toggle
-    dcno = session.get("dc_enabled", False)
-    dc_numbers = [i.dc_number for i in items if hasattr(i, "dc_number")] if dcno else []
-
-    # Layout sizes
-    current_sizes = layoutConfig().get_or_create().get_sizes()
-
-    return {
-        "invoice": recent_invoice,
-        "customer": {
-            "company": getattr(cust, "company", ""),
-            "address": getattr(cust, "address", ""),
-            "gst": getattr(cust, "gst", ""),
-            "phone": getattr(cust, "phone", ""),
-            "email": getattr(cust, "email", ""),
-        },
-        "items": sample_items,
-        "dcno": dcno,
-        "dc_numbers": dc_numbers,
-        "total_in_words": recent_invoice.total_in_words if hasattr(recent_invoice, "total_in_words") else "",
-        "sizes": current_sizes,
-        "rows": len(sample_items),
-        "persistent_notice": session.get("persistent_notice"),
-    }
-
-
-# --- Unified Layout Handler ---
-def handle_layout(action=None, data=None):
-    config = layoutConfig().get_or_create()
-    updated = False
-
-    if action == "update" and data:
-        current_sizes = config.get_sizes()
-        updated = False
-        for k in ["header", "customer", "table", "totals", "payment", "footer", "invoice_info"]:
-            if k in data:
-                try:
-                    new_size = int(data[k])
-                    if current_sizes.get(k) != new_size:
-                        current_sizes[k] = new_size
-                        updated = True
-                except Exception:
-                    pass
-        if updated:
-            config.set_sizes(current_sizes)
-            db.session.commit()
-            session['persistent_notice'] = "Layout has been updated successfully!"
-
-    elif action == "reset":
-        config.reset_sizes()
-        db.session.commit()
-        session['persistent_notice'] = "Layout has been reset to defaults!"
-
-    return _build_sample_invoice_context()
-
-
-# --- Routes ---
-@app.route('/test-pre-preview', methods=['GET', 'POST'])
-def test_pre_preview():
-    upi_id = APP_INFO["upi_info"]["upi_id"]
-    company_name = APP_INFO["business"]["name"]
-    upi_name = APP_INFO["upi_info"]["upi_name"]
-
-    api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
-    params = {"upi_id": upi_id, "amount": "", "company_name": company_name}  # amount empty for preview
-
-    try:
-        resp = requests.get(api_url, params=params, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            upi_qr = data.get('qr_svg_base64')
-        else:
-            upi_qr = None
-    except Exception as e:
-        print(f"[ERROR] Failed to fetch QR for preview: {e}")
-        upi_qr = None
-
-    ctx = handle_layout(action="view")
-    return render_template(
-        'pre-preview-bill.html',
-        app_info=APP_INFO,
-        upi_qr=upi_qr,
-        **ctx
-    )
-
-
-@app.route('/pre-pre-preview', methods=['GET'])
-def test_pre_preview_():
-    try:
-        if session['persistent_notice']:
-            pass  # keep notice, just no backup check
-    except Exception:
-        pass
-    ctx = handle_layout(action="view")
-    return render_template("pre-preview-bill.html", app_info=APP_INFO, **ctx)
-
-
-@app.route('/update-layout', methods=['POST'])
-def update_layout():
-    data = request.get_json(force=True) if request.is_json else request.form
-    ctx = handle_layout(action="update", data=data)
-    return render_template("pre-preview-bill.html", **ctx)
-
-
-@app.route('/reset-layout', methods=['POST'])
-def reset_layout():
-    ctx = handle_layout(action="reset")
-    return render_template("pre-preview-bill.html", **ctx)
 
 
 app.jinja_env.globals.update(zip=zip)
@@ -2880,26 +3744,92 @@ def statements_company():
     )
 
 
+@app.route('/statements/accounting', methods=['GET'])
+def accounting_statement():
+    """
+    Accounting-ledger statement with optional printable PDF view.
+    """
+    today = datetime.now(timezone.utc).date()
+    min_start = get_default_statement_start().date()
+
+    default_start = ACCOUNTING_STATEMENT_DEFAULT_START
+
+    start_date = _parse_date(request.args.get('start')) or default_start
+    end_date = _parse_date(request.args.get('end')) or today
+    if start_date < min_start:
+        start_date = min_start
+    if end_date < start_date:
+        end_date = start_date
+
+    txn_type = (request.args.get('type') or 'all').lower()
+    customer_query = (request.args.get('customer') or '').strip()
+    export = (request.args.get('export') or 'html').lower()
+
+    start_dt = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+    end_dt = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+
+    context = _build_accounting_statement_context(
+        start_dt,
+        end_dt,
+        start_date,
+        end_date,
+        txn_type_filter=txn_type,
+        customer_query=customer_query,
+    )
+
+    suggestions = []
+    try:
+        suggestions = [
+            {"company": c.company or "", "phone": c.phone}
+            for c in customer.query.filter(customer.isDeleted == False).all()
+            if (c.company or c.phone)
+        ]
+    except Exception as e:
+        print("[warn] Failed to load accounting suggestions:", e)
+
+    template_payload = dict(context, APP_INFO=APP_INFO)
+    template_payload["suggestions"] = suggestions
+
+    if export == 'pdf':
+        return render_template('print_accounting_statement.html', **template_payload)
+
+    return render_template('accounting_statement.html', **template_payload)
+
+
 @app.route('/qr_code', methods=['GET', 'POST'])
 def qr_code():
+    upi_variants = _get_upi_variants()
+    default_variant = upi_variants[0] if upi_variants else {
+        'key': 'primary',
+        'upi_id': APP_INFO.get('upi_info', {}).get('upi_id') or APP_INFO.get('business', {}).get('upi_id', ''),
+        'upi_name': APP_INFO.get('upi_info', {}).get('upi_name') or APP_INFO.get('business', {}).get('upi_name', ''),
+    }
+
     return render_template('QR_code.html',
-                           upi_id=APP_INFO['upi_info']['upi_id'],
-                           upi_name=APP_INFO['upi_info']['upi_name'],
+                           upi_id=default_variant.get('upi_id', ''),
+                           upi_name=default_variant.get('upi_name', ''),
+                           selected_variant=default_variant.get('key', 'primary'),
+                           upi_variants=upi_variants,
                            qr_image=False)
 
 
 @app.route('/generate_qr', methods=['GET', 'POST'])
 def generate_qr():
-    if request.method == 'POST':
-        amount = request.form.get('amount')
-        upi_id = request.form.get('upi_id') or APP_INFO['business']['upi_id']
-        upi_name = request.form.get('upi_name') or APP_INFO['business']['upi_name']
-    else:
-        amount = request.args.get('amount')
-        upi_id = request.args.get('upi_id') or APP_INFO['business']['upi_id']
-        upi_name = request.args.get('upi_name') or APP_INFO['business']['upi_name']
+    source = request.form if request.method == 'POST' else request.args
+    amount = source.get('amount')
 
-    company_name = APP_INFO['business']['name']
+    upi_info_defaults = APP_INFO.get('upi_info', {}) if isinstance(APP_INFO.get('upi_info'), dict) else {}
+    business_defaults = APP_INFO.get('business', {}) if isinstance(APP_INFO.get('business'), dict) else {}
+
+    selected_variant = _find_upi_variant(source.get('upi_variant'))
+    if selected_variant:
+        upi_id = selected_variant.get('upi_id') or upi_info_defaults.get('upi_id') or business_defaults.get('upi_id')
+        upi_name = selected_variant.get('upi_name') or upi_info_defaults.get('upi_name') or business_defaults.get('upi_name') or business_defaults.get('owner')
+    else:
+        upi_id = source.get('upi_id') or upi_info_defaults.get('upi_id') or business_defaults.get('upi_id')
+        upi_name = source.get('upi_name') or upi_info_defaults.get('upi_name') or business_defaults.get('upi_name') or business_defaults.get('owner')
+
+    company_name = business_defaults.get('name') or APP_INFO['business']['name']
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
     params = {"upi_id": upi_id, "amount": amount, "company_name": company_name}
@@ -3153,15 +4083,23 @@ def _check_supabase_connectivity(url: str, timeout: float = 5.0) -> tuple[bool, 
 
 @app.post('/supabase_sync_all')
 def supabase_sync_all():
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    def _respond(status: str, message: str, category: str = 'info', code: int = 200, **extra):
+        if is_ajax:
+            payload = {"status": status, "message": message}
+            payload.update(extra)
+            return jsonify(payload), code
+        flash(message, category)
+        return redirect(url_for('more'))
+
     url, key, _ = load_supabase_config()
     if not url or not key:
-        flash('Supabase credentials are missing. Please update Account Settings.', 'danger')
-        return redirect(url_for('more'))
+        return _respond('error', 'Supabase credentials are missing. Please update Account Settings.', 'danger', 400)
 
     reachable, error_message = _check_supabase_connectivity(url)
     if not reachable:
-        flash('Cloud sync unavailable right now — check your internet connection and try again.', 'warning')
-        return redirect(url_for('more'))
+        return _respond('error', 'Cloud sync unavailable right now — check your internet connection and try again.', 'warning', 503, details=error_message)
 
     backup_path = _create_db_backup()
 
@@ -3173,23 +4111,19 @@ def supabase_sync_all():
     except SupabaseUploadError as exc:
         skipped = ', '.join(exc.skipped_tables) if exc.skipped_tables else 'none'
         detail = f" Reason: {exc.detail}" if exc.detail else ''
-        flash(
-            (
-                f"Supabase rejected {exc.failed_count} records in '{exc.failed_table}'. "
-                f"Upload stopped before tables: {skipped}.{detail}"
-            ),
-            'danger'
+        message = (
+            f"Supabase rejected {exc.failed_count} records in '{exc.failed_table}'. "
+            f"Upload stopped before tables: {skipped}.{detail}"
         )
-        return redirect(url_for('more'))
+        return _respond('error', message, 'danger', 500, details=message)
     except Exception as exc:
-        flash(f'Failed to sync with Supabase: {exc}', 'danger')
-        return redirect(url_for('more'))
+        return _respond('error', f'Failed to sync with Supabase: {exc}', 'danger', 500)
 
     timestamp = datetime.now(timezone.utc).isoformat()
     _update_supabase_last_uploaded(timestamp)
-    flash(f'Successfully uploaded {result.uploaded} records to Supabase.', 'success')
 
-    return redirect(url_for('more'))
+    success_message = f"Uploaded {result.uploaded} records to Supabase ({result.failed} failed)."
+    return _respond('success', success_message, 'success', 200, uploaded=result.uploaded, failed=result.failed)
 
 
 @app.post('/backup/local_copy')

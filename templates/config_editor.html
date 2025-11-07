@@ -1,5 +1,80 @@
 {% extends "base.html" %}
 {% block content %}
+{% set logo_color_options = [
+  {'value': 'black', 'label': 'Black', 'hex': '#111111'},
+  {'value': 'blue', 'label': 'Blue', 'hex': '#1b4ea0'}
+] %}
+{% set current_logo_mode = app_info['business'].get('logo_color_mode', 'black') %}
+{% set supabase_info = app_info.get('supabase', {}) %}
+{% set visual_size_fields = [
+  {'key': 'header', 'label': 'Bill Heading'},
+  {'key': 'customer', 'label': 'From & To'},
+  {'key': 'invoice_info', 'label': 'Invoice Meta'},
+  {'key': 'table', 'label': 'Items Table'},
+  {'key': 'totals', 'label': 'Totals'},
+  {'key': 'payment', 'label': 'Payment Info'},
+  {'key': 'footer', 'label': 'Footer & Notes'}
+] %}
+<style>
+  .logo-color-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .logo-color-chip {
+    border: 1px solid #d0d7de;
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    background-color: #fff;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    font-size: 0.9rem;
+  }
+  .logo-color-chip.active {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+    background-color: rgba(13, 110, 253, 0.05);
+  }
+  .logo-color-chip .color-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+    color: #fff;
+    font-weight: 600;
+  }
+  .logo-color-chip .checkmark {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .logo-color-chip.active .checkmark {
+    opacity: 1;
+  }
+  .logo-color-chip button,
+  .logo-color-chip input {
+    border: none;
+  }
+  .logo-color-chip button:focus-visible,
+  .logo-color-chip:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+  }
+  .visual-size-grid label {
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .visual-size-grid .form-range {
+    height: 2.2rem;
+  }
+</style>
 <div class="container py-5">
   <div class="d-flex justify-content-end mb-3">
     <form method="post" action="{{ url_for('config_refresh') }}" class="d-inline">
@@ -58,6 +133,33 @@
           </div>
         </div>
 
+        <!-- Invoice Visual Settings Section -->
+        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h4 class="fw-semibold mb-3 text-primary">Invoice Visual Settings</h4>
+              <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#invoiceVisualModal" style="min-width: 70px;">Edit</button>
+            </div>
+            <dl class="row mb-0">
+              <dt class="col-sm-4">Watermark Color</dt>
+              <dd class="col-sm-8 text-muted text-capitalize">{{ current_logo_mode }}</dd>
+              <dt class="col-sm-4">Font Sizes</dt>
+              <dd class="col-sm-8 text-muted">
+                <div class="row">
+                  {% for field in visual_size_fields %}
+                    <div class="col-md-6 mb-1">
+                      <div class="d-flex justify-content-between small">
+                        <span>{{ field.label }}</span>
+                        <span>{{ layout_sizes.get(field.key, 12) }}px</span>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </dd>
+            </dl>
+          </div>
+        </div>
+
         <!-- Bank Section -->
         <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
           <div class="card-body">
@@ -83,19 +185,23 @@
         </div>
 
         <!-- UPI Info Section -->
-        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+        <div id="upi-info-section" class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
               <h4 class="fw-semibold mb-3 text-primary">UPI Info</h4>
               <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#upiModal" style="min-width: 70px;">Edit</button>
             </div>
             <dl class="row mb-0">
-              <dt class="col-sm-4">UPI ID</dt>
-              <dd class="col-sm-8 text-muted">{{ app_info['upi_info']['upi_id'] }}</dd>
+              <dt class="col-sm-4">Primary UPI ID</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info.get('upi_info', {}).get('upi_id', 'Not set') }}</dd>
+              <dt class="col-sm-4">Primary UPI Name</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info.get('upi_info', {}).get('upi_name', 'Not set') }}</dd>
               <dt class="col-sm-4">Currency</dt>
-              <dd class="col-sm-8 text-muted">{{ app_info['upi_info']['currency'] }}</dd>
-              <dt class="col-sm-4">UPI Name</dt>
-              <dd class="col-sm-8 text-muted">{{ app_info['upi_info']['upi_name'] }}</dd>
+              <dd class="col-sm-8 text-muted">{{ app_info.get('upi_info', {}).get('currency', 'Not set') }}</dd>
+              <dt class="col-sm-4">Current Account UPI ID</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info.get('upi_info', {}).get('upi_current_id', 'Not set') }}</dd>
+              <dt class="col-sm-4">Current Account UPI Name</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info.get('upi_info', {}).get('upi_current_name', 'Not set') }}</dd>
             </dl>
           </div>
         </div>
@@ -174,11 +280,11 @@
             </div>
             <dl class="row mb-0">
               <dt class="col-sm-4">URL</dt>
-              <dd class="col-sm-8 text-muted">{{ app_info['supabase']['url'] }}</dd>
+              <dd class="col-sm-8 text-muted">{{ supabase_info.get('url') }}</dd>
               <dt class="col-sm-4">API Key</dt>
               <dd class="col-sm-8 text-muted">************</dd>
               <dt class="col-sm-4">Last Uploaded to Cloud</dt>
-              <dd class="col-sm-8 text-muted">{{ app_info['supabase']['last_uploaded'] }}</dd>
+              <dd class="col-sm-8 text-muted">{{ supabase_info.get('last_uploaded') }}</dd>
             </dl>
           </div>
         </div>
@@ -250,6 +356,63 @@
                         <input type="text" name="estd" class="form-control" value="{{ app_info['business']['estd'] }}">
                       </div>
                     </div>
+                  </div>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Invoice Visual Modal -->
+        <div class="modal fade" id="invoiceVisualModal" tabindex="-1" aria-labelledby="invoiceVisualModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 1rem;">
+              <form method="post" autocomplete="off" action="{{ url_for('config') }}">
+                <input type="hidden" name="section" value="invoice_visual">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title fw-semibold" id="invoiceVisualModalLabel">Invoice Visual Settings</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="mb-4">
+                    <label class="form-label">Watermark Color</label>
+                    <div class="logo-color-picker">
+                      {% for option in logo_color_options %}
+                        <label class="logo-color-chip {% if current_logo_mode == option.value %}active{% endif %}">
+                          <input type="radio"
+                                 name="logo_color_mode"
+                                 value="{{ option.value }}"
+                                 class="visually-hidden"
+                                 {% if current_logo_mode == option.value %}checked{% endif %}>
+                          <span class="color-dot" style="background: {{ option.hex }};">
+                            <span class="checkmark">✓</span>
+                          </span>
+                          <span class="chip-label">{{ option.label }}</span>
+                        </label>
+                      {% endfor %}
+                    </div>
+                  </div>
+                  <div class="visual-size-grid row g-4">
+                    {% for field in visual_size_fields %}
+                      <div class="col-md-6">
+                        <label class="form-label text-muted small">{{ field.label }}</label>
+                        <input type="range"
+                               class="form-range visual-size-slider"
+                               name="{{ field.key }}"
+                               min="8"
+                               max="36"
+                               value="{{ layout_sizes.get(field.key, 12) }}"
+                               data-display="{{ field.key }}Display">
+                        <div class="d-flex justify-content-between small text-muted">
+                          <span>8px</span>
+                          <span id="{{ field.key }}Display">{{ layout_sizes.get(field.key, 12) }}px</span>
+                        </div>
+                      </div>
+                    {% endfor %}
                   </div>
                 </div>
                 <div class="modal-footer border-0">
@@ -366,26 +529,38 @@
                   <div class="row">
                     <div class="col-md-6">
                       <dl>
-                        <dt>UPI ID</dt>
-                        <dd class="text-muted">{{ app_info['upi_info']['upi_id'] }}</dd>
+                        <dt>Primary UPI ID</dt>
+                        <dd class="text-muted">{{ app_info.get('upi_info', {}).get('upi_id') }}</dd>
                         <dt>Currency</dt>
-                        <dd class="text-muted">{{ app_info['upi_info']['currency'] }}</dd>
-                        <dt>UPI Name</dt>
-                        <dd class="text-muted">{{ app_info['upi_info']['upi_name'] }}</dd>
+                        <dd class="text-muted">{{ app_info.get('upi_info', {}).get('currency') }}</dd>
+                        <dt>Primary UPI Name</dt>
+                        <dd class="text-muted">{{ app_info.get('upi_info', {}).get('upi_name') }}</dd>
+                        <dt>Current Account UPI ID</dt>
+                        <dd class="text-muted">{{ app_info.get('upi_info', {}).get('upi_current_id', 'N/A') }}</dd>
+                        <dt>Current Account UPI Name</dt>
+                        <dd class="text-muted">{{ app_info.get('upi_info', {}).get('upi_current_name', 'N/A') }}</dd>
                       </dl>
                     </div>
                     <div class="col-md-6">
                       <div class="mb-3">
-                        <label class="form-label">UPI ID</label>
-                        <input type="text" name="upi_id" class="form-control" value="{{ app_info['upi_info']['upi_id'] }}">
+                        <label class="form-label">Primary UPI ID</label>
+                        <input type="text" name="upi_id" class="form-control" value="{{ app_info.get('upi_info', {}).get('upi_id', '') }}">
                       </div>
                       <div class="mb-3">
                         <label class="form-label">Currency</label>
-                        <input type="text" name="currency" class="form-control" value="{{ app_info['upi_info']['currency'] }}">
+                        <input type="text" name="currency" class="form-control" value="{{ app_info.get('upi_info', {}).get('currency', '') }}">
                       </div>
                       <div class="mb-3">
-                        <label class="form-label">UPI Name</label>
-                        <input type="text" name="upi_name" class="form-control" value="{{ app_info['upi_info']['upi_name'] }}">
+                        <label class="form-label">Primary UPI Name</label>
+                        <input type="text" name="upi_name" class="form-control" value="{{ app_info.get('upi_info', {}).get('upi_name', '') }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Current Account UPI ID</label>
+                        <input type="text" name="upi_current_id" class="form-control" value="{{ app_info.get('upi_info', {}).get('upi_current_id', '') }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Current Account UPI Name</label>
+                        <input type="text" name="upi_current_name" class="form-control" value="{{ app_info.get('upi_info', {}).get('upi_current_name', '') }}">
                       </div>
                     </div>
                   </div>
@@ -404,7 +579,7 @@
           <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content" style="border-radius: 1rem;">
               <form method="post" autocomplete="off" action="{{ url_for('config') }}">
-                <input type="hidden" name="section" value="Cloud Settings">
+                <input type="hidden" name="section" value="supabase">
                 <div class="modal-header border-0">
                   <h5 class="modal-title fw-semibold" id="supabasemodellabel">Edit Cloud Auth</h5>
                   <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -414,25 +589,25 @@
                     <div class="col-md-6">
                       <dl>
                         <dt>URL</dt>
-                        <dd class="text-muted">{{ app_info['supabase']['url'] }}</dd>
+                        <dd class="text-muted">{{ supabase_info.get('url') }}</dd>
                         <dt>Key</dt>
                         <dd class="text-muted">************</dd>
                         <dt>Last Uploaded</dt>
-                        <dd class="text-muted">{{ app_info['supabase']['last_uploaded'] }}</dd>
+                        <dd class="text-muted">{{ supabase_info.get('last_uploaded') }}</dd>
                       </dl>
                     </div>
                     <div class="col-md-6">
                       <div class="mb-3">
                         <label class="form-label">URL</label>
-                        <input type="text" name="url" class="form-control" value="{{ app_info['supabase']['url'] }}">
+                        <input type="text" name="url" class="form-control" value="{{ supabase_info.get('url', '') }}">
                       </div>
                       <div class="mb-3">
                         <label class="form-label">API Key</label>
-                        <input type="password" name="key" class="form-control" value="{{ app_info['supabase']['key'] }}">
+                        <input type="password" name="key" class="form-control" value="{{ supabase_info.get('key', '') }}">
                       </div>
                       <div class="mb-3">
                         <label class="form-label">Last Uploaded</label>
-                        <input type="text" name="last_uploaded" class="form-control" value="{{ app_info['supabase']['last_uploaded'] }}" readonly>
+                        <input type="text" name="last_uploaded" class="form-control" value="{{ supabase_info.get('last_uploaded', '') }}" readonly>
                       </div>
                     </div>
                   </div>
@@ -573,5 +748,41 @@
   </form>
 </div>
 
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.visual-size-slider').forEach(function (slider) {
+      const targetId = slider.getAttribute('data-display');
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (!target) {
+        return;
+      }
+      const sync = () => target.textContent = slider.value + 'px';
+      slider.addEventListener('input', sync);
+    });
+
+    document.querySelectorAll('.logo-color-chip input[type="radio"]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        document.querySelectorAll('.logo-color-chip').forEach(function (chip) {
+          chip.classList.remove('active');
+        });
+        const parent = radio.closest('.logo-color-chip');
+        if (parent) {
+          parent.classList.add('active');
+        }
+      });
+    });
+
+    const targetHash = '#upi-info-section';
+    if (window.location.hash === targetHash) {
+      const upiSection = document.getElementById('upi-info-section');
+      if (upiSection) {
+        setTimeout(function () {
+          upiSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      }
+    }
+  });
+</script>
 
 {% endblock %}

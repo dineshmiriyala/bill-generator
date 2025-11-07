@@ -6,7 +6,7 @@ from pathlib import Path
 import os, json, sys
 
 # Define tables to be tracked
-SYNCED_TABLES = {"customer", "invoice", "item", "invoice_item"}
+SYNCED_TABLES = {"customer", "invoice", "item", "invoice_item", "accounting_transaction"}
 APP_NAME = "SLO BILL"
 
 # ---------------- PATH LOGIC ----------------

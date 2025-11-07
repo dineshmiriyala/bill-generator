@@ -40,6 +40,8 @@ build/
 *.pyz
 *.zip
 *.html
+!templates/*.html
+!templates/**/*.html
 
 # Flask cache
 __pycache__/

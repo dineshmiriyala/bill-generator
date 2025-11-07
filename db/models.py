@@ -169,3 +169,63 @@ class layoutConfig(db.Model):
 
 
 db.Index('ix_invoiceItem_invoice_item', invoiceItem.invoiceId, invoiceItem.itemId)
+
+
+class accountingTransaction(db.Model):
+    __tablename__ = "accounting_transaction"
+
+    id = db.Column(db.Integer, primary_key=True)
+    txn_id = db.Column(db.String(32), unique=True, nullable=False, index=True)
+    customerId = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=True, index=True)
+    amount = db.Column(db.Float, nullable=False)
+    txn_type = db.Column(db.String(16), nullable=False, default="income", index=True)
+    mode = db.Column(db.String(32), nullable=True)
+    account = db.Column(db.String(32), nullable=True)
+    invoice_no = db.Column(db.String(64), nullable=True, index=True)
+    remarks = db.Column(db.Text, nullable=True)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utcnow, index=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    customer = db.relationship("customer", backref="accounting_transactions", lazy=True)
+    expense_items = db.relationship(
+        "expenseItem",
+        backref="transaction",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+
+
+class expenseItem(db.Model):
+    __tablename__ = "expense_item"
+
+    id = db.Column(db.Integer, primary_key=True)
+    transactionId = db.Column(db.Integer, db.ForeignKey("accounting_transaction.id"), nullable=False, index=True)
+    description = db.Column(db.String(255), nullable=True)
+    amount = db.Column(db.Float, nullable=True)
+
+
+@event.listens_for(accountingTransaction, 'before_insert')
+def set_accounting_txn_id(mapper, connection, target):
+    if not target.created_at:
+        target.created_at = _utcnow()
+    if target.txn_id:
+        return
+    date_code = target.created_at.strftime("%d%m%y")
+    prefix = f"SLP-TXN-{date_code}-"
+    stmt = (
+        select(accountingTransaction.txn_id)
+        .where(accountingTransaction.txn_id.like(f"{prefix}%"))
+        .order_by(accountingTransaction.txn_id.desc())
+        .limit(1)
+    )
+    last_txn = connection.execute(stmt).scalar()
+    if last_txn:
+        try:
+            seq = int(last_txn.split("-")[-1])
+        except (ValueError, AttributeError):
+            seq = 0
+    else:
+        seq = 0
+    seq += 1
+    target.txn_id = f"{prefix}{seq:06d}"

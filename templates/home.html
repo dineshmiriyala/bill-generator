@@ -4,32 +4,51 @@
 {% block content %}
 
 <style>
-  /* Cloud Upload Button - small circular Apple-style icon button */
-  #cloudUploadBtn {
+  .floating-action-group {
     position: fixed;
     top: 20px;
     right: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
+    z-index: 1050;
+  }
+  .floating-action-group .action-buttons {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .floating-action-btn {
     width: 48px;
     height: 48px;
     border-radius: 50%;
     font-size: 24px;
     line-height: 1;
     padding: 0;
-    background: linear-gradient(135deg, #a3bffa, #6c8edb);
-    color: white;
-    box-shadow: 0 0 8px rgba(108, 142, 219, 0.6);
     border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: box-shadow 0.3s ease, transform 0.3s ease;
+    color: #fff;
+    text-decoration: none;
   }
-  #cloudUploadBtn:hover,
-  #cloudUploadBtn:focus {
+  .floating-action-btn:hover,
+  .floating-action-btn:focus {
     box-shadow: 0 0 15px rgba(108, 142, 219, 0.9);
     transform: scale(1.1);
     outline: none;
+  }
+  #cloudUploadBtn,
+  #accountSettingsBtn {
+    background: #212529;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  }
+  #accountSettingsBtn img {
+    width: 24px;
+    height: 24px;
+    filter: invert(1) brightness(2);
   }
 
   /* Main buttons two-column grid */
@@ -107,9 +126,6 @@
 
   /* --- Last Uploaded Text --- */
   #lastUploaded {
-    position: fixed;
-    top: 28px;
-    right: 80px;
     font-size: 0.9rem;
     color: #6c757d;
     font-weight: 500;
@@ -142,21 +158,21 @@
       <img src="{{ url_for('static', filename='logos/view_bills.svg') }}" alt="View Bills" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
       View Bills
     </a>
-    <a href="/statements_company" class="btn btn-dark btn-lg text-center">
+    <a href="/statements/accounting" class="btn btn-dark btn-lg text-center">
       <img src="{{ url_for('static', filename='logos/statements_company.svg') }}" alt="Statements" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
       Statements
     </a>
-    <a href="/view_customers" class="btn btn-dark btn-lg text-center">
-      <img src="{{ url_for('static', filename='logos/view_customers.svg') }}" alt="Customer List" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
-      Customer List
+    <a href="/accounting" class="btn btn-dark btn-lg text-center">
+      <img src="{{ url_for('static', filename='logos/accounting.svg') }}" alt="Accounting" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
+      Accounting
+    </a>
+    <a href="/accounting/transactions" class="btn btn-dark btn-lg text-center">
+      <img src="{{ url_for('static', filename='logos/all_transactions.svg') }}" alt="All Transactions" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
+      All Transactions
     </a>
     <a href="/qr_code" class="btn btn-dark btn-lg text-center">
       <img src="{{ url_for('static', filename='logos/qr_code.svg') }}" alt="Generate UPI QR" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
       Generate UPI QR
-    </a>
-    <a href="/config" class="btn btn-dark btn-lg text-center">
-      <img src="{{ url_for('static', filename='logos/config.svg') }}" alt="Account Settings" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
-      Account Settings
     </a>
     <a href="/more" class="btn btn-dark btn-lg">
       <img src="{{ url_for('static', filename='logos/more.svg') }}" alt="More" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
@@ -165,10 +181,21 @@
   </div>
 </div>
 
-<button id="cloudUploadBtn" aria-label="Cloud Upload" title="Cloud Upload">☁️</button>
-<span id="lastUploaded">
-  Last Sync: {{ last_uploaded or "Never" }}
-</span>
+<div class="floating-action-group">
+  <div class="action-buttons">
+    <button id="cloudUploadBtn" class="floating-action-btn" aria-label="Cloud Upload" title="Cloud Upload">☁️</button>
+    <a id="accountSettingsBtn"
+       class="floating-action-btn"
+       href="/config"
+       aria-label="Account Settings"
+       title="Account Settings">
+      <img src="{{ url_for('static', filename='logos/config.svg') }}" alt="Account Settings">
+    </a>
+  </div>
+  <span id="lastUploaded">
+    Last Sync: {{ last_uploaded or "Never" }}
+  </span>
+</div>
 
 {% if session and session.get('persistent_notice') %}
 <div class="modal fade" id="persistentNoticeModal" tabindex="-1" aria-hidden="true">
