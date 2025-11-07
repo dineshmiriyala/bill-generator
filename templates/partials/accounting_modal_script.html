@@ -1,0 +1,42 @@
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const txnTypeSelect = document.getElementById('txnType');
+    if (!txnTypeSelect) return;
+
+    const customerBlock = document.querySelector('[data-block="customer-fields"]');
+    const invoiceBlock = document.querySelector('[data-block="invoice-fields"]');
+    const expenseWrapper = document.getElementById('expenseItemsWrapper');
+    const expenseRepeater = document.getElementById('expenseItemsRepeater');
+    const expenseTemplate = document.getElementById('expenseRowTemplate')?.content;
+    const addExpenseBtn = document.getElementById('addExpenseRow');
+
+    function addExpenseRow() {
+      if (!expenseTemplate || !expenseRepeater) return;
+      const clone = document.importNode(expenseTemplate, true);
+      const row = clone.querySelector('.expense-item-row');
+      const removeBtn = row.querySelector('.remove-expense-row');
+      if (removeBtn) {
+        removeBtn.addEventListener('click', function () {
+          row.remove();
+        });
+      }
+      expenseRepeater.appendChild(clone);
+    }
+
+    function toggleBlocks() {
+      const isExpense = txnTypeSelect.value === 'expense';
+      if (customerBlock) customerBlock.classList.toggle('d-none', false);
+      if (invoiceBlock) invoiceBlock.classList.toggle('d-none', isExpense);
+      if (expenseWrapper) expenseWrapper.classList.toggle('d-none', !isExpense);
+      if (isExpense && expenseRepeater && !expenseRepeater.children.length) {
+        addExpenseRow();
+      }
+    }
+
+    if (addExpenseBtn) {
+      addExpenseBtn.addEventListener('click', addExpenseRow);
+    }
+    txnTypeSelect.addEventListener('change', toggleBlocks);
+    toggleBlocks();
+  });
+</script>

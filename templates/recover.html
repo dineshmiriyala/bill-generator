@@ -66,5 +66,50 @@
   {% else %}
   <p class="text-muted">No deleted invoices found.</p>
   {% endif %}
+
+  <hr class="my-5">
+
+  <h4 class="fw-medium mb-3">Deleted Transactions</h4>
+  {% if deleted_transactions %}
+  <div class="table-responsive">
+    <table class="table table-bordered align-middle shadow-sm">
+      <thead class="table-light">
+        <tr>
+          <th>Txn ID</th>
+          <th>Type</th>
+          <th>Customer</th>
+          <th>Amount</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for txn in deleted_transactions %}
+        <tr>
+          <td>{{ txn.txn_id }}</td>
+          <td>{{ txn.txn_type|capitalize }}</td>
+          <td>
+            {% if txn.customer %}
+              {{ txn.customer.name }}
+              {% if txn.customer.company %}
+                <div class="text-muted small">{{ txn.customer.company }}</div>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>&#8377; {{ '{:,.2f}'.format(txn.amount) }}</td>
+          <td>{{ txn.created_at | datetimeformat('%d %b %Y') }}</td>
+          <td>
+            <a href="{{ url_for('recover_transaction', txn_id=txn.id) }}" class="btn btn-success btn-sm shadow-sm">Recover</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="text-muted">No deleted transactions found.</p>
+  {% endif %}
 </div>
 {% endblock %}

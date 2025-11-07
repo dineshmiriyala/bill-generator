@@ -728,10 +728,18 @@ def _parse_date(date_str):
 def recover_page():
     deleted_customers = customer.query.filter_by(isDeleted=True).all()
     deleted_invoices = invoice.query.filter_by(isDeleted=True).all()
+    deleted_transactions = (
+        accountingTransaction.query
+        .options(joinedload(accountingTransaction.customer))
+        .filter(accountingTransaction.is_deleted.is_(True))
+        .order_by(accountingTransaction.updated_at.desc())
+        .all()
+    )
     return render_template(
         'recover.html',
         deleted_customers=deleted_customers,
-        deleted_invoices=deleted_invoices
+        deleted_invoices=deleted_invoices,
+        deleted_transactions=deleted_transactions,
     )
 
 
@@ -896,6 +904,15 @@ def recover_invoice(id):
     inv.isDeleted = False
     db.session.commit()
     flash('Invoice recovered successfully.', 'success')
+    return redirect(url_for('recover_page'))
+
+
+@app.route('/recover_transaction/<int:txn_id>')
+def recover_transaction(txn_id):
+    txn = accountingTransaction.query.get_or_404(txn_id)
+    txn.is_deleted = False
+    db.session.commit()
+    flash('Transaction recovered successfully.', 'success')
     return redirect(url_for('recover_page'))
 
 
@@ -1360,13 +1377,17 @@ def accounting_dashboard():
         sort_dir = 'desc'
 
     if request.method == 'POST':
+        next_url = request.form.get('next_url')
+        allowed_next = {url_for('accounting_dashboard'), url_for('accounting_transactions_list')}
+        if next_url not in allowed_next:
+            next_url = url_for('accounting_dashboard')
         error = _persist_accounting_transaction(request.form)
         if error:
             db.session.rollback()
             flash(error, 'danger')
         else:
             flash('Transaction recorded successfully.', 'success')
-        return redirect(url_for('accounting_dashboard'))
+        return redirect(next_url)
 
     totals = _accounting_totals(sort_by=sort_by, sort_dir=sort_dir)
     outstanding = totals['outstanding_entries']
@@ -1403,6 +1424,113 @@ def accounting_dashboard():
         current_sort=sort_by,
         current_dir=sort_dir,
     )
+
+
+@app.route('/accounting/transactions')
+def accounting_transactions_list():
+    sort_by = (request.args.get('sort') or 'date').lower()
+    sort_dir = (request.args.get('dir') or 'desc').lower()
+    if sort_by not in {'date', 'amount', 'customer', 'type'}:
+        sort_by = 'date'
+    if sort_dir not in {'asc', 'desc'}:
+        sort_dir = 'desc'
+
+    customer_query = (request.args.get('customer') or '').strip()
+    date_query = (request.args.get('date') or '').strip()
+    amount_query = (request.args.get('amount') or '').strip()
+
+    q = (
+        accountingTransaction.query
+        .outerjoin(customer)
+        .options(joinedload(accountingTransaction.customer))
+        .filter(accountingTransaction.is_deleted.is_(False))
+    )
+
+    if customer_query:
+        like_value = f"%{customer_query.lower()}%"
+        q = q.filter(
+            or_(
+                func.lower(customer.name).like(like_value),
+                func.lower(customer.company).like(like_value)
+            )
+        )
+
+    if date_query:
+        try:
+            parsed_date = datetime.strptime(date_query, '%Y-%m-%d')
+            start = parsed_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=1)
+            q = q.filter(accountingTransaction.created_at >= start, accountingTransaction.created_at < end)
+        except Exception:
+            pass
+
+    if amount_query:
+        try:
+            amt_value = float(Decimal(amount_query))
+            q = q.filter(accountingTransaction.amount == amt_value)
+        except (InvalidOperation, ValueError):
+            pass
+
+    if sort_by == 'amount':
+        sort_column = accountingTransaction.amount
+    elif sort_by == 'customer':
+        sort_column = func.lower(customer.name)
+    elif sort_by == 'type':
+        sort_column = accountingTransaction.txn_type
+    else:
+        sort_column = accountingTransaction.created_at
+
+    if sort_dir == 'asc':
+        q = q.order_by(sort_column.asc())
+    else:
+        q = q.order_by(sort_column.desc())
+
+    transactions = q.all()
+
+    customers_list = customer.alive().order_by(customer.name.asc()).all()
+    invoice_choices = []
+    seen = set()
+    for row in _outstanding_invoice_rows():
+        inv = row.get('invoice_no')
+        if inv and inv not in seen:
+            seen.add(inv)
+            invoice_choices.append(inv)
+    payment_modes = ['cash', 'bank', 'upi']
+    account_options = ['cash', 'savings', 'current']
+
+    return render_template(
+        'accounting_transactions.html',
+        transactions=transactions,
+        filter_customer=customer_query,
+        filter_date=date_query,
+        filter_amount=amount_query,
+        current_sort=sort_by,
+        current_dir=sort_dir,
+        customers=customers_list,
+        invoice_choices=invoice_choices,
+        payment_modes=payment_modes,
+        account_options=account_options,
+    )
+
+
+@app.route('/accounting/transactions/<int:txn_id>', methods=['GET', 'POST'])
+def accounting_transaction_detail(txn_id):
+    txn = (
+        accountingTransaction.query
+        .options(joinedload(accountingTransaction.customer), joinedload(accountingTransaction.expense_items))
+        .get_or_404(txn_id)
+    )
+
+    if request.method == 'POST':
+        if txn.is_deleted:
+            flash('Transaction already archived.', 'warning')
+        else:
+            txn.is_deleted = True
+            db.session.commit()
+            flash('Transaction deleted successfully.', 'success')
+        return redirect(url_for('accounting_transactions_list'))
+
+    return render_template('accounting_transaction_detail.html', txn=txn)
 
 
 # customers page (temperory placeholder)
