@@ -1054,7 +1054,7 @@ def config_refresh():
     return redirect(url_for('config'))
 
 
-def _accounting_totals():
+def _accounting_totals(sort_by='balance', sort_dir='desc'):
     base_query = db.session.query
     income_total = base_query(func.coalesce(func.sum(accountingTransaction.amount), 0.0)).filter(
         accountingTransaction.txn_type == 'income',
@@ -1072,7 +1072,9 @@ def _accounting_totals():
     outstanding_entries = _group_outstanding_by_customer(
         outstanding_invoice_rows,
         general_payments,
-        customer_expenses
+        customer_expenses,
+        sort_by,
+        sort_dir
     )
     outstanding_total = sum(entry['balance'] for entry in outstanding_entries)
 
@@ -1083,6 +1085,8 @@ def _accounting_totals():
         'outstanding_total': outstanding_total,
         'outstanding_entries': outstanding_entries,
         'outstanding_invoices_raw': outstanding_invoice_rows,
+        'sort_by': sort_by,
+        'sort_dir': sort_dir,
     }
 
 
@@ -1170,7 +1174,7 @@ def _customer_expenses():
     return {row.customerId: float(row.amt or 0) for row in rows}
 
 
-def _group_outstanding_by_customer(invoice_rows, general_payments, customer_expenses):
+def _group_outstanding_by_customer(invoice_rows, general_payments, customer_expenses, sort_by='balance', sort_dir='desc'):
     grouped = {}
     for entry in invoice_rows:
         cust_id = entry.get('customer_id')
@@ -1192,6 +1196,25 @@ def _group_outstanding_by_customer(invoice_rows, general_payments, customer_expe
         created_at = entry.get('created_at')
         if existing_date is None or (created_at and created_at > existing_date):
             bucket['latest_invoice_date'] = created_at
+    existing_ids = {bucket['customer_id'] for bucket in grouped.values() if bucket.get('customer_id')}
+    missing_expense_ids = [cid for cid in customer_expenses.keys() if cid and cid not in existing_ids]
+    missing_lookup = {}
+    if missing_expense_ids:
+        customer_rows = customer.query.filter(customer.id.in_(missing_expense_ids)).all()
+        missing_lookup = {row.id: row for row in customer_rows}
+    for cid in missing_expense_ids:
+        cust_obj = missing_lookup.get(cid)
+        grouped[cid] = {
+            'customer_id': cid,
+            'customer': cust_obj.name if cust_obj else 'Customer',
+            'company': cust_obj.company if cust_obj else None,
+            'total': 0.0,
+            'paid': 0.0,
+            'expenses': 0.0,
+            'invoice_count': 0,
+            'latest_invoice_date': None,
+        }
+
     for bucket in grouped.values():
         cust_id = bucket.get('customer_id')
         general = general_payments.get(cust_id)
@@ -1206,7 +1229,16 @@ def _group_outstanding_by_customer(invoice_rows, general_payments, customer_expe
         bucket['balance'] = max(total_due - bucket['paid'], 0.0)
 
     result = list(grouped.values())
-    result.sort(key=lambda row: row['balance'], reverse=True)
+    sort_key_map = {
+        'invoices': lambda r: r['invoice_count'],
+        'balance': lambda r: r['balance'],
+        'expenses': lambda r: r['expenses'],
+        'paid': lambda r: r['paid'],
+        'invoiced': lambda r: r['total'],
+    }
+    sort_field = sort_key_map.get(sort_by, sort_key_map['balance'])
+    reverse = (sort_dir.lower() != 'asc')
+    result.sort(key=sort_field, reverse=reverse)
     return result
 
 
@@ -1320,6 +1352,13 @@ def _persist_accounting_transaction(form):
 # Accounting dashboard
 @app.route('/accounting', methods=['GET', 'POST'])
 def accounting_dashboard():
+    sort_by = (request.args.get('sort') or 'balance').lower()
+    sort_dir = (request.args.get('dir') or 'desc').lower()
+    if sort_by not in {'balance', 'expenses', 'paid', 'invoices', 'invoiced'}:
+        sort_by = 'balance'
+    if sort_dir not in {'asc', 'desc'}:
+        sort_dir = 'desc'
+
     if request.method == 'POST':
         error = _persist_accounting_transaction(request.form)
         if error:
@@ -1329,7 +1368,7 @@ def accounting_dashboard():
             flash('Transaction recorded successfully.', 'success')
         return redirect(url_for('accounting_dashboard'))
 
-    totals = _accounting_totals()
+    totals = _accounting_totals(sort_by=sort_by, sort_dir=sort_dir)
     outstanding = totals['outstanding_entries']
     customers_list = customer.alive().order_by(customer.name.asc()).all()
     recent_transactions = (
@@ -1361,6 +1400,8 @@ def accounting_dashboard():
         invoice_choices=invoice_choices,
         payment_modes=payment_modes,
         account_options=account_options,
+        current_sort=sort_by,
+        current_dir=sort_dir,
     )
 
 

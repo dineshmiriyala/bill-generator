@@ -1,4 +1,21 @@
 {% extends 'base.html' %}
+{% macro sort_link(label, field) %}
+  {% set is_active = current_sort == field %}
+  {% if is_active %}
+    {% set icon = '↑' if current_dir == 'asc' else '↓' %}
+    {% set next_dir = 'desc' if current_dir == 'asc' else 'asc' %}
+  {% else %}
+    {% set icon = '' %}
+    {% set next_dir = 'desc' %}
+  {% endif %}
+  <a href="{{ url_for('accounting_dashboard', sort=field, dir=next_dir) }}"
+     class="text-decoration-none text-muted fw-semibold">
+    {{ label }}
+    {% if icon %}
+      <span class="ms-1">{{ icon }}</span>
+    {% endif %}
+  </a>
+{% endmacro %}
 {% block content %}
 <div class="container-fluid py-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
@@ -71,11 +88,11 @@
             <thead class="table-light text-muted text-uppercase small">
               <tr>
                 <th>Customer</th>
-                <th class="text-center">Invoices</th>
-                <th class="text-end">Invoiced</th>
-                <th class="text-end">Paid</th>
-                <th class="text-end">Expenses</th>
-                <th class="text-end">Balance</th>
+                <th class="text-center">{{ sort_link('Invoices', 'invoices') }}</th>
+                <th class="text-end">{{ sort_link('Invoiced', 'invoiced') }}</th>
+                <th class="text-end">{{ sort_link('Paid', 'paid') }}</th>
+                <th class="text-end">{{ sort_link('Expenses', 'expenses') }}</th>
+                <th class="text-end">{{ sort_link('Balance', 'balance') }}</th>
               </tr>
             </thead>
             <tbody>
