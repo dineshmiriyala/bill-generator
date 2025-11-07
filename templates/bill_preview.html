@@ -52,6 +52,11 @@
       .accent-text {
         color: var(--brand-accent);
       }
+      .auto-shrink-line {
+        display: inline-block;
+        max-width: 100%;
+        white-space: nowrap;
+      }
       @media print {
         .brand-logo {
           height: calc(var(--hdr-fs) * 4) !important;
@@ -157,7 +162,7 @@
                     Cell: {{ app_info['business']['phone'] }}<br>
                     email: {{ app_info['business']['email'] }}<br>
                 </p>
-                <small class="text-muted footer-note">{{ app_info['bill_config']['footer'] }}</small>
+                <small class="text-muted footer-note auto-shrink-line">{{ app_info['bill_config']['footer'] }}</small>
             </div>
             <div class="col-sm-6 text-end">
                 <h5>To:</h5>
@@ -226,7 +231,7 @@
         </div>
 
         <div class="mt-3 text-end">
-          <small class="text-muted footer-note">{{ app_info['bill_config']['payment-footer'] }}</small>
+          <small class="text-muted footer-note auto-shrink-line">{{ app_info['bill_config']['payment-footer'] }}</small>
         </div>
 
         <div class="row mt-5">
@@ -295,6 +300,33 @@
       el.textContent = formatINR(v);
     });
   })();
+</script>
+
+<script>
+  function shrinkAutoLines() {
+    const targets = document.querySelectorAll('.auto-shrink-line');
+    targets.forEach(function(el) {
+      const parent = el.parentElement;
+      if (!parent) {
+        return;
+      }
+      const baseSize = el.dataset.baseFontSize || window.getComputedStyle(el).fontSize;
+      el.dataset.baseFontSize = baseSize;
+      el.style.fontSize = baseSize;
+      let currentSize = parseFloat(baseSize);
+      const minSize = 8;
+      const maxIterations = 40;
+      let iterations = 0;
+      while (el.scrollWidth > parent.clientWidth && currentSize > minSize && iterations < maxIterations) {
+        currentSize -= 0.5;
+        el.style.fontSize = currentSize + 'px';
+        iterations += 1;
+      }
+    });
+  }
+  window.addEventListener('load', shrinkAutoLines);
+  window.addEventListener('resize', shrinkAutoLines);
+  window.addEventListener('beforeprint', shrinkAutoLines);
 </script>
 
 <script>

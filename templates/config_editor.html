@@ -5,6 +5,16 @@
   {'value': 'blue', 'label': 'Blue', 'hex': '#1b4ea0'}
 ] %}
 {% set current_logo_mode = app_info['business'].get('logo_color_mode', 'black') %}
+{% set supabase_info = app_info.get('supabase', {}) %}
+{% set visual_size_fields = [
+  {'key': 'header', 'label': 'Bill Heading'},
+  {'key': 'customer', 'label': 'From & To'},
+  {'key': 'invoice_info', 'label': 'Invoice Meta'},
+  {'key': 'table', 'label': 'Items Table'},
+  {'key': 'totals', 'label': 'Totals'},
+  {'key': 'payment', 'label': 'Payment Info'},
+  {'key': 'footer', 'label': 'Footer & Notes'}
+] %}
 <style>
   .logo-color-picker {
     display: flex;
@@ -55,6 +65,14 @@
   .logo-color-chip:focus-within {
     outline: none;
     box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+  }
+  .visual-size-grid label {
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .visual-size-grid .form-range {
+    height: 2.2rem;
   }
 </style>
 <div class="container py-5">
@@ -112,29 +130,33 @@
               <dt class="col-sm-4">Established</dt>
               <dd class="col-sm-8 text-muted">{{ app_info['business']['estd'] }}</dd>
             </dl>
-            <div class="mt-3">
-              <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-                <div>
-                  <span class="text-uppercase text-muted small">Watermark Color</span>
-                  <div class="fw-semibold text-capitalize">{{ current_logo_mode }}</div>
-                </div>
-                <form method="post" action="{{ url_for('config') }}" class="logo-color-picker align-items-center">
-                  <input type="hidden" name="section" value="business">
-                  {% for option in logo_color_options %}
-                    <button type="submit"
-                            name="logo_color_mode"
-                            value="{{ option.value }}"
-                            class="logo-color-chip {% if current_logo_mode == option.value %}active{% endif %}"
-                            aria-label="Use {{ option.label }} watermark">
-                      <span class="color-dot" style="background: {{ option.hex }};">
-                        <span class="checkmark">✓</span>
-                      </span>
-                      <span class="chip-label">{{ option.label }}</span>
-                    </button>
-                  {% endfor %}
-                </form>
-              </div>
+          </div>
+        </div>
+
+        <!-- Invoice Visual Settings Section -->
+        <div class="card mb-4 shadow-sm border-0 position-relative" style="background: #f8f9fa; border-radius: 1rem;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <h4 class="fw-semibold mb-3 text-primary">Invoice Visual Settings</h4>
+              <button type="button" class="btn btn-sm btn-light rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#invoiceVisualModal" style="min-width: 70px;">Edit</button>
             </div>
+            <dl class="row mb-0">
+              <dt class="col-sm-4">Watermark Color</dt>
+              <dd class="col-sm-8 text-muted text-capitalize">{{ current_logo_mode }}</dd>
+              <dt class="col-sm-4">Font Sizes</dt>
+              <dd class="col-sm-8 text-muted">
+                <div class="row">
+                  {% for field in visual_size_fields %}
+                    <div class="col-md-6 mb-1">
+                      <div class="d-flex justify-content-between small">
+                        <span>{{ field.label }}</span>
+                        <span>{{ layout_sizes.get(field.key, 12) }}px</span>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </dd>
+            </dl>
           </div>
         </div>
 
@@ -254,11 +276,11 @@
             </div>
             <dl class="row mb-0">
               <dt class="col-sm-4">URL</dt>
-              <dd class="col-sm-8 text-muted">{{ app_info['supabase']['url'] }}</dd>
+              <dd class="col-sm-8 text-muted">{{ supabase_info.get('url') }}</dd>
               <dt class="col-sm-4">API Key</dt>
               <dd class="col-sm-8 text-muted">************</dd>
               <dt class="col-sm-4">Last Uploaded to Cloud</dt>
-              <dd class="col-sm-8 text-muted">{{ app_info['supabase']['last_uploaded'] }}</dd>
+              <dd class="col-sm-8 text-muted">{{ supabase_info.get('last_uploaded') }}</dd>
             </dl>
           </div>
         </div>
@@ -294,10 +316,6 @@
                         <dd class="text-muted">{{ app_info['business']['upi_id'] }}</dd>
                         <dt>Established</dt>
                         <dd class="text-muted">{{ app_info['business']['estd'] }}</dd>
-                        <dt>Watermark Color</dt>
-                        <dd class="text-muted text-capitalize">
-                          {{ app_info['business'].get('logo_color_mode', 'black') }}
-                        </dd>
                       </dl>
                     </div>
                     <div class="col-md-6">
@@ -333,26 +351,64 @@
                         <label class="form-label">Established</label>
                         <input type="text" name="estd" class="form-control" value="{{ app_info['business']['estd'] }}">
                       </div>
-                      <div class="mb-3">
-                        <label class="form-label">Watermark Color</label>
-                        <div class="logo-color-picker">
-                          {% for option in logo_color_options %}
-                            <label class="logo-color-chip {% if current_logo_mode == option.value %}active{% endif %}">
-                              <input type="radio"
-                                     name="logo_color_mode"
-                                     value="{{ option.value }}"
-                                     class="visually-hidden"
-                                     {% if current_logo_mode == option.value %}checked{% endif %}>
-                              <span class="color-dot" style="background: {{ option.hex }};">
-                                <span class="checkmark">✓</span>
-                              </span>
-                              <span class="chip-label">{{ option.label }}</span>
-                            </label>
-                          {% endfor %}
-                        </div>
-                        <div class="form-text">Controls the watermark tint used inside the invoice preview.</div>
-                      </div>
                     </div>
+                  </div>
+                </div>
+                <div class="modal-footer border-0">
+                  <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary rounded-pill px-4">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Invoice Visual Modal -->
+        <div class="modal fade" id="invoiceVisualModal" tabindex="-1" aria-labelledby="invoiceVisualModalLabel" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 1rem;">
+              <form method="post" autocomplete="off" action="{{ url_for('config') }}">
+                <input type="hidden" name="section" value="invoice_visual">
+                <div class="modal-header border-0">
+                  <h5 class="modal-title fw-semibold" id="invoiceVisualModalLabel">Invoice Visual Settings</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="mb-4">
+                    <label class="form-label">Watermark Color</label>
+                    <div class="logo-color-picker">
+                      {% for option in logo_color_options %}
+                        <label class="logo-color-chip {% if current_logo_mode == option.value %}active{% endif %}">
+                          <input type="radio"
+                                 name="logo_color_mode"
+                                 value="{{ option.value }}"
+                                 class="visually-hidden"
+                                 {% if current_logo_mode == option.value %}checked{% endif %}>
+                          <span class="color-dot" style="background: {{ option.hex }};">
+                            <span class="checkmark">✓</span>
+                          </span>
+                          <span class="chip-label">{{ option.label }}</span>
+                        </label>
+                      {% endfor %}
+                    </div>
+                  </div>
+                  <div class="visual-size-grid row g-4">
+                    {% for field in visual_size_fields %}
+                      <div class="col-md-6">
+                        <label class="form-label text-muted small">{{ field.label }}</label>
+                        <input type="range"
+                               class="form-range visual-size-slider"
+                               name="{{ field.key }}"
+                               min="8"
+                               max="36"
+                               value="{{ layout_sizes.get(field.key, 12) }}"
+                               data-display="{{ field.key }}Display">
+                        <div class="d-flex justify-content-between small text-muted">
+                          <span>8px</span>
+                          <span id="{{ field.key }}Display">{{ layout_sizes.get(field.key, 12) }}px</span>
+                        </div>
+                      </div>
+                    {% endfor %}
                   </div>
                 </div>
                 <div class="modal-footer border-0">
@@ -507,7 +563,7 @@
           <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content" style="border-radius: 1rem;">
               <form method="post" autocomplete="off" action="{{ url_for('config') }}">
-                <input type="hidden" name="section" value="Cloud Settings">
+                <input type="hidden" name="section" value="supabase">
                 <div class="modal-header border-0">
                   <h5 class="modal-title fw-semibold" id="supabasemodellabel">Edit Cloud Auth</h5>
                   <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -517,25 +573,25 @@
                     <div class="col-md-6">
                       <dl>
                         <dt>URL</dt>
-                        <dd class="text-muted">{{ app_info['supabase']['url'] }}</dd>
+                        <dd class="text-muted">{{ supabase_info.get('url') }}</dd>
                         <dt>Key</dt>
                         <dd class="text-muted">************</dd>
                         <dt>Last Uploaded</dt>
-                        <dd class="text-muted">{{ app_info['supabase']['last_uploaded'] }}</dd>
+                        <dd class="text-muted">{{ supabase_info.get('last_uploaded') }}</dd>
                       </dl>
                     </div>
                     <div class="col-md-6">
                       <div class="mb-3">
                         <label class="form-label">URL</label>
-                        <input type="text" name="url" class="form-control" value="{{ app_info['supabase']['url'] }}">
+                        <input type="text" name="url" class="form-control" value="{{ supabase_info.get('url', '') }}">
                       </div>
                       <div class="mb-3">
                         <label class="form-label">API Key</label>
-                        <input type="password" name="key" class="form-control" value="{{ app_info['supabase']['key'] }}">
+                        <input type="password" name="key" class="form-control" value="{{ supabase_info.get('key', '') }}">
                       </div>
                       <div class="mb-3">
                         <label class="form-label">Last Uploaded</label>
-                        <input type="text" name="last_uploaded" class="form-control" value="{{ app_info['supabase']['last_uploaded'] }}" readonly>
+                        <input type="text" name="last_uploaded" class="form-control" value="{{ supabase_info.get('last_uploaded', '') }}" readonly>
                       </div>
                     </div>
                   </div>
@@ -676,5 +732,31 @@
   </form>
 </div>
 
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.visual-size-slider').forEach(function (slider) {
+      const targetId = slider.getAttribute('data-display');
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (!target) {
+        return;
+      }
+      const sync = () => target.textContent = slider.value + 'px';
+      slider.addEventListener('input', sync);
+    });
+
+    document.querySelectorAll('.logo-color-chip input[type="radio"]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        document.querySelectorAll('.logo-color-chip').forEach(function (chip) {
+          chip.classList.remove('active');
+        });
+        const parent = radio.closest('.logo-color-chip');
+        if (parent) {
+          parent.classList.add('active');
+        }
+      });
+    });
+  });
+</script>
 
 {% endblock %}

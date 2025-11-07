@@ -49,7 +49,7 @@ Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Boots
 - Analytics dashboard summarising trends by day, month, year, weekday, and top customers using precomputed aggregates.
 
 ### Document Layout and Rendering
-- Live preview (`/test-pre-preview`) and layout editor allow tuning of section font sizes stored in the database (`layoutConfig`).
+- Configurable “Invoice Visual Settings” (Config → Invoice Visual Settings) let you tune watermark colour and section font sizes stored in the database (`layoutConfig`).
 - Print-ready HTML templates for invoice previews and final statements.
 - Optional exclusion of customer contact details on rendered invoices.
 
@@ -131,7 +131,7 @@ The script installs/updates dependencies, clears previous artefacts, and emits `
 4. **Edit or delete invoices** with admin privileges only. Edits respect previous rounding choices and preserve totals on reload.
 5. **Statements:** Use `/statements` (date range) or `/statements_company` (per customer) to review totals and export data.
 6. **Analytics:** `/analytics` surfaces trends, retention, and top customers for monitoring business health.
-7. **Layouts:** `/test-pre-preview` lets you adjust font sizes for invoice sections; settings persist through `layoutConfig`.
+7. **Invoice visuals:** Use the Config → Invoice Visual Settings panel to update watermark colour and section font sizes (persisted via `layoutConfig`).
 
 ## Data Management and Recovery
 

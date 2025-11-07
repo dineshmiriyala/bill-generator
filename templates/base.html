@@ -88,7 +88,7 @@
       </div>
 
       <!-- GitHub-style "+" Dropdown -->
-      <div class="dropdown">
+      <div class="dropdown me-2">
         <button class="btn btn-sm" type="button" id="newDropdown" data-bs-toggle="dropdown" aria-expanded="false"
                 style="background-color: #21262d; border: 1px solid #30363d; color: #f0f6fc; font-size: 1.3rem; line-height: 1;">
           +
@@ -99,6 +99,11 @@
           <li><a class="dropdown-item" href="/add_inventory">New Inventory Item</a></li>
         </ul>
       </div>
+      <a href="{{ url_for('config') }}"
+         class="btn btn-sm d-flex align-items-center justify-content-center"
+         style="width: 40px; height: 40px; background-color: #21262d; border: 1px solid #30363d; color: #f0f6fc;">
+        <img src="{{ url_for('static', filename='logos/config.svg') }}" alt="Settings" style="width: 18px; height: 18px; filter: invert(1) brightness(2);">
+      </a>
     </div>
   </div>
 </nav>
@@ -180,7 +185,6 @@
     { name: "Add Item", url: "/add_inventory" },
     { name: "Statements (Date-wise)", url: "/statements" },
     { name: "Company Statements", url: "/statements_company" },
-    { name: "Invoice Layout Editor", url: "/test-pre-preview" },
     { name: "Data Recovery", url: "/recover" },
     { name: "Home", url: "/" },
     { name: "Analytics", url: "/analytics" },

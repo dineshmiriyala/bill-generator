@@ -939,6 +939,8 @@ def home():
 @app.route('/config', methods=['GET', 'POST'])
 def config():
     info_path = get_info_json_path()
+    layout_config = layoutConfig.get_or_create()
+    layout_sizes = layout_config.get_sizes()
 
     # --- Load existing info.json ---
     with open(info_path, 'r', encoding='utf-8') as f:
@@ -949,6 +951,12 @@ def config():
         app_info = {}
     if 'file_location' not in app_info:
         app_info['file_location'] = ''
+    # Merge legacy Cloud Settings block into supabase if present
+    legacy_cloud = app_info.pop('Cloud Settings', None)
+    if legacy_cloud:
+        supabase_section = app_info.setdefault('supabase', {})
+        if isinstance(legacy_cloud, dict):
+            supabase_section.update(legacy_cloud)
 
     # --- Handle POST (Save Changes) ---
     if request.method == 'POST':
@@ -967,9 +975,41 @@ def config():
         if section == 'file_location':
             new_path = updates.get('file_location') or updates.get('value') or ''
             app_info['file_location'] = new_path.strip()
+        elif section == 'invoice_visual':
+            business_section = app_info.setdefault('business', {})
+            color_mode = (updates.get('logo_color_mode') or '').lower()
+            if color_mode:
+                business_section['logo_color_mode'] = color_mode
+
+            size_fields = ('header', 'customer', 'invoice_info', 'table', 'totals', 'payment', 'footer')
+            sizes_changed = False
+            for field in size_fields:
+                raw_value = request.form.get(field)
+                if raw_value is None:
+                    continue
+                try:
+                    new_value = int(raw_value)
+                except (TypeError, ValueError):
+                    continue
+                if layout_sizes.get(field) != new_value:
+                    layout_sizes[field] = new_value
+                    sizes_changed = True
+            if sizes_changed:
+                layout_config.set_sizes(layout_sizes)
+                db.session.commit()
         elif section in app_info:
             if isinstance(app_info[section], dict):
-                app_info[section].update(updates)
+                target_section = app_info[section]
+                filtered_updates = {}
+                for key, new_value in updates.items():
+                    existing_value = target_section.get(key)
+                    if isinstance(existing_value, str) and new_value == existing_value:
+                        continue
+                    if new_value == '' and key in target_section:
+                        continue
+                    filtered_updates[key] = new_value
+                if filtered_updates:
+                    target_section.update(filtered_updates)
             elif isinstance(app_info[section], list):
                 # handle lists (e.g., services textarea)
                 lines = updates.get('services', '').splitlines()
@@ -1000,7 +1040,8 @@ def config():
     # --- Default (GET) view ---
     return render_template('config_editor.html', app_info=app_info,
                            last_updated=info_data['last_updated'],
-                           created_on=info_data['created_on'])
+                           created_on=info_data['created_on'],
+                           layout_sizes=layout_sizes)
 
 
 @app.route('/config/refresh', methods=['POST'])
@@ -2109,165 +2150,6 @@ def latest_bill_preview():
         brand_watermark_path=brand_watermark_path,
         brand_accent_color=brand_accent_color,
     )
-
-
-# --- Common builder for sample invoice context ---
-
-def _build_sample_invoice_context():
-    # Get the most recent invoice
-    recent_invoice = invoice.query.order_by(invoice.createdAt.desc()).first()
-
-    if not recent_invoice:
-        # Fallback if no invoice exists
-        fallback_created_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        return {
-            "invoice": type("Invoice", (),
-                            {"invoiceId": "NO_DATA", "createdAt": fallback_created_at, "totalAmount": 0.0})(),
-            "customer": {},
-            "items": [],
-            "dcno": False,
-            "dc_numbers": [],
-            "total_in_words": "",
-            "sizes": layoutConfig().get_or_create().get_sizes(),
-            "rows": 0,
-            "persistent_notice": session.get("persistent_notice"),
-            "brand_watermark_path": _resolve_brand_watermark_path(APP_INFO.get("business")),
-            "brand_accent_color": _resolve_brand_accent_color(APP_INFO.get("business")),
-        }
-
-    # Get customer info
-    cust = customer.query.get(recent_invoice.customerId)
-
-    # Get items from invoiceItem joined with item
-    line_items = invoiceItem.query.filter_by(invoiceId=recent_invoice.id).all()
-    items = []
-    for li in line_items:
-        itm = item.query.get(li.itemId)
-        items.append({
-            "name": itm.name if itm else "Unknown",
-            "hsn": "N/A",
-            "qty": li.quantity,
-            "rate": li.rate,
-            "discount": li.discount,
-            "tax": li.taxPercentage,
-            "amount": li.line_total
-        })
-
-    sample_items = [
-        (i["name"], i["hsn"], i["qty"], i["rate"], i["discount"], i["tax"], i["amount"])
-        for i in items
-    ]
-
-    # Delivery challan toggle
-    dcno = session.get("dc_enabled", False)
-    dc_numbers = [i.dc_number for i in items if hasattr(i, "dc_number")] if dcno else []
-
-    # Layout sizes
-    current_sizes = layoutConfig().get_or_create().get_sizes()
-
-    return {
-        "invoice": recent_invoice,
-        "customer": {
-            "company": getattr(cust, "company", ""),
-            "address": getattr(cust, "address", ""),
-            "gst": getattr(cust, "gst", ""),
-            "phone": getattr(cust, "phone", ""),
-            "email": getattr(cust, "email", ""),
-        },
-        "items": sample_items,
-        "dcno": dcno,
-        "dc_numbers": dc_numbers,
-        "total_in_words": recent_invoice.total_in_words if hasattr(recent_invoice, "total_in_words") else "",
-        "sizes": current_sizes,
-        "rows": len(sample_items),
-        "persistent_notice": session.get("persistent_notice"),
-        "brand_watermark_path": _resolve_brand_watermark_path(APP_INFO.get("business")),
-        "brand_accent_color": _resolve_brand_accent_color(APP_INFO.get("business")),
-    }
-
-
-# --- Unified Layout Handler ---
-def handle_layout(action=None, data=None):
-    config = layoutConfig().get_or_create()
-    updated = False
-
-    if action == "update" and data:
-        current_sizes = config.get_sizes()
-        updated = False
-        for k in ["header", "customer", "table", "totals", "payment", "footer", "invoice_info"]:
-            if k in data:
-                try:
-                    new_size = int(data[k])
-                    if current_sizes.get(k) != new_size:
-                        current_sizes[k] = new_size
-                        updated = True
-                except Exception:
-                    pass
-        if updated:
-            config.set_sizes(current_sizes)
-            db.session.commit()
-            session['persistent_notice'] = "Layout has been updated successfully!"
-
-    elif action == "reset":
-        config.reset_sizes()
-        db.session.commit()
-        session['persistent_notice'] = "Layout has been reset to defaults!"
-
-    return _build_sample_invoice_context()
-
-
-# --- Routes ---
-@app.route('/test-pre-preview', methods=['GET', 'POST'])
-def test_pre_preview():
-    upi_id = APP_INFO["upi_info"]["upi_id"]
-    company_name = APP_INFO["business"]["name"]
-    upi_name = APP_INFO["upi_info"]["upi_name"]
-
-    api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
-    params = {"upi_id": upi_id, "amount": "", "company_name": company_name}  # amount empty for preview
-
-    try:
-        resp = requests.get(api_url, params=params, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            upi_qr = data.get('qr_svg_base64')
-        else:
-            upi_qr = None
-    except Exception as e:
-        print(f"[ERROR] Failed to fetch QR for preview: {e}")
-        upi_qr = None
-
-    ctx = handle_layout(action="view")
-    return render_template(
-        'pre-preview-bill.html',
-        app_info=APP_INFO,
-        upi_qr=upi_qr,
-        **ctx
-    )
-
-
-@app.route('/pre-pre-preview', methods=['GET'])
-def test_pre_preview_():
-    try:
-        if session['persistent_notice']:
-            pass  # keep notice, just no backup check
-    except Exception:
-        pass
-    ctx = handle_layout(action="view")
-    return render_template("pre-preview-bill.html", app_info=APP_INFO, **ctx)
-
-
-@app.route('/update-layout', methods=['POST'])
-def update_layout():
-    data = request.get_json(force=True) if request.is_json else request.form
-    ctx = handle_layout(action="update", data=data)
-    return render_template("pre-preview-bill.html", **ctx)
-
-
-@app.route('/reset-layout', methods=['POST'])
-def reset_layout():
-    ctx = handle_layout(action="reset")
-    return render_template("pre-preview-bill.html", **ctx)
 
 
 app.jinja_env.globals.update(zip=zip)
