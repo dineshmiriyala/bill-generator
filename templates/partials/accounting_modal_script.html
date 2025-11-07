@@ -1,7 +1,8 @@
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    const txnTypeSelect = document.getElementById('txnType');
-    if (!txnTypeSelect) return;
+    const txnTypeIncome = document.getElementById('txnTypeIncome');
+    const txnTypeExpense = document.getElementById('txnTypeExpense');
+    if (!txnTypeIncome || !txnTypeExpense) return;
 
     const customerBlock = document.querySelector('[data-block="customer-fields"]');
     const invoiceBlock = document.querySelector('[data-block="invoice-fields"]');
@@ -9,6 +10,16 @@
     const expenseRepeater = document.getElementById('expenseItemsRepeater');
     const expenseTemplate = document.getElementById('expenseRowTemplate')?.content;
     const addExpenseBtn = document.getElementById('addExpenseRow');
+    const customerSelect = document.getElementById('customerSelect');
+    const businessExpenseId = document.getElementById('businessExpenseId')?.value || '';
+    const summaryBox = document.getElementById('customerSummaryBox');
+    const summaryTitle = document.getElementById('customerSummaryTitle');
+    const summaryValues = document.getElementById('customerSummaryValues');
+    const amountInput = document.getElementById('amountInput');
+    const amountInWords = document.getElementById('amountInWords');
+    const projectedBalance = document.getElementById('projectedBalance');
+    const fillBalanceBtn = document.getElementById('fillBalanceBtn');
+    const fillBalanceActions = document.getElementById('fillBalanceActions');
 
     function addExpenseRow() {
       if (!expenseTemplate || !expenseRepeater) return;
@@ -23,20 +34,114 @@
       expenseRepeater.appendChild(clone);
     }
 
+    function updateCustomerSummary(customerId) {
+      if (!summaryBox || !summaryTitle) return;
+      if (!customerId) {
+        summaryValues.innerHTML = '';
+        summaryBox.dataset.balance = '';
+        summaryTitle.textContent = 'Select a customer to view ledger summary.';
+        updateProjectedBalance();
+        return;
+      }
+      fetch(`/accounting/customer_summary/${customerId}`)
+        .then(resp => resp.ok ? resp.json() : Promise.reject())
+        .then(data => {
+          summaryTitle.textContent = `${data.customer_name}${data.company ? ' — ' + data.company : ''}`;
+          summaryValues.innerHTML = `
+            <div>Invoiced: &#8377; ${Number(data.total_invoiced).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+            <div>Paid: &#8377; ${Number(data.total_payments).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+            <div>Expenses: &#8377; ${Number(data.total_expenses).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+            <div>Balance: &#8377; ${Number(data.balance).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+          `;
+          summaryBox.dataset.balance = data.balance;
+          updateProjectedBalance();
+        })
+        .catch(() => {
+          summaryTitle.textContent = 'Unable to load summary.';
+          summaryValues.innerHTML = '';
+          summaryBox.dataset.balance = '';
+          updateProjectedBalance();
+        });
+    }
+
+    function updateAmountWords() {
+      if (!amountInput || !amountInWords) return;
+      const value = amountInput.value || '0';
+      fetch(`/accounting/amount_to_words?amount=${encodeURIComponent(value)}`)
+        .then(resp => resp.ok ? resp.json() : Promise.reject())
+        .then(data => {
+          amountInWords.textContent = data.words || '';
+        })
+        .catch(() => {
+          amountInWords.textContent = '';
+        });
+    }
+
+    function updateProjectedBalance() {
+      if (!projectedBalance || !summaryBox) return;
+      const currentBalance = parseFloat(summaryBox.dataset.balance || '0') || 0;
+      const amt = parseFloat(amountInput?.value || '0') || 0;
+      const isExpense = txnTypeExpense.checked;
+      let projected = currentBalance;
+      if (isExpense) {
+        projected = currentBalance + amt;
+      } else {
+        projected = currentBalance - amt;
+      }
+      projectedBalance.innerHTML = `&#8377; ${projected.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    }
+
     function toggleBlocks() {
-      const isExpense = txnTypeSelect.value === 'expense';
-      if (customerBlock) customerBlock.classList.toggle('d-none', false);
+      const isExpense = txnTypeExpense.checked;
+      if (customerBlock) customerBlock.classList.remove('d-none');
       if (invoiceBlock) invoiceBlock.classList.toggle('d-none', isExpense);
       if (expenseWrapper) expenseWrapper.classList.toggle('d-none', !isExpense);
+      if (isExpense && customerSelect && businessExpenseId) {
+        customerSelect.value = businessExpenseId;
+        updateCustomerSummary(businessExpenseId);
+      }
       if (isExpense && expenseRepeater && !expenseRepeater.children.length) {
         addExpenseRow();
       }
+      if (fillBalanceActions) {
+        fillBalanceActions.classList.toggle('d-none', isExpense);
+      }
+      updateProjectedBalance();
     }
 
     if (addExpenseBtn) {
       addExpenseBtn.addEventListener('click', addExpenseRow);
     }
-    txnTypeSelect.addEventListener('change', toggleBlocks);
+    txnTypeIncome.addEventListener('change', toggleBlocks);
+    txnTypeExpense.addEventListener('change', toggleBlocks);
     toggleBlocks();
+
+    if (customerSelect) {
+      customerSelect.addEventListener('change', function () {
+        updateCustomerSummary(this.value);
+      });
+    }
+    updateCustomerSummary(customerSelect?.value || '');
+
+    if (amountInput) {
+      amountInput.addEventListener('input', function () {
+        updateAmountWords();
+        updateProjectedBalance();
+      });
+      updateAmountWords();
+      updateProjectedBalance();
+    }
+
+    if (fillBalanceBtn) {
+      fillBalanceBtn.addEventListener('click', function () {
+        const currentBalance = parseFloat(summaryBox?.dataset.balance || '0') || 0;
+        if (txnTypeIncome.checked) {
+          amountInput.value = Math.max(currentBalance, 0).toFixed(2);
+        } else {
+          amountInput.value = Math.abs(currentBalance).toFixed(2);
+        }
+        amountInput.dispatchEvent(new Event('input'));
+      });
+    }
   });
 </script>

@@ -1397,7 +1397,7 @@ def accounting_dashboard():
         .options(joinedload(accountingTransaction.expense_items), joinedload(accountingTransaction.customer))
         .filter(accountingTransaction.is_deleted.is_(False))
         .order_by(accountingTransaction.created_at.desc())
-        .limit(20)
+        .limit(6)
         .all()
     )
 
@@ -1411,6 +1411,7 @@ def accounting_dashboard():
 
     payment_modes = ['cash', 'bank', 'upi']
     account_options = ['cash', 'savings', 'current']
+    business_expense_id = _ensure_business_expense_customer().id
 
     return render_template(
         'accounting.html',
@@ -1423,6 +1424,7 @@ def accounting_dashboard():
         account_options=account_options,
         current_sort=sort_by,
         current_dir=sort_dir,
+        business_expense_id=business_expense_id,
     )
 
 
@@ -1497,6 +1499,7 @@ def accounting_transactions_list():
             invoice_choices.append(inv)
     payment_modes = ['cash', 'bank', 'upi']
     account_options = ['cash', 'savings', 'current']
+    business_expense_id = _ensure_business_expense_customer().id
 
     return render_template(
         'accounting_transactions.html',
@@ -1510,6 +1513,7 @@ def accounting_transactions_list():
         invoice_choices=invoice_choices,
         payment_modes=payment_modes,
         account_options=account_options,
+        business_expense_id=business_expense_id,
     )
 
 
@@ -1531,6 +1535,70 @@ def accounting_transaction_detail(txn_id):
         return redirect(url_for('accounting_transactions_list'))
 
     return render_template('accounting_transaction_detail.html', txn=txn)
+
+
+def _customer_financial_snapshot(customer_id: int) -> dict:
+    total_invoiced, invoice_count = (
+        db.session.query(
+            func.coalesce(func.sum(invoice.totalAmount), 0.0),
+            func.count(invoice.id)
+        )
+        .filter(
+            invoice.customerId == customer_id,
+            invoice.isDeleted.is_(False)
+        )
+        .one()
+    )
+
+    total_payments = (
+        db.session.query(func.coalesce(func.sum(accountingTransaction.amount), 0.0))
+        .filter(
+            accountingTransaction.customerId == customer_id,
+            accountingTransaction.txn_type == 'income',
+            accountingTransaction.is_deleted.is_(False)
+        )
+        .scalar()
+        or 0.0
+    )
+
+    total_expenses = (
+        db.session.query(func.coalesce(func.sum(accountingTransaction.amount), 0.0))
+        .filter(
+            accountingTransaction.customerId == customer_id,
+            accountingTransaction.txn_type == 'expense',
+            accountingTransaction.is_deleted.is_(False)
+        )
+        .scalar()
+        or 0.0
+    )
+
+    balance = (total_invoiced + total_expenses) - total_payments
+
+    return {
+        'customer_id': customer_id,
+        'total_invoiced': float(total_invoiced or 0.0),
+        'invoice_count': int(invoice_count or 0),
+        'total_payments': float(total_payments or 0.0),
+        'total_expenses': float(total_expenses or 0.0),
+        'balance': float(balance),
+    }
+
+
+@app.route('/accounting/customer_summary/<int:customer_id>')
+def accounting_customer_summary(customer_id):
+    cust = customer.query.filter_by(id=customer_id, isDeleted=False).first()
+    if not cust:
+        return jsonify({'error': 'Customer not found'}), 404
+    summary = _customer_financial_snapshot(customer_id)
+    summary['customer_name'] = cust.name
+    summary['company'] = cust.company
+    return jsonify(summary)
+
+
+@app.route('/accounting/amount_to_words')
+def accounting_amount_to_words():
+    amount = request.args.get('amount', '0')
+    return jsonify({'words': amount_to_words(amount)})
 
 
 # customers page (temperory placeholder)
