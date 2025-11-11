@@ -133,7 +133,7 @@
         <div class="masthead mb-2">
           <h1 class="visually-hidden">{{ app_info['business']['name'] }} — ESTD: {{ app_info['business']['estd'] }}</h1>
           <img class="brand-logo"
-               src="/{{ app_info['business']['logo_path'] }}"
+               src="{{ url_for('static', filename=app_info['business']['logo_path'].replace('static/', '')) }}"
                alt="{{ app_info['business']['name'] }} — ESTD: {{ app_info['business']['estd'] }}">
           <h2 class="bill-heading">{{ app_info['bill_config']['heading'] }}</h2>
         </div>

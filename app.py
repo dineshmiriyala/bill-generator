@@ -14,6 +14,9 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from pathlib import Path
 from urllib.parse import urlparse
+import socket
+from waitress import serve
+import random
 
 import requests
 import stat
@@ -4211,4 +4214,17 @@ def supabase_sync_incremental():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=6969)
+    host = os.getenv('HOST', '0.0.0.0')
+    port = int(os.getenv('PORT', 5000))
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    try:
+        sock.bind((host, port))
+        sock.close()
+    except OSError as exc:
+        port = random.randint(5001, 5999)
+        print(f"Port 5000 busy, switching to port {port}")
+
+    print(f"Starting WSGI server on https://{host}:{port}")
+    serve(app, host=host, port=port)
