@@ -1517,7 +1517,7 @@ def accounting_quick_clear(customer_id):
     db.session.add(txn)
     try:
         db.session.commit()
-        flash(f"Cleared ₹{balance:,.2f} for {cust.name}.", 'success')
+        flash(f"Cleared INR: {balance:,.2f} for {cust.name}.", 'success')
     except Exception as exc:
         db.session.rollback()
         flash(f"Unable to clear dues: {exc}", 'danger')
@@ -4211,4 +4211,4 @@ def supabase_sync_incremental():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=6969)
