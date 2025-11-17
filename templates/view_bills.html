@@ -39,6 +39,7 @@
             <th class="fw-semibold">Customer</th>
             <th class="fw-semibold text-end" style="width:120px;">Total (INR)</th>
             <th class="fw-semibold text-center" style="width:110px;">Items</th>
+            <th class="fw-semibold text-center" style="width:140px;">Mark Paid</th>
             <th class="fw-semibold text-center" style="width:90px;">View</th>
           </tr>
         </thead>
@@ -57,12 +58,27 @@
                 View Items
               </button>
             </td>
+            <td class="text-center">
+              {% if bill.is_paid %}
+                <span class="badge bg-success-subtle text-success fw-semibold px-3 py-2 rounded-pill d-inline-flex align-items-center justify-content-center gap-1">
+                  ✓ Paid
+                </span>
+              {% else %}
+                <form method="POST" action="{{ url_for('mark_bill_paid', invoice_no=bill.invoice_no) }}" class="d-inline">
+                  <input type="hidden" name="source" value="view_bills">
+                  <input type="hidden" name="next" value="{{ mark_paid_redirect }}">
+                  <button type="submit" class="btn btn-sm btn-success rounded-pill shadow-none fw-semibold px-3">
+                    Mark as Paid
+                  </button>
+                </form>
+              {% endif %}
+            </td>
             <td class="text-center" style="white-space: nowrap;">
               <a href="{{ url_for('view_bill_locked', invoicenumber=bill.invoice_no) }}" class="text-primary fw-semibold text-decoration-none" style="font-size:0.95rem; user-select:none;">View →</a>
             </td>
           </tr>
           <tr class="items-row" id="items-row-{{ bill.invoice_no }}" style="display:none;">
-            <td colspan="6" class="p-3 bg-light rounded-3" style="background:#f8f9fa;">
+            <td colspan="7" class="p-3 bg-light rounded-3" style="background:#f8f9fa;">
               <div class="table-responsive" style="overflow-x:auto;">
                 <table class="table table-sm mb-0" style="color:#666;">
                   <thead>

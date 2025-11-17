@@ -42,6 +42,7 @@ class invoice(db.Model):
     exclude_phone = db.Column(db.Boolean, default=False)
     exclude_gst = db.Column(db.Boolean, default=False)
     exclude_addr = db.Column(db.Boolean, default=False)
+    payment = db.Column(db.Boolean, nullable=False, default=False, index=True)
 
     @classmethod
     def alive(cls):

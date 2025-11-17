@@ -83,6 +83,12 @@ def migrate_db(db_path):
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS ix_expense_item_transactionId ON expense_item(transactionId);")
 
+        cursor.execute("PRAGMA table_info(invoice);")
+        invoice_columns = [row[1] for row in cursor.fetchall()]
+        if 'payment' not in invoice_columns:
+            print("[Migration] Adding missing column: invoice.payment")
+            cursor.execute("ALTER TABLE invoice ADD COLUMN payment INTEGER NOT NULL DEFAULT 0;")
+
         conn.commit()
         print("[Migration] DB schema is up-to-date.")
     except Exception as e:

@@ -1184,7 +1184,10 @@ def _outstanding_invoice_rows():
         )
         .join(customer, invoice.customerId == customer.id)
         .outerjoin(payments_subq, payments_subq.c.invoice_no == invoice.invoiceId)
-        .filter(invoice.isDeleted.is_(False))
+        .filter(
+            invoice.isDeleted.is_(False),
+            or_(invoice.payment.is_(False), invoice.payment.is_(None))
+        )
         .order_by(invoice.createdAt.desc())
     )
 
@@ -1336,7 +1339,9 @@ def _ensure_business_expense_customer():
     return cust
 
 
-def _persist_accounting_transaction(form):
+def _persist_accounting_transaction(form, existing_txn=None):
+    previous_invoice_no = existing_txn.invoice_no if existing_txn else None
+    previous_txn_type = existing_txn.txn_type if existing_txn else None
     txn_type = (form.get('txn_type') or 'income').strip().lower()
     if txn_type not in ('income', 'expense'):
         txn_type = 'income'
@@ -1366,6 +1371,7 @@ def _persist_accounting_transaction(form):
         customer_obj = _ensure_business_expense_customer()
 
     invoice_no = (form.get('invoice_no') or '').strip() or None
+    invoice_obj = None
     if invoice_no:
         invoice_obj = invoice.query.filter_by(invoiceId=invoice_no).first()
         if not invoice_obj:
@@ -1390,19 +1396,36 @@ def _persist_accounting_transaction(form):
         txn_kwargs['created_at'] = txn_created_at
         txn_kwargs['updated_at'] = txn_created_at
 
-    txn = accountingTransaction(
-        customerId=customer_obj.id if customer_obj else None,
-        amount=float(amount_decimal),
-        txn_type=txn_type,
-        mode=(form.get('mode') or '').strip().lower() or 'cash',
-        account=(form.get('account') or '').strip().lower() or 'cash',
-        invoice_no=invoice_no,
-        remarks=(form.get('remarks') or '').strip() or None,
-        **txn_kwargs
-    )
+    txn = existing_txn
+    if txn:
+        txn.customerId = customer_obj.id if customer_obj else None
+        txn.amount = float(amount_decimal)
+        txn.txn_type = txn_type
+        txn.mode = (form.get('mode') or '').strip().lower() or 'cash'
+        txn.account = (form.get('account') or '').strip().lower() or 'cash'
+        txn.invoice_no = invoice_no
+        txn.remarks = (form.get('remarks') or '').strip() or None
+        if txn_created_at:
+            txn.created_at = txn_created_at
+        txn.updated_at = datetime.now(timezone.utc)
+        db.session.flush()
+    else:
+        txn = accountingTransaction(
+            customerId=customer_obj.id if customer_obj else None,
+            amount=float(amount_decimal),
+            txn_type=txn_type,
+            mode=(form.get('mode') or '').strip().lower() or 'cash',
+            account=(form.get('account') or '').strip().lower() or 'cash',
+            invoice_no=invoice_no,
+            remarks=(form.get('remarks') or '').strip() or None,
+            **txn_kwargs
+        )
+        db.session.add(txn)
+        db.session.flush()
 
-    db.session.add(txn)
-    db.session.flush()
+    if existing_txn:
+        for entry in list(existing_txn.expense_items):
+            db.session.delete(entry)
 
     if txn_type == 'expense':
         descriptions = form.getlist('expense_desc[]')
@@ -1426,12 +1449,41 @@ def _persist_accounting_transaction(form):
             )
             db.session.add(expense_entry)
 
+    invoices_to_sync = set()
+    if txn_type == 'income' and invoice_no:
+        invoices_to_sync.add(invoice_no)
+    if previous_txn_type == 'income' and previous_invoice_no:
+        invoices_to_sync.add(previous_invoice_no)
+
+    for inv_code in invoices_to_sync:
+        _sync_invoice_payment_flag(inv_code)
+
     try:
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
         return f"Unable to record transaction: {exc}"
     return None
+
+
+def _sync_invoice_payment_flag(invoice_code: Optional[str]):
+    if not invoice_code:
+        return
+    target_invoice = invoice.query.filter_by(invoiceId=invoice_code, isDeleted=False).first()
+    if not target_invoice:
+        return
+    paid_amount = (
+        db.session.query(func.coalesce(func.sum(accountingTransaction.amount), 0.0))
+        .filter(
+            accountingTransaction.invoice_no == invoice_code,
+            accountingTransaction.txn_type == 'income',
+            accountingTransaction.is_deleted.is_(False)
+        )
+        .scalar()
+        or 0.0
+    )
+    invoice_total = float(target_invoice.totalAmount or 0.0)
+    target_invoice.payment = paid_amount >= max(invoice_total, 0.0) - 0.01
 
 
 # Accounting dashboard
@@ -1518,6 +1570,13 @@ def accounting_quick_clear(customer_id):
         remarks='Quick clear via dashboard',
     )
     db.session.add(txn)
+    cleared_invoices = (
+        invoice.query
+        .filter(invoice.customerId == customer_id, invoice.isDeleted.is_(False))
+        .all()
+    )
+    for inv in cleared_invoices:
+        inv.payment = True
     try:
         db.session.commit()
         flash(f"Cleared INR: {balance:,.2f} for {cust.name}.", 'success')
@@ -1633,11 +1692,88 @@ def accounting_transaction_detail(txn_id):
             flash('Transaction already archived.', 'warning')
         else:
             txn.is_deleted = True
+            invoice_code = txn.invoice_no if txn.txn_type == 'income' else None
+            _sync_invoice_payment_flag(invoice_code)
             db.session.commit()
             flash('Transaction deleted successfully.', 'success')
         return redirect(url_for('accounting_transactions_list'))
 
     return render_template('accounting_transaction_detail.html', txn=txn)
+
+
+@app.route('/accounting/transactions/<int:txn_id>/edit', methods=['GET', 'POST'])
+def accounting_transaction_edit(txn_id):
+    txn = (
+        accountingTransaction.query
+        .options(joinedload(accountingTransaction.customer), joinedload(accountingTransaction.expense_items))
+        .get_or_404(txn_id)
+    )
+    if txn.is_deleted:
+        flash('Cannot edit an archived transaction.', 'warning')
+        return redirect(url_for('accounting_transaction_detail', txn_id=txn_id))
+
+    customers_list = customer.alive().order_by(customer.name.asc()).all()
+    invoice_choices = []
+    seen = set()
+    for row in _outstanding_invoice_rows():
+        inv = row.get('invoice_no')
+        if inv and inv not in seen:
+            seen.add(inv)
+            invoice_choices.append(inv)
+    if txn.invoice_no and txn.invoice_no not in invoice_choices:
+        invoice_choices.append(txn.invoice_no)
+    payment_modes = ['cash', 'bank', 'upi']
+    account_options = ['cash', 'savings', 'current']
+    business_expense_id = _ensure_business_expense_customer().id
+
+    form_data = None
+    expense_rows = []
+
+    def _build_expense_rows(source_form):
+        if not source_form:
+            rows = [
+                {
+                    'desc': (item.description or ''),
+                    'amount': '' if item.amount is None else f"{item.amount:.2f}"
+                }
+                for item in txn.expense_items
+            ]
+        else:
+            descs = source_form.getlist('expense_desc[]')
+            amts = source_form.getlist('expense_amount[]')
+            rows = []
+            for idx in range(max(len(descs), len(amts))):
+                desc_val = descs[idx] if idx < len(descs) else ''
+                amt_val = amts[idx] if idx < len(amts) else ''
+                rows.append({'desc': desc_val, 'amount': amt_val})
+        if not rows:
+            rows = [{'desc': '', 'amount': ''}]
+        return rows
+
+    if request.method == 'POST':
+        form_data = request.form
+        error = _persist_accounting_transaction(request.form, existing_txn=txn)
+        if error:
+            db.session.rollback()
+            flash(error, 'danger')
+            expense_rows = _build_expense_rows(form_data)
+        else:
+            flash('Transaction updated successfully.', 'success')
+            return redirect(url_for('accounting_transaction_detail', txn_id=txn.id))
+    else:
+        expense_rows = _build_expense_rows(None)
+
+    return render_template(
+        'accounting_transaction_edit.html',
+        txn=txn,
+        customers=customers_list,
+        invoice_choices=invoice_choices,
+        payment_modes=payment_modes,
+        account_options=account_options,
+        business_expense_id=business_expense_id,
+        form_data=form_data,
+        expense_rows=expense_rows
+    )
 
 
 def _customer_financial_snapshot(customer_id: int) -> dict:
@@ -2616,7 +2752,8 @@ def view_bills():
             "phone": cust.phone if cust else '',
             "total": f"{inv.totalAmount:,.2f}",
             "filename": f"{inv.invoiceId}.pdf",
-            "customer_company": cust.company if cust else 'Unknown'
+            "customer_company": cust.company if cust else 'Unknown',
+            "is_paid": bool(getattr(inv, 'payment', False))
         })
 
     # ---- 7️⃣ Apply search filters ----
@@ -2632,7 +2769,8 @@ def view_bills():
         ]
 
     # ---- 8️⃣ Render ----
-    return render_template('view_bills.html', bills=bills)
+    current_filters_url = request.full_path if request.query_string else request.path
+    return render_template('view_bills.html', bills=bills, mark_paid_redirect=current_filters_url)
 
 
 @app.route('/view-bill/<invoicenumber>')
@@ -2672,7 +2810,9 @@ def view_bill_locked(invoicenumber):
     back_two_pages = edit_bill
 
     invoice_date = current_invoice.createdAt
+    invoice_paid = bool(getattr(current_invoice, 'payment', False))
 
+    current_page_url = request.full_path if request.query_string else request.path
     return render_template(
         'view_bill_locked.html',
         customer=current_customer,
@@ -2689,7 +2829,69 @@ def view_bill_locked(invoicenumber):
         customer_id=cur_cust.id,
         back_two_pages=back_two_pages,
         invoice_date=invoice_date,
+        mark_paid_redirect=current_page_url,
+        is_paid=invoice_paid,
     )
+
+
+def mark_bill_paid(invoice_no):
+    invoice_obj = invoice.query.filter_by(invoiceId=invoice_no, isDeleted=False).first_or_404()
+    customer_obj = customer.query.filter_by(id=invoice_obj.customerId, isDeleted=False).first()
+
+    raw_next = request.form.get('next') or ''
+    next_url = raw_next or url_for('view_bills')
+    parsed_next = urlparse(next_url)
+    if parsed_next.netloc and parsed_next.netloc != request.host:
+        next_url = url_for('view_bills')
+
+    if getattr(invoice_obj, 'payment', False):
+        flash('Invoice already marked as paid.', 'info')
+        return redirect(next_url)
+
+    if not customer_obj:
+        flash('Unable to record payment: customer details missing for this invoice.', 'danger')
+        return redirect(next_url)
+
+    amount_value = float(invoice_obj.totalAmount or 0.0)
+    if amount_value <= 0:
+        flash('Unable to record payment for an empty invoice.', 'warning')
+        return redirect(next_url)
+
+    source = (request.form.get('source') or 'view_bills').strip().lower()
+    remarks_map = {
+        'view_bill_locked': 'Marked as paid via bill detail page.',
+        'view_bills': 'Marked as paid via bills list.',
+    }
+    remarks = remarks_map.get(source, 'Marked as paid.')
+
+    txn = accountingTransaction(
+        customerId=customer_obj.id,
+        amount=amount_value,
+        txn_type='income',
+        mode='bank',
+        account='current',
+        invoice_no=invoice_obj.invoiceId,
+        remarks=remarks,
+    )
+    db.session.add(txn)
+    db.session.flush()
+    _sync_invoice_payment_flag(invoice_obj.invoiceId)
+    try:
+        db.session.commit()
+        flash(f'Recorded payment of INR {amount_value:,.2f} for invoice {invoice_obj.invoiceId}.', 'success')
+    except Exception as exc:
+        db.session.rollback()
+        flash(f'Unable to record payment: {exc}', 'danger')
+
+    return redirect(next_url)
+
+
+app.add_url_rule(
+    '/bills/<invoice_no>/mark-paid',
+    view_func=mark_bill_paid,
+    endpoint='mark_bill_paid',
+    methods=['POST']
+)
 
 
 # amounts to words
