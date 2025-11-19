@@ -417,7 +417,7 @@ def _iter_activity_logs(base_folder: Path) -> List[Dict[str, Any]]:
     return flattened_logs
 
 
-def upload_to_supabase(url: str, key: str) -> Dict[str, Any]:
+def upload_to_supabase(url: str, key: str, include_analytics: bool = True) -> Dict[str, Any]:
     base_folder = _base_folder()
     headers = _build_headers(key)
     activity_dir = base_folder / ACTIVITY_DIR_NAME
@@ -442,23 +442,34 @@ def upload_to_supabase(url: str, key: str) -> Dict[str, Any]:
             list(activity_logs.keys()), archive_root, ACTIVITY_DIR_NAME
         )
 
-    analytics_logs = _load_logs_from_dir(analytics_dir)
-    analytics_entries: List[Dict[str, Any]] = [
-        entry for entries in analytics_logs.values() for entry in entries
-    ]
-    analytics_result = (
-        _process_records(url, headers, base_folder, analytics_entries)
-        if analytics_entries
-        else UploadResult()
-    )
-    analytics_status = "DONE" if analytics_result.failed == 0 else "FAILED"
-    _log_upload_activity(url, headers, base_folder, analytics_result, status=analytics_status, mode="incremental-analytics")
-
+    analytics_logs: Dict[Path, List[Dict[str, Any]]] = {}
+    analytics_entries: List[Dict[str, Any]] = []
+    analytics_result = UploadResult()
     archived_analytics = 0
-    if analytics_entries and analytics_result.failed == 0:
-        archived_analytics = _archive_processed_files(
-            list(analytics_logs.keys()), archive_root, ANALYTICS_DIR_NAME
+    if include_analytics:
+        analytics_logs = _load_logs_from_dir(analytics_dir)
+        analytics_entries = [
+            entry for entries in analytics_logs.values() for entry in entries
+        ]
+        analytics_result = (
+            _process_records(url, headers, base_folder, analytics_entries)
+            if analytics_entries
+            else UploadResult()
         )
+        analytics_status = "DONE" if analytics_result.failed == 0 else "FAILED"
+        _log_upload_activity(
+            url,
+            headers,
+            base_folder,
+            analytics_result,
+            status=analytics_status,
+            mode="incremental-analytics",
+        )
+
+        if analytics_entries and analytics_result.failed == 0:
+            archived_analytics = _archive_processed_files(
+                list(analytics_logs.keys()), archive_root, ANALYTICS_DIR_NAME
+            )
 
     summary_payload = {
         "total_uploaded": activity_result.uploaded + analytics_result.uploaded,

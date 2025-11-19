@@ -46,7 +46,7 @@ from analytics import (
 )
 from analytics_tracking import log_user_event
 from api import api_bp
-from db import db_events  # noqa: F401
+from db.db_events import activity_logs_pending, clear_activity_pending_flag  # noqa: F401
 from db.models import db, customer, invoice, invoiceItem, item, layoutConfig, accountingTransaction, expenseItem
 from migration import migrate_db
 from supabase_upload import SupabaseUploadError, upload_full_database, upload_to_supabase
@@ -4129,6 +4129,52 @@ def _update_supabase_last_incremental(timestamp: str) -> None:
     refresh_info_json()
 
 
+def _supabase_credentials_ready() -> bool:
+    supabase_meta = APP_INFO.get('supabase', {})
+    url = (supabase_meta.get('url') or '').strip()
+    key = (supabase_meta.get('key') or '').strip()
+    return bool(url and key)
+
+
+def _should_flash_sync_error() -> bool:
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return False
+    accepts_html = request.accept_mimetypes['text/html']
+    accepts_json = request.accept_mimetypes['application/json']
+    return accepts_html >= accepts_json
+
+
+def _sync_pending_activity_logs() -> tuple[str, Optional[str]]:
+    if not activity_logs_pending() or not _supabase_credentials_ready():
+        return "skipped", None
+
+    url, key, _ = load_supabase_config()
+    if not url or not key:
+        return "skipped", None
+
+    try:
+        result = upload_to_supabase(url, key, include_analytics=False)
+    except Exception as exc:
+        return "error", str(exc)
+
+    db_result = result["db"]
+    if db_result.failed == 0:
+        clear_activity_pending_flag()
+        if db_result.uploaded:
+            timestamp = datetime.now(timezone.utc).isoformat()
+            _update_supabase_last_incremental(timestamp)
+        return "success", None
+
+    message = "Unable to sync recent changes with Supabase."
+    if db_result.failure_details:
+        detail_payload = db_result.failure_details[0].get("details")
+        if isinstance(detail_payload, dict):
+            message = detail_payload.get("message") or detail_payload.get("error") or message
+        elif detail_payload:
+            message = str(detail_payload)
+    return "error", message
+
+
 def _resolve_external_backup_dir() -> Optional[Path]:
     """Return configured external backup directory, or None if unset."""
     location = (APP_INFO.get('file_location') or '').strip()
@@ -4402,6 +4448,7 @@ def supabase_sync_incremental():
             f" and {analytics_result.uploaded} analytics events."
         )
         payload["last_uploaded"] = _format_sync_timestamp(timestamp)
+        clear_activity_pending_flag()
     else:
         payload["status"] = "partial"
         payload["message"] = (
@@ -4411,8 +4458,24 @@ def supabase_sync_incremental():
         supabase_meta = APP_INFO.get('supabase', {})
         previous = supabase_meta.get('last_incremental_uploaded') or supabase_meta.get('last_uploaded')
         payload["last_uploaded"] = _format_sync_timestamp(previous)
+        if db_result.failed == 0:
+            clear_activity_pending_flag()
 
     return jsonify(payload)
+
+
+@app.after_request
+def auto_sync_after_request(response: Response):
+    status, message = _sync_pending_activity_logs()
+    if status == "success":
+        response.headers["X-Cloud-Sync"] = "ok"
+    elif status == "error":
+        response.headers["X-Cloud-Sync"] = "error"
+        if message:
+            response.headers["X-Cloud-Sync-Message"] = message
+        if message and _should_flash_sync_error():
+            flash(f"Cloud sync failed: {message}", "danger")
+    return response
 
 
 if __name__ == '__main__':
