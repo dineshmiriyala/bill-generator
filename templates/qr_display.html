@@ -132,7 +132,7 @@
         {% if amount %}
         <div>
           <p style="color:#6b7280;font-weight:600;margin:0;font-size:0.9rem;">Amount</p>
-          <p style="margin:0.3rem 0 0.1rem 0;font-weight:600;color:#000;">&#8377;{{ amount }}</p>
+          <p style="margin:0.3rem 0 0.1rem 0;font-weight:600;color:#000;">INR {{ amount }}</p>
           <p style="margin:0;font-size:0.85rem;color:#555;font-style:italic;">* {{ amount_to_words }}</p>
         </div>
         {% endif %}
@@ -146,7 +146,7 @@
           <img src="data:image/svg+xml;base64,{{ qr_code }}" alt="QR Code" style="width:100%;height:auto;object-fit:contain;">
         </div>
         {% if amount %}
-        <p style="font-weight:700;font-size:1.4rem;color:#000;margin:0.5rem 0;">&#8377;{{ amount }}</p>
+        <p style="font-weight:700;font-size:1.4rem;color:#000;margin:0.5rem 0;">INR {{ amount }}</p>
         {% endif %}
         <p style="color:#6b7280;margin:0;">Scan with your payment app</p>
         <div class="app-badges" style="display:flex;flex-wrap:wrap;justify-content:center;gap:0.5rem;">

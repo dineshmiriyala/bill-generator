@@ -154,12 +154,9 @@
                 <div class="to-block">
                     <h5>To:</h5>
                     <p class="text-dark fs-5 mb-0">
-                        {% set primary_name = customer.name or customer.company %}
-                        {% if primary_name %}
-                            <strong class="fs-4 recipient-name">{{ primary_name }}</strong>
-                        {% endif %}
-                        {% if customer.company and customer.company != primary_name %}
-                            <span class="contact-line">{{ customer.company }}</span>
+                        {% set primary_company = customer.company %}
+                        {% if primary_company %}
+                            <strong class="fs-4 recipient-name">{{ primary_company }}</strong>
                         {% endif %}
                         {% if customer.address %}
                             <span class="contact-line">{{ customer["address"] }}</span>
@@ -258,7 +255,7 @@
                 <div class="qr-box d-flex align-items-center justify-content-end" style="font-size: inherit;">
                   <div class="qr-inner d-flex align-items-center justify-content-center" style="gap:0.75rem;">
                     <img src="data:image/svg+xml;base64,{{ qr_svg_base64 }}" alt="UPI QR Code"
-                         style="width:calc(var(--payment-fs) * 7); height:calc(var(--payment-fs) * 7); border-radius:8px; background:#fff; box-shadow:0 1px 5px rgba(0,0,0,0.05);">
+                         style="width:calc(var(--payment-fs) * 9); height:calc(var(--payment-fs) * 9); border-radius:8px; background:#fff; box-shadow:0 1px 5px rgba(0,0,0,0.05);">
                     <div class="text-muted text-start" style="font-size:calc(var(--payment-fs) * 0.8); line-height:1.2;">
                       <div><strong>{{ upi_name }}</strong></div>
                       <div>UPI: {{ upi_id }}</div>

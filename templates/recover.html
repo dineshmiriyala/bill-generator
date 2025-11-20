@@ -98,7 +98,7 @@
               <span class="text-muted">—</span>
             {% endif %}
           </td>
-          <td>&#8377; {{ '{:,.2f}'.format(txn.amount) }}</td>
+          <td>INR {{ '{:,.2f}'.format(txn.amount) }}</td>
           <td>{{ txn.created_at | datetimeformat('%d %b %Y') }}</td>
           <td>
             <a href="{{ url_for('recover_transaction', txn_id=txn.id) }}" class="btn btn-success btn-sm shadow-sm">Recover</a>
