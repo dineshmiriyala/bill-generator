@@ -155,6 +155,7 @@ def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
             "key": "",
             "last_uploaded": "",
             "last_incremental_uploaded": "",
+            "instant_uploads": False,
         },
     }
 
@@ -1038,6 +1039,12 @@ def config():
             if key not in ('section',):
                 updates[key] = val.strip()
 
+        if section == 'supabase':
+            instant_values = request.form.getlist('instant_uploads')
+            if instant_values:
+                raw_value = (instant_values[-1] or '').strip().lower()
+                updates['instant_uploads'] = raw_value in ('true', '1', 'yes', 'on')
+
         # Apply updates to correct section
         if section == 'file_location':
             new_path = updates.get('file_location') or updates.get('value') or ''
@@ -1070,6 +1077,8 @@ def config():
                 filtered_updates = {}
                 for key, new_value in updates.items():
                     existing_value = target_section.get(key)
+                    if new_value == existing_value:
+                        continue
                     if isinstance(existing_value, str) and new_value == existing_value:
                         continue
                     if new_value == '' and key in target_section:
@@ -4136,6 +4145,14 @@ def _supabase_credentials_ready() -> bool:
     return bool(url and key)
 
 
+def _instant_uploads_enabled() -> bool:
+    supabase_meta = APP_INFO.get('supabase', {})
+    raw_value = supabase_meta.get('instant_uploads')
+    if isinstance(raw_value, str):
+        return raw_value.strip().lower() in ("true", "1", "yes", "on")
+    return bool(raw_value)
+
+
 def _should_flash_sync_error() -> bool:
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return False
@@ -4145,6 +4162,9 @@ def _should_flash_sync_error() -> bool:
 
 
 def _sync_pending_activity_logs() -> tuple[str, Optional[str]]:
+    if not _instant_uploads_enabled():
+        return "skipped", None
+
     if not activity_logs_pending() or not _supabase_credentials_ready():
         return "skipped", None
 

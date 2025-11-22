@@ -139,8 +139,9 @@
 </div>
 
 <!-- Flash Messages -->
-{% with messages = get_flashed_messages(with_categories=true) %}
+{% set messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
+    {% set messages = messages[-2:] %}
     <div class="container mt-3">
       {% for category, message in messages %}
         <div class="alert alert-{{ 'warning' if category == 'warn' else category }} alert-dismissible fade show shadow-sm" role="alert">
@@ -150,7 +151,6 @@
       {% endfor %}
     </div>
   {% endif %}
-{% endwith %}
 {% endif %}
 
 <main class="flex-fill">

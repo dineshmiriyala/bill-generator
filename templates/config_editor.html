@@ -6,6 +6,7 @@
 ] %}
 {% set current_logo_mode = app_info['business'].get('logo_color_mode', 'black') %}
 {% set supabase_info = app_info.get('supabase', {}) %}
+{% set instant_uploads_enabled = (supabase_info.get('instant_uploads', False) | string | lower) in ['true', '1', 'yes', 'on'] %}
 {% set visual_size_fields = [
   {'key': 'header', 'label': 'Bill Heading'},
   {'key': 'customer', 'label': 'From & To'},
@@ -285,6 +286,8 @@
               <dd class="col-sm-8 text-muted">************</dd>
               <dt class="col-sm-4">Last Uploaded to Cloud</dt>
               <dd class="col-sm-8 text-muted">{{ supabase_info.get('last_uploaded') }}</dd>
+              <dt class="col-sm-4">Instant Uploads</dt>
+              <dd class="col-sm-8 text-muted">{{ 'Enabled' if instant_uploads_enabled else 'Disabled' }}</dd>
             </dl>
           </div>
         </div>
@@ -609,6 +612,12 @@
                         <label class="form-label">Last Uploaded</label>
                         <input type="text" name="last_uploaded" class="form-control" value="{{ supabase_info.get('last_uploaded', '') }}" readonly>
                       </div>
+                      <div class="form-check form-switch mb-2">
+                        <input type="hidden" name="instant_uploads" value="false">
+                        <input class="form-check-input" type="checkbox" role="switch" id="instantUploadsSwitch" name="instant_uploads" value="true" {% if instant_uploads_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="instantUploadsSwitch">Do instant cloud uploads</label>
+                      </div>
+                      <p class="text-muted small mb-0">If turned off, uploads run only when you click the Cloud Upload button.</p>
                     </div>
                   </div>
                 </div>
