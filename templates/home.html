@@ -158,7 +158,7 @@
       <img src="{{ url_for('static', filename='logos/view_bills.svg') }}" alt="View Bills" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
       View Bills
     </a>
-    <a href="/statements/accounting" class="btn btn-dark btn-lg text-center">
+    <a href="/statements_company" class="btn btn-dark btn-lg text-center">
       <img src="{{ url_for('static', filename='logos/statements_company.svg') }}" alt="Statements" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
       Statements
     </a>
@@ -192,9 +192,6 @@
       <img src="{{ url_for('static', filename='logos/config.svg') }}" alt="Account Settings">
     </a>
   </div>
-  <span id="lastUploaded">
-    Last Sync: {{ last_uploaded or "Never" }}
-  </span>
 </div>
 
 {% if session and session.get('persistent_notice') %}

@@ -92,7 +92,7 @@
                     <small class="text-muted text-capitalize">{{ txn.account or '—' }}</small>
                   </td>
                   <td class="text-end {{ 'text-success' if txn.txn_type == 'income' else 'text-danger' }}">
-                    INR {{ '{:,.2f}'.format(txn.amount) }}
+                    INR {{ txn.amount|inr }}
                   </td>
                   <td>{{ txn.created_at | datetimeformat('%d %b %Y') }}</td>
                   <td class="text-end">

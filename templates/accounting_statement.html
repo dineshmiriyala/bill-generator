@@ -64,7 +64,7 @@
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Invoices Raised</p>
-          <h4 class="mb-1">INR {{ '{:,.2f}'.format(customer_statement_summary.invoice_total) }}</h4>
+          <h4 class="mb-1">INR {{ customer_statement_summary.invoice_total|inr }}</h4>
           <small class="text-muted">{{ customer_statement_summary.invoice_count }} invoices</small>
         </div>
       </div>
@@ -73,7 +73,7 @@
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Payments Received</p>
-          <h4 class="text-success mb-1">INR {{ '{:,.2f}'.format(customer_statement_summary.payment_total) }}</h4>
+          <h4 class="text-success mb-1">INR {{ customer_statement_summary.payment_total|inr }}</h4>
           <small class="text-muted">{{ customer_statement_summary.payment_count }} payments</small>
         </div>
       </div>
@@ -83,7 +83,7 @@
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Outgoing</p>
-          <h4 class="text-danger mb-1">INR {{ '{:,.2f}'.format(customer_statement_summary.adjustment_total) }}</h4>
+          <h4 class="text-danger mb-1">INR {{ customer_statement_summary.adjustment_total|inr }}</h4>
           <small class="text-muted">Additional charges/credits</small>
         </div>
       </div>
@@ -94,7 +94,7 @@
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Balance Due</p>
           <h4 class="{{ 'text-success' if customer_statement_summary.balance <= 0 else 'text-danger' }} mb-1">
-            INR {{ '{:,.2f}'.format(customer_statement_summary.balance) }}
+            INR {{ customer_statement_summary.balance|inr }}
           </h4>
           <small class="text-muted">As of {{ generated_at.strftime('%d %b %Y') }}</small>
         </div>
@@ -107,7 +107,7 @@
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Total Outstanding</p>
-          <h4 class="mb-0">INR {{ '{:,.2f}'.format(overall_totals.outstanding_total) }}</h4>
+          <h4 class="mb-0">INR {{ overall_totals.outstanding_total|inr }}</h4>
         </div>
       </div>
     </div>
@@ -115,7 +115,7 @@
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Payments Received</p>
-          <h4 class="text-success mb-0">INR {{ '{:,.2f}'.format(income_total) }}</h4>
+          <h4 class="text-success mb-0">INR {{ income_total|inr }}</h4>
           <small class="text-muted">{{ income_count }} entries</small>
         </div>
       </div>
@@ -124,7 +124,7 @@
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Outgoing</p>
-          <h4 class="text-danger mb-0">INR {{ '{:,.2f}'.format(expense_total) }}</h4>
+          <h4 class="text-danger mb-0">INR {{ expense_total|inr }}</h4>
           <small class="text-muted">{{ expense_count }} entries</small>
         </div>
       </div>
@@ -134,7 +134,7 @@
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Net Movement</p>
           <h4 class="{{ 'text-success' if net_flow >= 0 else 'text-danger' }} mb-1">
-            INR {{ '{:,.2f}'.format(net_flow) }}
+            INR {{ net_flow|inr }}
           </h4>
           <small class="text-muted">Payments - Outgoing</small>
         </div>
@@ -189,7 +189,7 @@
                       </a>
                     </td>
                     <td>{{ inv.date.strftime('%d %b %Y') }}</td>
-                    <td class="text-end">{{ '{:,.2f}'.format(inv.total) }}</td>
+                    <td class="text-end">{{ inv.total|inr }}</td>
                   </tr>
                   {% endfor %}
                 {% else %}
@@ -228,7 +228,7 @@
                         <div class="text-muted small">{{ pay.remarks }}</div>
                       {% endif %}
                     </td>
-                    <td class="text-end text-success">{{ '{:,.2f}'.format(pay.amount) }}</td>
+                    <td class="text-end text-success">{{ pay.amount|inr }}</td>
                   </tr>
                   {% endfor %}
                 {% else %}
@@ -268,7 +268,7 @@
                   <div class="text-muted small">{{ adj.remarks }}</div>
                 {% endif %}
               </td>
-              <td class="text-end text-danger">{{ '{:,.2f}'.format(adj.amount) }}</td>
+              <td class="text-end text-danger">{{ adj.amount|inr }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -303,10 +303,10 @@
                   {% for row in mode_breakdown %}
                     <tr>
                       <td class="fw-semibold text-uppercase">{{ row.label }}</td>
-                      {% if show_income %}<td class="text-end text-success">INR {{ '{:,.2f}'.format(row.income) }}</td>{% endif %}
-                      {% if show_expense %}<td class="text-end text-danger">INR {{ '{:,.2f}'.format(row.expense) }}</td>{% endif %}
+                      {% if show_income %}<td class="text-end text-success">INR {{ row.income|inr }}</td>{% endif %}
+                      {% if show_expense %}<td class="text-end text-danger">INR {{ row.expense|inr }}</td>{% endif %}
                       <td class="text-end fw-semibold {{ 'text-success' if row.net >= 0 else 'text-danger' }}">
-                        INR {{ '{:,.2f}'.format(row.net) }}
+                        INR {{ row.net|inr }}
                       </td>
                     </tr>
                   {% endfor %}
@@ -341,10 +341,10 @@
                   {% for row in account_breakdown %}
                     <tr>
                       <td class="fw-semibold">{{ row.label }}</td>
-                      {% if show_income %}<td class="text-end text-success">INR {{ '{:,.2f}'.format(row.income) }}</td>{% endif %}
-                      {% if show_expense %}<td class="text-end text-danger">INR {{ '{:,.2f}'.format(row.expense) }}</td>{% endif %}
+                      {% if show_income %}<td class="text-end text-success">INR {{ row.income|inr }}</td>{% endif %}
+                      {% if show_expense %}<td class="text-end text-danger">INR {{ row.expense|inr }}</td>{% endif %}
                       <td class="text-end fw-semibold {{ 'text-success' if row.net >= 0 else 'text-danger' }}">
-                        INR {{ '{:,.2f}'.format(row.net) }}
+                        INR {{ row.net|inr }}
                       </td>
                     </tr>
                   {% endfor %}
@@ -392,10 +392,10 @@
                       <small class="text-muted">{{ row.phone }}</small>
                     {% endif %}
                   </td>
-                  {% if show_income %}<td class="text-end text-success">INR {{ '{:,.2f}'.format(row.income) }}</td>{% endif %}
-                  {% if show_expense %}<td class="text-end text-danger">INR {{ '{:,.2f}'.format(row.expense) }}</td>{% endif %}
+                  {% if show_income %}<td class="text-end text-success">INR {{ row.income|inr }}</td>{% endif %}
+                  {% if show_expense %}<td class="text-end text-danger">INR {{ row.expense|inr }}</td>{% endif %}
                   <td class="text-end fw-semibold {{ 'text-success' if row.net >= 0 else 'text-danger' }}">
-                    INR {{ '{:,.2f}'.format(row.net) }}
+                    INR {{ row.net|inr }}
                   </td>
                   <td class="text-end">{{ row.transactions }}</td>
                   <td>{{ row.last_txn_at.strftime('%d %b %Y') if row.last_txn_at else '—' }}</td>
@@ -430,10 +430,10 @@
                   {% for row in daily_summary %}
                     <tr>
                       <td>{{ row.date.strftime('%d %b %Y') }}</td>
-                      {% if show_income %}<td class="text-end text-success">INR {{ '{:,.2f}'.format(row.income) }}</td>{% endif %}
-                      {% if show_expense %}<td class="text-end text-danger">INR {{ '{:,.2f}'.format(row.expense) }}</td>{% endif %}
+                      {% if show_income %}<td class="text-end text-success">INR {{ row.income|inr }}</td>{% endif %}
+                      {% if show_expense %}<td class="text-end text-danger">INR {{ row.expense|inr }}</td>{% endif %}
                       <td class="text-end fw-semibold {{ 'text-success' if row.net >= 0 else 'text-danger' }}">
-                        INR {{ '{:,.2f}'.format(row.net) }}
+                        INR {{ row.net|inr }}
                       </td>
                     </tr>
                   {% endfor %}
@@ -497,7 +497,7 @@
                         <small class="text-muted text-capitalize">{{ txn.account or '—' }}</small>
                       </td>
                       <td class="text-end {{ 'text-success' if txn.txn_type == 'income' else 'text-danger' }}">
-                        {{ '{:,.2f}'.format(txn.amount) }}
+                        {{ txn.amount|inr }}
                       </td>
                     </tr>
                   {% endfor %}

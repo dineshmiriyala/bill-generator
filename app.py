@@ -7,6 +7,7 @@ import shutil
 import sys
 import sqlite3
 import uuid
+import re
 from collections import defaultdict
 from copy import deepcopy
 from typing import Dict, List, Optional
@@ -310,6 +311,32 @@ migrate = Migrate(app, db)
 
 def _format_customer_id(n: int) -> str:
     return f"ID-{n:06d}"
+
+
+def format_inr(value, places: int = 2) -> str:
+    """Return Indian-style grouping (e.g., 12,34,567.89)."""
+    try:
+        amt = Decimal(str(value or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    except Exception:
+        amt = Decimal('0.00')
+
+    sign = '-' if amt < 0 else ''
+    amt = abs(amt)
+    integer_part, frac = f"{amt:.{places}f}".split(".")
+
+    if len(integer_part) > 3:
+        last3 = integer_part[-3:]
+        rest = integer_part[:-3]
+        groups = []
+        while rest:
+            groups.append(rest[-2:])
+            rest = rest[:-2]
+        integer_part = ",".join(reversed(groups)) + "," + last3
+
+    return f"{sign}{integer_part}.{frac}"
+
+
+app.jinja_env.filters['inr'] = format_inr
 
 
 def rounding_to_nearest_zero(amount):
@@ -625,6 +652,45 @@ def _find_upi_variant(choice: Optional[str]) -> Optional[Dict[str, str]]:
         if variant.get('key') == choice:
             return variant
     return None
+
+
+def _format_upi_amount(value) -> Optional[str]:
+    """Return a 2-decimal string amount for UPI (or None if invalid)."""
+    if value is None or value == '':
+        return None
+    try:
+        raw_str = str(value)
+        normalized = raw_str.replace(',', '').replace('₹', '').replace('INR', '')
+        normalized = re.sub(r'[^\d.\-]', '', normalized)
+        if normalized.count('.') > 1:
+            head, tail = normalized.split('.', 1)
+            tail = tail.replace('.', '')
+            normalized = f"{head}.{tail}"
+        amount = Decimal(normalized).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, ValueError):
+        return None
+    if amount <= 0:
+        return None
+    return format(amount, 'f')
+
+
+def _build_upi_qr_params(upi_id: str, amount, payee_name: Optional[str], currency: Optional[str] = None) -> Dict[str, str]:
+    """Prepare consistent query params for the /api/generate_upi_qr endpoint."""
+    params: Dict[str, str] = {"upi_id": upi_id}
+
+    formatted_amount = _format_upi_amount(amount)
+    if formatted_amount:
+        params["am"] = formatted_amount
+
+    cleaned_name = (payee_name or '').strip()
+    if cleaned_name:
+        params["pn"] = cleaned_name
+
+    upi_currency = (currency or APP_INFO.get("upi_info", {}).get("currency") or "INR").strip().upper()
+    if upi_currency:
+        params["cu"] = upi_currency
+
+    return params
 
 
 @app.route('/onboarding/submit', methods=['POST'])
@@ -2364,17 +2430,16 @@ def select_customer():
     # GET: either search or show recent
     q = (request.args.get('q') or '').strip()
     base = customer.query.filter(customer.isDeleted == False)
+    sort_key = func.lower(func.coalesce(customer.company, customer.name, ''))
     if q:
         like = f"%{q}%"
         customers = (base.filter((customer.phone.ilike(like)) |
                                  (customer.name.ilike(like)) |
                                  (customer.company.ilike(like)))
-                     .order_by(customer.id.desc())
-                     .limit(100)
+                     .order_by(sort_key.asc(), customer.id.asc())
                      .all())
     else:
-        customers = (base.order_by(customer.id.desc())
-                     .limit(25)
+        customers = (base.order_by(sort_key.asc(), customer.id.asc())
                      .all())
 
     return render_template('select_customer.html', customers=customers)
@@ -2575,7 +2640,7 @@ def start_bill():
                .first())
         if not sel:
             flash('Please pick a valid customer', 'warning')
-            return render_template('select_customer.html')
+            return redirect(url_for('select_customer'))
         return _render_create_bill(customer=sel, inventory=item.query.all())
 
     # (B) Final bill submission with line items
@@ -3017,7 +3082,12 @@ def bill_preview(invoicenumber):
     brand_accent_color = _resolve_brand_accent_color(APP_INFO.get("business"))
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
-    params = {"upi_id": upi_id, "amount": current_invoice.totalAmount, "company_name": company_name}
+    params = _build_upi_qr_params(
+        upi_id=upi_id,
+        amount=current_invoice.totalAmount,
+        payee_name=upi_name or company_name,
+        currency=APP_INFO.get("upi_info", {}).get("currency"),
+    )
 
     try:
         resp = requests.get(api_url, params=params, timeout=5)
@@ -3270,11 +3340,12 @@ def latest_bill_preview():
     brand_accent_color = _resolve_brand_accent_color(APP_INFO.get("business"))
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
-    params = {
-        "upi_id": upi_id,
-        "amount": current_invoice.totalAmount,
-        "company_name": company_name
-    }
+    params = _build_upi_qr_params(
+        upi_id=upi_id,
+        amount=current_invoice.totalAmount,
+        payee_name=upi_name or company_name,
+        currency=APP_INFO.get("upi_info", {}).get("currency"),
+    )
 
     try:
         resp = requests.get(api_url, params=params, timeout=5)
@@ -4046,7 +4117,12 @@ def generate_qr():
     company_name = business_defaults.get('name') or APP_INFO['business']['name']
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
-    params = {"upi_id": upi_id, "amount": amount, "company_name": company_name}
+    params = _build_upi_qr_params(
+        upi_id=upi_id,
+        amount=amount,
+        payee_name=upi_name or company_name,
+        currency=APP_INFO.get("upi_info", {}).get("currency"),
+    )
 
     try:
         resp = requests.get(api_url, params=params, timeout=5)
@@ -4146,11 +4222,8 @@ def _supabase_credentials_ready() -> bool:
 
 
 def _instant_uploads_enabled() -> bool:
-    supabase_meta = APP_INFO.get('supabase', {})
-    raw_value = supabase_meta.get('instant_uploads')
-    if isinstance(raw_value, str):
-        return raw_value.strip().lower() in ("true", "1", "yes", "on")
-    return bool(raw_value)
+    # Disable automatic Supabase uploads; only manual triggers should sync.
+    return False
 
 
 def _should_flash_sync_error() -> bool:

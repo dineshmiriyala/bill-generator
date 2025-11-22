@@ -32,7 +32,7 @@
 
             <dt class="col-sm-4">Amount</dt>
             <dd class="col-sm-8 {{ 'text-success' if txn.txn_type == 'income' else 'text-danger' }}">
-              INR {{ '{:,.2f}'.format(txn.amount) }}
+              INR {{ txn.amount|inr }}
             </dd>
 
             <dt class="col-sm-4">Customer</dt>
@@ -85,7 +85,7 @@
                 <li class="d-flex justify-content-between border-bottom py-1">
                   <span>{{ item.description }}</span>
                   {% if item.amount %}
-                    <span>INR {{ '{:,.2f}'.format(item.amount) }}</span>
+                    <span>INR {{ item.amount|inr }}</span>
                   {% endif %}
                 </li>
               {% endfor %}

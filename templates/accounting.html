@@ -28,7 +28,7 @@
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Total Outstanding</p>
-          <h4 class="mb-0">INR {{ '{:,.2f}'.format(totals.outstanding_total) }}</h4>
+          <h4 class="mb-0">INR {{ totals.outstanding_total|inr }}</h4>
         </div>
       </div>
     </div>
@@ -36,7 +36,7 @@
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Income</p>
-          <h4 class="mb-0 text-success">INR {{ '{:,.2f}'.format(totals.income_total) }}</h4>
+          <h4 class="mb-0 text-success">INR {{ totals.income_total|inr }}</h4>
         </div>
       </div>
     </div>
@@ -44,7 +44,7 @@
       <div class="card shadow-sm border-0 h-100">
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Expenses</p>
-          <h4 class="mb-0 text-danger">INR {{ '{:,.2f}'.format(totals.expense_total) }}</h4>
+          <h4 class="mb-0 text-danger">INR {{ totals.expense_total|inr }}</h4>
         </div>
       </div>
     </div>
@@ -53,7 +53,7 @@
         <div class="card-body">
           <p class="text-muted text-uppercase small mb-1">Net Flow</p>
           <h4 class="mb-0 {{ 'text-success' if totals.net_flow >= 0 else 'text-danger' }}">
-            INR {{ '{:,.2f}'.format(totals.net_flow) }}
+            INR {{ totals.net_flow|inr }}
           </h4>
         </div>
       </div>
@@ -113,10 +113,10 @@
                     {% endif %}
                   </td>
                   <td class="text-center fw-semibold">{{ entry.invoice_count }}</td>
-                  <td class="text-end">{{ '{:,.2f}'.format(entry.total) }}</td>
-                  <td class="text-end text-success">{{ '{:,.2f}'.format(entry.paid) }}</td>
-                  <td class="text-end text-warning">{{ '{:,.2f}'.format(entry.expenses or 0) }}</td>
-                  <td class="text-end text-danger fw-semibold">{{ '{:,.2f}'.format(entry.balance) }}</td>
+                  <td class="text-end">{{ entry.total|inr }}</td>
+                  <td class="text-end text-success">{{ entry.paid|inr }}</td>
+                  <td class="text-end text-warning">{{ (entry.expenses or 0)|inr }}</td>
+                  <td class="text-end text-danger fw-semibold">{{ entry.balance|inr }}</td>
                   <td class="text-end">
                     <form method="post"
                           action="{{ url_for('accounting_quick_clear', customer_id=entry.customer_id) }}"
@@ -188,7 +188,7 @@
                   </td>
                   <td class="text-capitalize">{{ txn.mode or '—' }}</td>
                   <td class="text-end {{ 'text-success' if txn.txn_type == 'income' else 'text-danger' }}">
-                    {{ '{:,.2f}'.format(txn.amount) }}
+                    {{ txn.amount|inr }}
                   </td>
                   <td>{{ txn.created_at | datetimeformat('%d %b %Y') }}</td>
                 </tr>

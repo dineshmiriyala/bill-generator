@@ -158,7 +158,7 @@ The script installs/updates dependencies, clears previous artefacts, and emits `
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/bill_items/<invoice_no>` | GET | Returns customer, line items, and totals for an invoice as JSON. |
-| `/api/generate_upi_qr` | GET | Generates a base64 encoded SVG for a UPI payment QR code. Query params: `upi_id` (required), `amount`, `name`, `cur`. |
+| `/api/generate_upi_qr` | GET | Generates a base64 encoded SVG for a UPI payment QR code. Query params: `upi_id` (required), `am` (amount), `pn` (payee name), `cu` (currency, defaults to `INR`). Legacy `amount`/`name`/`cur` are still accepted. |
 | `/accounting/customer_summary/<customer_id>` | GET | Returns a JSON snapshot of invoiced/paid/outgoing totals and balance for a specific customer. |
 | `/accounting/amount_to_words` | GET | Converts a numeric amount to words (Rupees). Query param: `amount`. |
 | `/api/statements` | GET | JSON summary of statements for a date range or year/month scope, including totals and per-period breakdowns. |
