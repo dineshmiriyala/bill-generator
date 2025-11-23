@@ -89,6 +89,37 @@ def migrate_db(db_path):
             print("[Migration] Adding missing column: invoice.payment")
             cursor.execute("ALTER TABLE invoice ADD COLUMN payment INTEGER NOT NULL DEFAULT 0;")
 
+        # Ensure exclude flags exist on invoice
+        if 'exclude_phone' not in invoice_columns:
+            print("[Migration] Adding missing column: invoice.exclude_phone")
+            cursor.execute("ALTER TABLE invoice ADD COLUMN exclude_phone INTEGER NOT NULL DEFAULT 0;")
+        if 'exclude_gst' not in invoice_columns:
+            print("[Migration] Adding missing column: invoice.exclude_gst")
+            cursor.execute("ALTER TABLE invoice ADD COLUMN exclude_gst INTEGER NOT NULL DEFAULT 0;")
+        if 'exclude_addr' not in invoice_columns:
+            print("[Migration] Adding missing column: invoice.exclude_addr")
+            cursor.execute("ALTER TABLE invoice ADD COLUMN exclude_addr INTEGER NOT NULL DEFAULT 0;")
+
+        # Ensure soft-delete columns exist on customer
+        cursor.execute("PRAGMA table_info(customer);")
+        customer_columns = [row[1] for row in cursor.fetchall()]
+        if 'isDeleted' not in customer_columns:
+            print("[Migration] Adding missing column: customer.isDeleted")
+            cursor.execute("ALTER TABLE customer ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0;")
+            cursor.execute("CREATE INDEX IF NOT EXISTS ix_customer_isDeleted ON customer(isDeleted);")
+        if 'deletedAt' not in customer_columns:
+            print("[Migration] Adding missing column: customer.deletedAt")
+            cursor.execute("ALTER TABLE customer ADD COLUMN deletedAt DATETIME;")
+            cursor.execute("CREATE INDEX IF NOT EXISTS ix_customer_deletedAt ON customer(deletedAt);")
+
+        # Ensure delivery challan number exists on invoice_item (added later)
+        cursor.execute("PRAGMA table_info(invoice_item);")
+        invoice_item_columns = [row[1] for row in cursor.fetchall()]
+        if 'dcNo' not in invoice_item_columns:
+            print("[Migration] Adding missing column: invoice_item.dcNo")
+            cursor.execute("ALTER TABLE invoice_item ADD COLUMN dcNo TEXT;")
+            cursor.execute("CREATE INDEX IF NOT EXISTS ix_invoice_item_dcNo ON invoice_item(dcNo);")
+
         conn.commit()
         print("[Migration] DB schema is up-to-date.")
     except Exception as e:

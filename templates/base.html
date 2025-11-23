@@ -206,39 +206,44 @@
   const searchInput = document.getElementById('globalSearch');
   const searchResults = document.getElementById('searchResults');
 
-  searchInput.addEventListener('input', () => {
-    const query = searchInput.value.toLowerCase();
-    searchResults.innerHTML = '';
-    if (!query) {
-      searchResults.style.display = 'none';
-      return;
-    }
+  if (searchInput && searchResults) {
+    searchInput.addEventListener('input', () => {
+      const query = searchInput.value.toLowerCase();
+      searchResults.innerHTML = '';
+      if (!query) {
+        searchResults.style.display = 'none';
+        return;
+      }
 
-    const matches = searchLinks.filter(link => link.name.toLowerCase().includes(query));
-    matches.forEach(match => {
-      const item = document.createElement('li');
-      item.className = 'list-group-item list-group-item-action';
-      item.textContent = match.name;
-      item.addEventListener('click', () => {
-        window.location.href = match.url;
+      const matches = searchLinks.filter(link => link.name.toLowerCase().includes(query));
+      matches.forEach(match => {
+        const item = document.createElement('li');
+        item.className = 'list-group-item list-group-item-action';
+        item.textContent = match.name;
+        item.addEventListener('click', () => {
+          window.location.href = match.url;
+        });
+        searchResults.appendChild(item);
       });
-      searchResults.appendChild(item);
+      searchResults.style.display = matches.length ? 'block' : 'none';
     });
-    searchResults.style.display = matches.length ? 'block' : 'none';
-  });
 
-  document.addEventListener('click', (e) => {
-    if (!searchResults.contains(e.target) && e.target !== searchInput) {
-      searchResults.style.display = 'none';
-    }
-  });
+    document.addEventListener('click', (e) => {
+      if (!searchResults.contains(e.target) && e.target !== searchInput) {
+        searchResults.style.display = 'none';
+      }
+    });
+  }
 </script>
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     const offcanvasEl = document.getElementById('offcanvasMenu');
-    const bsOffcanvas = new bootstrap.Offcanvas(offcanvasEl);
-    document.getElementById('menuToggle').addEventListener('click', () => bsOffcanvas.toggle());
+    const toggleBtn = document.getElementById('menuToggle');
+    if (offcanvasEl && toggleBtn) {
+      const bsOffcanvas = new bootstrap.Offcanvas(offcanvasEl);
+      toggleBtn.addEventListener('click', () => bsOffcanvas.toggle());
+    }
   });
 </script>
 

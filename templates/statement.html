@@ -53,6 +53,9 @@
             <a href="{{ url_for('statements') }}" class="btn btn-outline-danger px-4">Clear</a>
             <a href="{{ url_for('statements_company') }}" class="btn btn-outline-secondary px-4">Company Wise</a>
           </div>
+          <div id="stmtsWarning" class="text-warning small text-center mt-2 d-none">
+            Please enter a valid year/month or date range before searching.
+          </div>
         </div>
       </div>
     </form>
@@ -184,6 +187,8 @@
   const monthEl  = document.getElementById('month');
   const startEl  = document.getElementById('start');
   const endEl    = document.getElementById('end');
+  const warning  = document.getElementById('stmtsWarning');
+  const form     = document.getElementById('stmts-form');
 
   function setDefaultsIfEmpty() {
     const today = new Date();
@@ -212,6 +217,48 @@
   setDefaultsIfEmpty();
   toggleByScope();
   scopeEl.addEventListener('change', toggleByScope);
+
+  function showWarning(msg) {
+    if (!warning) return;
+    warning.textContent = msg;
+    warning.classList.remove('d-none');
+    setTimeout(() => warning.classList.add('d-none'), 4000);
+  }
+
+  form.addEventListener('submit', function (e) {
+    const scope = scopeEl.value;
+    const year = yearEl.value.trim();
+    const month = monthEl.value.trim();
+    const start = startEl.value;
+    const end = endEl.value;
+
+    if (scope === 'year') {
+      const yr = Number(year);
+      if (!yr || yr < 2000 || yr > 2100) {
+        e.preventDefault();
+        showWarning('Year must be between 2000 and 2100.');
+      }
+    } else if (scope === 'month') {
+      const yr = Number(year);
+      const mo = Number(month);
+      if (!yr || yr < 2000 || yr > 2100 || !mo || mo < 1 || mo > 12) {
+        e.preventDefault();
+        showWarning('Enter a valid year (2000-2100) and month (1-12).');
+      }
+    } else {
+      if (!start || !end) {
+        e.preventDefault();
+        showWarning('Please select both start and end dates.');
+        return;
+      }
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      if (startDate > endDate) {
+        e.preventDefault();
+        showWarning('Start date must be before end date.');
+      }
+    }
+  });
 })();
 </script>
 {% endblock %}

@@ -840,6 +840,21 @@ def _parse_date(date_str):
         return None
 
 
+def _parse_int_arg(raw_value, *, min_value=None, max_value=None):
+    """Parse string to int with optional bounds; returns (value, error_message)."""
+    if raw_value in (None, ''):
+        return None, None
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return None, "must be a number"
+    if min_value is not None and value < min_value:
+        return None, f"must be ≥ {min_value}"
+    if max_value is not None and value > max_value:
+        return None, f"must be ≤ {max_value}"
+    return value, None
+
+
 @app.route('/recover')
 def recover_page():
     deleted_customers = customer.query.filter_by(isDeleted=True).all()
@@ -2470,12 +2485,21 @@ def api_statements_summary():
     phone = request.args.get('phone')
     today = datetime.now().date()
     if scope == 'year':
-        year = int(request.args.get('year') or today.year)
+        year_raw = request.args.get('year')
+        year, err = _parse_int_arg(year_raw, min_value=2000, max_value=2100)
+        if err or year is None:
+            return jsonify({"error": "Invalid year. Please provide a number between 2000 and 2100."}), 400
         start_date = datetime(year, 1, 1).date()
         end_date = datetime(year, 12, 31).date()
     elif scope == 'month':
-        year = int(request.args.get('year') or today.year)
-        month = int(request.args.get('month') or today.month)
+        year_raw = request.args.get('year')
+        month_raw = request.args.get('month')
+        year, y_err = _parse_int_arg(year_raw, min_value=2000, max_value=2100)
+        month, m_err = _parse_int_arg(month_raw, min_value=1, max_value=12)
+        if y_err or year is None:
+            return jsonify({"error": "Invalid year. Please provide a number between 2000 and 2100."}), 400
+        if m_err or month is None:
+            return jsonify({"error": "Invalid month. Please provide a number between 1 and 12."}), 400
         start_date = datetime(year, month, 1).date()
         end_date = datetime(year, 12, 31).date() if month == 12 else (
                 datetime(year, month + 1, 1).date() - timedelta(days=1))
@@ -2544,12 +2568,21 @@ def api_statements_invoices():
 
     today = datetime.now().date()
     if scope == 'year':
-        year = int(request.args.get('year') or today.year)
+        year_raw = request.args.get('year')
+        year, err = _parse_int_arg(year_raw, min_value=2000, max_value=2100)
+        if err or year is None:
+            return jsonify({"error": "Invalid year. Please provide a number between 2000 and 2100."}), 400
         start_date = datetime(year, 1, 1).date()
         end_date = datetime(year, 12, 31).date()
     elif scope == 'month':
-        year = int(request.args.get('year') or today.year)
-        month = int(request.args.get('month') or today.month)
+        year_raw = request.args.get('year')
+        month_raw = request.args.get('month')
+        year, y_err = _parse_int_arg(year_raw, min_value=2000, max_value=2100)
+        month, m_err = _parse_int_arg(month_raw, min_value=1, max_value=12)
+        if y_err or year is None:
+            return jsonify({"error": "Invalid year. Please provide a number between 2000 and 2100."}), 400
+        if m_err or month is None:
+            return jsonify({"error": "Invalid month. Please provide a number between 1 and 12."}), 400
         start_date = datetime(year, month, 1).date()
         end_date = datetime(year, 12, 31).date() if month == 12 else (
                 datetime(year, month + 1, 1).date() - timedelta(days=1))
@@ -4037,7 +4070,7 @@ def accounting_statement():
     today = datetime.now(timezone.utc).date()
     min_start = get_default_statement_start().date()
 
-    default_start = ACCOUNTING_STATEMENT_DEFAULT_START
+    default_start = min_start
 
     start_date = _parse_date(request.args.get('start')) or default_start
     end_date = _parse_date(request.args.get('end')) or today
