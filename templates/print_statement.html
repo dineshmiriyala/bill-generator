@@ -75,16 +75,9 @@
 
     <div class="summary-grid mb-4">
       <div class="summary-card total">
-        <div class="label text-white">Total (INR)</div>
+        <div class="label text-uppercase">Total (INR):</div>
         <div class="value display-6">{{ total_amount|inr }}</div>
       </div>
-      {% if not date_wise %}
-      <div class="summary-card">
-        <div class="label">Customer</div>
-        <div class="value">{{ customer_company or '(No Company)' }}</div>
-        {% if customer_phone %}<div class="muted">Phone: {{ customer_phone }}</div>{% endif %}
-      </div>
-      {% endif %}
     </div>
 
     <div class="table-responsive rounded-3 border shadow-sm mb-4 statement-table">
@@ -236,7 +229,9 @@
     color: #fbbf24 !important;
   }
   .summary-card.total .label {
-    color: #f3f4f6;
+    color: #cbd5e1;
+    font-size: 0.78rem;
+    letter-spacing: .08em;
   }
   .statement-table .table > :not(caption) > * > * {
     padding: 0.72rem;
