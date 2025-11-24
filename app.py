@@ -3741,6 +3741,7 @@ def statements():
             date_wise=True,
             APP_INFO=APP_INFO,
             pdf_title=pdf_title,
+            generated_on=datetime.now(),
         )
 
     # 🔸 Default: HTML View
@@ -4064,6 +4065,7 @@ def statements_company():
             company_wise=True,
             APP_INFO=APP_INFO,
             pdf_title=pdf_title,
+            generated_on=datetime.now(),
         )
 
     # --- Build rows for HTML template ---
