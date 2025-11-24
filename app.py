@@ -209,6 +209,21 @@ def _resolve_brand_accent_color(business_section: Optional[dict]) -> str:
     return LOGO_COLOR_VALUES.get(color_mode, LOGO_COLOR_VALUES[DEFAULT_LOGO_COLOR_MODE])
 
 
+def _sanitize_filename_component(value: Optional[str], fallback: str = "statement") -> str:
+    """Return a filesystem-friendly slug (A-Z, 0-9, underscores) for titles."""
+    value = (value or fallback).strip()
+    safe = re.sub(r"[^A-Za-z0-9]+", "_", value)
+    safe = re.sub(r"_+", "_", safe).strip("_")
+    return safe or fallback
+
+
+def _build_statement_pdf_title(company_name: Optional[str], start_date, end_date) -> str:
+    """Compose a predictable print/PDF title with company + date range."""
+    start_str = start_date.strftime("%Y-%m-%d") if start_date else "start"
+    end_str = end_date.strftime("%Y-%m-%d") if end_date else "end"
+    return f"{_sanitize_filename_component(company_name)}_{start_str}_{end_str}_statement"
+
+
 def _get_earliest_invoice_created_at() -> Optional[datetime]:
     """Fetch the earliest invoice.createdAt value from the DB."""
     try:
@@ -3498,6 +3513,13 @@ def statements():
     if not per_customer:
         per_customer = {}
 
+    primary_company = None
+    if phone and invs:
+        cust = invs[0].customer
+        if cust:
+            primary_company = getattr(cust, "company", None) or getattr(cust, "name", None) or getattr(cust, "phone", None)
+    pdf_title = _build_statement_pdf_title(primary_company or "statements", start_date, end_date)
+
     # 🔸 Export CSV
     if export == "csv":
         output = io.StringIO()
@@ -3718,6 +3740,7 @@ def statements():
             phone=phone,
             date_wise=True,
             APP_INFO=APP_INFO,
+            pdf_title=pdf_title,
         )
 
     # 🔸 Default: HTML View
@@ -4010,6 +4033,11 @@ def statements_company():
     if invs and invs[0].customer:
         customer_company = invs[0].customer.company or ''
         customer_phone = invs[0].customer.phone or ''
+    pdf_title = _build_statement_pdf_title(
+        customer_company or query or "customer_statement",
+        start_dt.date(),
+        end_dt.date(),
+    )
 
     # --- PDF Export ---
     if fmt == 'pdf' and (phone or query):
@@ -4035,6 +4063,7 @@ def statements_company():
             customer_phone=customer_phone,
             company_wise=True,
             APP_INFO=APP_INFO,
+            pdf_title=pdf_title,
         )
 
     # --- Build rows for HTML template ---
