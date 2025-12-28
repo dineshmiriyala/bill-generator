@@ -1575,7 +1575,7 @@ def _persist_accounting_transaction(form, existing_txn=None):
     customer_obj = None
     if customer_id_val:
         try:
-            customer_obj = customer.query.get(int(customer_id_val))
+            customer_obj = db.session.get(customer, int(customer_id_val))
         except (TypeError, ValueError):
             customer_obj = None
         if not customer_obj or customer_obj.isDeleted:
@@ -3011,7 +3011,7 @@ def view_bills():
 def view_bill_locked(invoicenumber):
     # load invoice and related data
     current_invoice = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
-    cur_cust = customer.query.get(current_invoice.customerId)
+    cur_cust = db.session.get(customer, current_invoice.customerId)
     line_items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
 
     current_customer = {
@@ -3029,7 +3029,7 @@ def view_bill_locked(invoicenumber):
 
     total = 0.0
     for li in line_items:
-        itm = item.query.get(li.itemId)
+        itm = db.session.get(item, li.itemId)
         descriptions.append(itm.name if itm else 'Unknown')
         quantities.append(li.quantity)
         rates.append(li.rate)
@@ -3201,7 +3201,7 @@ def bill_preview(invoicenumber):
     if not current_invoice:
         return f"No invoice found for {invoicenumber}"
 
-    cur_cust = customer.query.get(current_invoice.customerId)
+    cur_cust = db.session.get(customer, current_invoice.customerId)
 
     current_customer = {
         "name": cur_cust.name,
@@ -3216,7 +3216,7 @@ def bill_preview(invoicenumber):
     # Prepare item data
     item_data = []
     for i in items:
-        item_name = item.query.get(i.itemId).name if i.itemId else "Unknown"
+        item_name = db.session.get(item, i.itemId).name if i.itemId else "Unknown"
         entry = (
             item_name,
             "N/A",
@@ -3285,11 +3285,187 @@ def bill_preview(invoicenumber):
     )
 
 
+@app.route('/bill_preview_a5/<invoicenumber>')
+def bill_preview_a5(invoicenumber):
+    current_invoice = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
+    if not current_invoice:
+        return f"No invoice found for {invoicenumber}"
+
+    cur_cust = db.session.get(customer, current_invoice.customerId)
+
+    current_customer = {
+        "name": cur_cust.name,
+        "company": cur_cust.company,
+        "phone": None if current_invoice.exclude_phone else cur_cust.phone,
+        "gst": None if current_invoice.exclude_gst else cur_cust.gst,
+        "address": None if current_invoice.exclude_addr else cur_cust.address,
+        "email": cur_cust.email
+    }
+    items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
+
+    item_data = []
+    for i in items:
+        item_name = db.session.get(item, i.itemId).name if i.itemId else "Unknown"
+        entry = (
+            item_name,
+            "N/A",
+            i.quantity,
+            i.rate,
+            i.discount,
+            i.taxPercentage,
+            i.line_total
+        )
+        item_data.append(entry)
+
+    dc_numbers = [i.dcNo or '' for i in items]
+    dcno = any(bool((x or '').strip()) for x in dc_numbers)
+
+    config = layoutConfig().get_or_create()
+    current_sizes = config.get_sizes()
+
+    upi_id = APP_INFO["upi_info"]["upi_id"]
+    company_name = APP_INFO["business"]["name"]
+    upi_name = APP_INFO["upi_info"]["upi_name"]
+    brand_watermark_path = _resolve_brand_watermark_path(APP_INFO.get("business"))
+    brand_accent_color = _resolve_brand_accent_color(APP_INFO.get("business"))
+    to_color = _resolve_to_color(APP_INFO.get("invoice_visual"))
+
+    api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
+    params = _build_upi_qr_params(
+        upi_id=upi_id,
+        amount=current_invoice.totalAmount,
+        payee_name=upi_name or company_name,
+        currency=APP_INFO.get("upi_info", {}).get("currency"),
+    )
+
+    try:
+        resp = requests.get(api_url, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            qr_svg_base64 = data.get('qr_svg_base64')
+            upi_url = data.get('upi_url')
+        else:
+            qr_svg_base64 = None
+            upi_url = None
+    except Exception as e:
+        print(f"[ERROR] failed to fetch QR: {e}")
+        qr_svg_base64 = None
+        upi_url = None
+
+    return render_template(
+        'bill_preview_a5.html',
+        invoice=current_invoice,
+        customer=current_customer,
+        items=item_data,
+        dcno=dcno,
+        dc_numbers=dc_numbers,
+        total_in_words=amount_to_words(current_invoice.totalAmount),
+        sizes=current_sizes,
+        qr_svg_base64=qr_svg_base64,
+        upi_id=upi_id,
+        upi_name=upi_name,
+        company_name=company_name,
+        total=current_invoice.totalAmount,
+        app_info=APP_INFO,
+        to_color=to_color,
+        brand_watermark_path=brand_watermark_path,
+        brand_accent_color=brand_accent_color,
+    )
+
+
+@app.route('/bill_preview_tiny/<invoicenumber>')
+def bill_preview_tiny(invoicenumber):
+    current_invoice = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
+    if not current_invoice:
+        return f"No invoice found for {invoicenumber}"
+
+    cur_cust = db.session.get(customer, current_invoice.customerId)
+
+    current_customer = {
+        "name": cur_cust.name,
+        "company": cur_cust.company,
+        "phone": None if current_invoice.exclude_phone else cur_cust.phone,
+        "gst": None if current_invoice.exclude_gst else cur_cust.gst,
+        "address": None if current_invoice.exclude_addr else cur_cust.address,
+        "email": cur_cust.email
+    }
+    items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
+
+    item_data = []
+    for i in items:
+        item_name = db.session.get(item, i.itemId).name if i.itemId else "Unknown"
+        entry = (
+            item_name,
+            "N/A",
+            i.quantity,
+            i.rate,
+            i.discount,
+            i.taxPercentage,
+            i.line_total
+        )
+        item_data.append(entry)
+
+    dc_numbers = [i.dcNo or '' for i in items]
+    dcno = any(bool((x or '').strip()) for x in dc_numbers)
+
+    config = layoutConfig().get_or_create()
+    current_sizes = config.get_sizes()
+
+    upi_id = APP_INFO["upi_info"]["upi_id"]
+    company_name = APP_INFO["business"]["name"]
+    upi_name = APP_INFO["upi_info"]["upi_name"]
+    brand_watermark_path = _resolve_brand_watermark_path(APP_INFO.get("business"))
+    brand_accent_color = _resolve_brand_accent_color(APP_INFO.get("business"))
+    to_color = _resolve_to_color(APP_INFO.get("invoice_visual"))
+
+    api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
+    params = _build_upi_qr_params(
+        upi_id=upi_id,
+        amount=current_invoice.totalAmount,
+        payee_name=upi_name or company_name,
+        currency=APP_INFO.get("upi_info", {}).get("currency"),
+    )
+
+    try:
+        resp = requests.get(api_url, params=params, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            qr_svg_base64 = data.get('qr_svg_base64')
+            upi_url = data.get('upi_url')
+        else:
+            qr_svg_base64 = None
+            upi_url = None
+    except Exception as e:
+        print(f"[ERROR] failed to fetch QR: {e}")
+        qr_svg_base64 = None
+        upi_url = None
+
+    return render_template(
+        'bill_preview_tiny.html',
+        invoice=current_invoice,
+        customer=current_customer,
+        items=item_data,
+        dcno=dcno,
+        dc_numbers=dc_numbers,
+        total_in_words=amount_to_words(current_invoice.totalAmount),
+        sizes=current_sizes,
+        qr_svg_base64=qr_svg_base64,
+        upi_id=upi_id,
+        upi_name=upi_name,
+        company_name=company_name,
+        total=current_invoice.totalAmount,
+        app_info=APP_INFO,
+        to_color=to_color,
+        brand_watermark_path=brand_watermark_path,
+        brand_accent_color=brand_accent_color,
+    )
+
+
 @app.route('/edit-bill/<invoicenumber>', methods=['GET', 'POST'])
 def edit_bill(invoicenumber):
     # fetch invoice and related data
     current_invoice = invoice.query.filter_by(invoiceId=invoicenumber).first_or_404()
-    current_customer = customer.query.get(current_invoice.customerId)
+    current_customer = db.session.get(customer, current_invoice.customerId)
     line_items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
 
     # Build lists for template
@@ -3297,7 +3473,7 @@ def edit_bill(invoicenumber):
     line_totals = []
     total = 0.0
     for li in line_items:
-        itm = item.query.get(li.itemId)
+        itm = db.session.get(item, li.itemId)
         descriptions.append(itm.name if itm else 'Unknown')
         quantities.append(li.quantity)
         rates.append(li.rate)
@@ -3374,7 +3550,7 @@ def delete_bill(invoicenumber):
 def update_bill(invoicenumber):
     # 1) Load the invoice being edited
     current_invoice = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
-    current_customer = customer.query.get(current_invoice.customerId)
+    current_customer = db.session.get(customer, current_invoice.customerId)
 
     submitted_token = request.form.get('form_token')
     if not _validate_bill_token(submitted_token):
@@ -3461,7 +3637,7 @@ def latest_bill_preview():
     if not current_invoice:
         return "No invoice found"
 
-    cur_cust = customer.query.get(current_invoice.customerId)
+    cur_cust = db.session.get(customer, current_invoice.customerId)
 
     current_customer = {
         "name": cur_cust.name,
@@ -3476,7 +3652,7 @@ def latest_bill_preview():
     item_data = []
 
     for i in items:
-        item_name = item.query.get(i.itemId).name if i.itemId else "Unknown"
+        item_name = db.session.get(item, i.itemId).name if i.itemId else "Unknown"
         entry = (
             item_name,
             "N/A",
