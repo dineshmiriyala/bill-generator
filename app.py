@@ -17,7 +17,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 import socket
 from waitress import serve
-import random
 
 import requests
 import stat
@@ -63,6 +62,7 @@ REQUIRED_DB_TABLES = {"customer", "invoice", "invoice_item", "item"}
 BACKUP_DIRNAME = "backups"
 BACKUP_RETENTION = 10
 BACKUP_MAX_AGE_DAYS = 7
+APP_PORT = 42069
 ISO_8601_UTC = "%Y-%m-%dT%H:%M:%SZ"
 HUMAN_DATE_FMT = "%d %B %Y"
 DEFAULT_LOGO_COLOR_MODE = "black"
@@ -96,7 +96,7 @@ def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
             "businessType": "",
             "pan": "",
             "estd": current_year,
-            "logo_path": "static/img/brand-wordmark.svg",
+            "logo_path": LOGO_COLOR_PATHS[DEFAULT_LOGO_COLOR_MODE],
             "logo_color_mode": DEFAULT_LOGO_COLOR_MODE,
         },
         "bank": {
@@ -207,6 +207,33 @@ def _resolve_brand_accent_color(business_section: Optional[dict]) -> str:
         business_section = {}
     color_mode = (business_section.get("logo_color_mode") or DEFAULT_LOGO_COLOR_MODE).lower()
     return LOGO_COLOR_VALUES.get(color_mode, LOGO_COLOR_VALUES[DEFAULT_LOGO_COLOR_MODE])
+
+
+def _normalize_logo_color_mode(value: Optional[str]) -> str:
+    color_mode = (value or DEFAULT_LOGO_COLOR_MODE).strip().lower()
+    if color_mode not in LOGO_COLOR_PATHS:
+        return DEFAULT_LOGO_COLOR_MODE
+    return color_mode
+
+
+def _sync_logo_color_settings(business_section: dict) -> bool:
+    if not isinstance(business_section, dict):
+        return False
+    changed = False
+    color_mode = _normalize_logo_color_mode(business_section.get("logo_color_mode"))
+    if business_section.get("logo_color_mode") != color_mode:
+        business_section["logo_color_mode"] = color_mode
+        changed = True
+
+    logo_path = business_section.get("logo_path")
+    default_logo_paths = set(LOGO_COLOR_PATHS.values())
+    default_logo_paths.add("static/img/brand-wordmark.svg")
+    if not logo_path or logo_path in default_logo_paths:
+        desired_path = LOGO_COLOR_PATHS[color_mode]
+        if logo_path != desired_path:
+            business_section["logo_path"] = desired_path
+            changed = True
+    return changed
 
 
 def _sanitize_filename_component(value: Optional[str], fallback: str = "statement") -> str:
@@ -476,6 +503,9 @@ def ensure_info_json():
             changed = True
 
     data_section = info_data["data"]
+    business_section = data_section.setdefault("business", {})
+    if _sync_logo_color_settings(business_section):
+        changed = True
 
     account_defaults = data_section.setdefault("account_defaults", {})
     existing_start = account_defaults.get("start_date")
@@ -1147,9 +1177,11 @@ def config():
             app_info['file_location'] = new_path.strip()
         elif section == 'invoice_visual':
             business_section = app_info.setdefault('business', {})
-            color_mode = (updates.get('logo_color_mode') or '').lower()
-            if color_mode:
+            raw_color_mode = updates.get('logo_color_mode')
+            if raw_color_mode:
+                color_mode = _normalize_logo_color_mode(raw_color_mode)
                 business_section['logo_color_mode'] = color_mode
+                business_section['logo_path'] = LOGO_COLOR_PATHS[color_mode]
 
             size_fields = ('header', 'customer', 'invoice_info', 'table', 'totals', 'payment', 'footer')
             sizes_changed = False
@@ -4636,17 +4668,18 @@ def auto_sync_after_request(response: Response):
 
 
 if __name__ == '__main__':
-    host = os.getenv('HOST', '0.0.0.0')
-    port = int(os.getenv('PORT', 5000))
+    host = "0.0.0.0"
+    port = APP_PORT
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     try:
         sock.bind((host, port))
         sock.close()
     except OSError as exc:
-        port = random.randint(5001, 5999)
-        print(f"Port 5000 busy, switching to port {port}")
+        print(f"Port {port} is already in use. Close the existing server and try again.")
+        raise SystemExit(1) from exc
 
-    print(f"Starting WSGI server on https://{host}:{port}")
+    print(f"Starting WSGI server on http://{host}:{port}")
     serve(app, host=host, port=port)

@@ -8,12 +8,15 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    {% set header_size = (sizes.header if sizes is defined and sizes.header is defined else 13) %}
+    {% set logo_print_multiplier = 3.2 if app_info['business'].get('logo_color_mode') == 'blue' else 4 %}
+    {% set logo_print_height = header_size * logo_print_multiplier %}
     <style>
       body {
         font-family: 'Poppins', sans-serif;
       }
       :root {
-        --hdr-fs: {{ (sizes.header if sizes is defined and sizes.header is defined else 13) }}px;
+        --hdr-fs: {{ header_size }}px;
         --cust-fs: {{ (sizes.customer if sizes is defined and sizes.customer is defined else 16) }}px;
         --invinfo-fs: {{ (sizes.invoice_info if sizes is defined and sizes.invoice_info is defined else 13) }}px;
         --table-fs: {{ (sizes.table if sizes is defined and sizes.table is defined else 13) }}px;
@@ -28,7 +31,7 @@
       }
       @media print {
         .brand-logo {
-          height: calc(var(--hdr-fs) * 4) !important;
+          height: {{ logo_print_height | round(2) }}px !important;
           width: auto !important;
           max-width: none !important;
         }

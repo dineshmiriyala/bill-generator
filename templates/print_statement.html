@@ -1,6 +1,9 @@
 {% extends 'base.html' %}
 {% set hide_navbar = True %}
 {% set accent = APP_INFO.appearance.theme_color if APP_INFO.appearance and APP_INFO.appearance.theme_color else '#0f172a' %}
+{% set logo_color_mode = APP_INFO.business.logo_color_mode if APP_INFO.business and APP_INFO.business.logo_color_mode else 'black' %}
+{% set base_logo_height = 72 %}
+{% set logo_print_height = base_logo_height * (0.8 if logo_color_mode == 'blue' else 1) %}
 {% block title %}{{ pdf_title | default('Statement') }}{% endblock %}
 {% block head %}
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -8,6 +11,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  @media print {
+    .brand-logo {
+      height: {{ logo_print_height | round(1) }}px !important;
+    }
+  }
+</style>
 {% endblock %}
 {% block content %}
 <div class="container py-5" style="max-width: 960px;">
@@ -17,7 +27,7 @@
       <img class="brand-logo"
            src="{{ APP_INFO.business.logo_path }}"
            alt="{{ APP_INFO.business.name }}"
-           style="height: 72px; width: auto; object-fit: contain;"
+           style="height: {{ base_logo_height }}px; width: auto; object-fit: contain;"
            onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', '<div class=&quot;fw-bold text-dark fs-5 text-center&quot;>{{ APP_INFO.business.name }}</div>');">
       <div class="bill-heading text-uppercase fw-bold mt-2" style="letter-spacing: .08em;">Company Statement</div>
     </div>

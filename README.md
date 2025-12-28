@@ -105,7 +105,7 @@ Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Boots
 ```bash
 python app.py
 ```
-The development server listens on `http://127.0.0.1:5000/` by default. On first launch, the onboarding workflow will guide you through initial setup.
+The development server listens on `http://127.0.0.1:42069/` by default. For LAN access, browse to `http://<machine-ip>:42069/`. On first launch, the onboarding workflow will guide you through initial setup.
 
 ### Desktop Packaging
 For Windows packaging the project ships a `build_exe.bat` script that wraps PyInstaller to produce a standalone executable. Before packaging, run `pytest` to ensure the latest test suite passes, then execute:
