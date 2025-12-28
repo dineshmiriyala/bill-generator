@@ -74,6 +74,13 @@ LOGO_COLOR_VALUES = {
     "black": "#111111",
     "blue": "#1b4ea0",
 }
+DEFAULT_TO_COLOR_MODE = "black"
+TO_COLOR_VALUES = {
+    "black": "#000000",
+    "magenta": "#FF00FF",
+}
+TO_COLOR_MODES = set(TO_COLOR_VALUES.keys()) | {"custom"}
+HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{6})$")
 ACCOUNTING_STATEMENT_DEFAULT_START = datetime(2025, 9, 1).date()
 
 
@@ -112,6 +119,10 @@ def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
             "date_format": "%d %B %Y",
             "font_family": "Inter, Helvetica, Arial, sans-serif",
             "theme_color": "#0056b3",
+        },
+        "invoice_visual": {
+            "to_color_mode": DEFAULT_TO_COLOR_MODE,
+            "to_color_custom": "",
         },
         "payment": {
             "methods": ["Bank Transfer", "UPI"],
@@ -216,6 +227,34 @@ def _normalize_logo_color_mode(value: Optional[str]) -> str:
     return color_mode
 
 
+def _normalize_to_color_mode(value: Optional[str]) -> str:
+    color_mode = (value or DEFAULT_TO_COLOR_MODE).strip().lower()
+    if color_mode not in TO_COLOR_MODES:
+        return DEFAULT_TO_COLOR_MODE
+    return color_mode
+
+
+def _normalize_hex_color(value: Optional[str]) -> Optional[str]:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    if HEX_COLOR_RE.match(raw):
+        return raw.upper()
+    return None
+
+
+def _resolve_to_color(visual_section: Optional[dict]) -> str:
+    if not isinstance(visual_section, dict):
+        visual_section = {}
+    color_mode = _normalize_to_color_mode(visual_section.get("to_color_mode"))
+    if color_mode == "custom":
+        custom = _normalize_hex_color(visual_section.get("to_color_custom"))
+        if custom:
+            return custom
+        return TO_COLOR_VALUES[DEFAULT_TO_COLOR_MODE]
+    return TO_COLOR_VALUES.get(color_mode, TO_COLOR_VALUES[DEFAULT_TO_COLOR_MODE])
+
+
 def _sync_logo_color_settings(business_section: dict) -> bool:
     if not isinstance(business_section, dict):
         return False
@@ -233,6 +272,27 @@ def _sync_logo_color_settings(business_section: dict) -> bool:
         if logo_path != desired_path:
             business_section["logo_path"] = desired_path
             changed = True
+    return changed
+
+
+def _sync_to_color_settings(visual_section: dict) -> bool:
+    if not isinstance(visual_section, dict):
+        return False
+    changed = False
+    color_mode = _normalize_to_color_mode(visual_section.get("to_color_mode"))
+    if visual_section.get("to_color_mode") != color_mode:
+        visual_section["to_color_mode"] = color_mode
+        changed = True
+    if "to_color_custom" in visual_section:
+        normalized_custom = _normalize_hex_color(visual_section.get("to_color_custom"))
+        if normalized_custom:
+            if visual_section.get("to_color_custom") != normalized_custom:
+                visual_section["to_color_custom"] = normalized_custom
+                changed = True
+        else:
+            if visual_section.get("to_color_custom"):
+                visual_section["to_color_custom"] = ""
+                changed = True
     return changed
 
 
@@ -505,6 +565,9 @@ def ensure_info_json():
     data_section = info_data["data"]
     business_section = data_section.setdefault("business", {})
     if _sync_logo_color_settings(business_section):
+        changed = True
+    visual_section = data_section.setdefault("invoice_visual", {})
+    if _sync_to_color_settings(visual_section):
         changed = True
 
     account_defaults = data_section.setdefault("account_defaults", {})
@@ -1182,6 +1245,23 @@ def config():
                 color_mode = _normalize_logo_color_mode(raw_color_mode)
                 business_section['logo_color_mode'] = color_mode
                 business_section['logo_path'] = LOGO_COLOR_PATHS[color_mode]
+
+            visual_section = app_info.setdefault('invoice_visual', {})
+            raw_to_mode = updates.get('to_color_mode')
+            if raw_to_mode is not None:
+                visual_section['to_color_mode'] = _normalize_to_color_mode(raw_to_mode)
+            else:
+                visual_section['to_color_mode'] = _normalize_to_color_mode(
+                    visual_section.get('to_color_mode')
+                )
+            raw_to_custom = updates.get('to_color_custom')
+            if raw_to_custom is not None:
+                normalized_custom = _normalize_hex_color(raw_to_custom)
+                if normalized_custom:
+                    visual_section['to_color_custom'] = normalized_custom
+                elif raw_to_custom.strip() == "":
+                    visual_section['to_color_custom'] = ""
+            _sync_to_color_settings(visual_section)
 
             size_fields = ('header', 'customer', 'invoice_info', 'table', 'totals', 'payment', 'footer')
             sizes_changed = False
@@ -3160,6 +3240,7 @@ def bill_preview(invoicenumber):
     upi_name = APP_INFO["upi_info"]["upi_name"]
     brand_watermark_path = _resolve_brand_watermark_path(APP_INFO.get("business"))
     brand_accent_color = _resolve_brand_accent_color(APP_INFO.get("business"))
+    to_color = _resolve_to_color(APP_INFO.get("invoice_visual"))
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
     params = _build_upi_qr_params(
@@ -3198,6 +3279,7 @@ def bill_preview(invoicenumber):
         company_name=company_name,
         total=current_invoice.totalAmount,
         app_info=APP_INFO,
+        to_color=to_color,
         brand_watermark_path=brand_watermark_path,
         brand_accent_color=brand_accent_color,
     )
@@ -3418,6 +3500,7 @@ def latest_bill_preview():
     upi_name = APP_INFO["upi_info"]["upi_name"]
     brand_watermark_path = _resolve_brand_watermark_path(APP_INFO.get("business"))
     brand_accent_color = _resolve_brand_accent_color(APP_INFO.get("business"))
+    to_color = _resolve_to_color(APP_INFO.get("invoice_visual"))
 
     api_url = f"{request.host_url.rstrip('/')}/api/generate_upi_qr"
     params = _build_upi_qr_params(
@@ -3456,6 +3539,7 @@ def latest_bill_preview():
         upi_name=upi_name,
         company_name=company_name,
         total=current_invoice.totalAmount,
+        to_color=to_color,
         brand_watermark_path=brand_watermark_path,
         brand_accent_color=brand_accent_color,
     )

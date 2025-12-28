@@ -23,7 +23,7 @@
         --totals-fs: {{ (sizes.totals if sizes is defined and sizes.totals is defined else 15) }}px;
         --payment-fs: {{ (sizes.payment if sizes is defined and sizes.payment is defined else 13) }}px;
         --footer-fs: {{ (sizes.footer if sizes is defined and sizes.footer is defined else 10) }}px;
-        --recipient-name-color: {{ '#1a2a6c' if app_info['business'].get('logo_color_mode') == 'blue' else '#000000' }};
+        --to-color: {{ to_color }};
       }
       .brand-logo {
         height: calc(var(--hdr-fs) * 4);
@@ -105,8 +105,9 @@
       .bill-heading { text-align: center; margin-top:4px; font-weight:bold; color:#000; }
       .highlight-info { color:#1a2a6c; }
       .masthead { text-align: left; }
-      .recipient-name { color: var(--recipient-name-color); display: block; }
+      .recipient-name { display: block; }
       .to-block { display: inline-block; text-align: right; }
+      .to-text, .to-text * { color: var(--to-color) !important; }
       .phone-toggle {
         display: inline-flex;
         align-items: center;
@@ -155,8 +156,9 @@
             </div>
             <div class="col-sm-6 text-end">
                 <div class="to-block">
-                    <h5>To:</h5>
-                    <p class="text-dark fs-5 mb-0">
+                    <div class="to-text">
+                      <h5>To:</h5>
+                      <p class="text-dark fs-5 mb-0">
                         {% set primary_company = customer.company %}
                         {% if primary_company %}
                             <strong class="fs-4 recipient-name">{{ primary_company }}</strong>
@@ -170,7 +172,8 @@
                         {% if customer.phone %}
                             <span class="contact-line" id="customerPhoneLine">Phone: {{ customer["phone"] }}</span>
                         {% endif %}
-                    </p>
+                      </p>
+                    </div>
                     {% if customer.phone %}
                     <div class="phone-toggle d-print-none">
                         <span>Phone</span>

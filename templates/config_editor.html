@@ -5,6 +5,15 @@
   {'value': 'blue', 'label': 'Blue', 'hex': '#1b4ea0'}
 ] %}
 {% set current_logo_mode = app_info['business'].get('logo_color_mode', 'black') %}
+{% set invoice_visual = app_info.get('invoice_visual', {}) %}
+{% set current_to_mode = invoice_visual.get('to_color_mode', 'black') %}
+{% set current_to_custom = invoice_visual.get('to_color_custom', '') %}
+{% set to_custom_swatch = current_to_custom if current_to_custom else '#FF00FF' %}
+{% set to_color_options = [
+  {'value': 'black', 'label': 'Black', 'hex': '#000000'},
+  {'value': 'magenta', 'label': 'Magenta', 'hex': '#FF00FF'},
+  {'value': 'custom', 'label': 'Custom', 'hex': to_custom_swatch}
+] %}
 {% set supabase_info = app_info.get('supabase', {}) %}
 {% set instant_uploads_enabled = (supabase_info.get('instant_uploads', False) | string | lower) in ['true', '1', 'yes', 'on'] %}
 {% set visual_size_fields = [
@@ -144,6 +153,16 @@
             <dl class="row mb-0">
               <dt class="col-sm-4">Watermark Color</dt>
               <dd class="col-sm-8 text-muted text-capitalize">{{ current_logo_mode }}</dd>
+              <dt class="col-sm-4">To Color</dt>
+              <dd class="col-sm-8 text-muted">
+                {% if current_to_mode == 'custom' %}
+                  Custom{% if current_to_custom %} ({{ current_to_custom }}){% endif %}
+                {% elif current_to_mode == 'magenta' %}
+                  Magenta (#FF00FF)
+                {% else %}
+                  Black (#000000)
+                {% endif %}
+              </dd>
               <dt class="col-sm-4">Font Sizes</dt>
               <dd class="col-sm-8 text-muted">
                 <div class="row">
@@ -397,6 +416,36 @@
                           <span class="chip-label">{{ option.label }}</span>
                         </label>
                       {% endfor %}
+                    </div>
+                  </div>
+                  <div class="mb-4">
+                    <label class="form-label">To Color</label>
+                    <div class="logo-color-picker">
+                      {% for option in to_color_options %}
+                        <label class="logo-color-chip {% if current_to_mode == option.value %}active{% endif %}">
+                          <input type="radio"
+                                 name="to_color_mode"
+                                 value="{{ option.value }}"
+                                 class="visually-hidden"
+                                 {% if current_to_mode == option.value %}checked{% endif %}>
+                          <span class="color-dot" {% if option.value == 'custom' %}id="toColorCustomDot"{% endif %} style="background: {{ option.hex }};">
+                            <span class="checkmark">✓</span>
+                          </span>
+                          <span class="chip-label">{{ option.label }}</span>
+                        </label>
+                      {% endfor %}
+                    </div>
+                    <div class="mt-3" id="toColorCustomWrap" style="{% if current_to_mode != 'custom' %}display: none;{% endif %}">
+                      <label class="form-label">Custom Hex</label>
+                      <input type="text"
+                             name="to_color_custom"
+                             id="toColorCustomInput"
+                             class="form-control"
+                             value="{{ current_to_custom }}"
+                             placeholder="#FF00FF"
+                             pattern="^#([0-9a-fA-F]{6})$"
+                             title="Use a 6-digit hex code like #FF00FF">
+                      <div class="form-text">Use 6-digit hex, e.g. #FF00FF.</div>
                     </div>
                   </div>
                   <div class="visual-size-grid row g-4">
@@ -770,17 +819,56 @@
       slider.addEventListener('input', sync);
     });
 
-    document.querySelectorAll('.logo-color-chip input[type="radio"]').forEach(function (radio) {
-      radio.addEventListener('change', function () {
-        document.querySelectorAll('.logo-color-chip').forEach(function (chip) {
-          chip.classList.remove('active');
-        });
-        const parent = radio.closest('.logo-color-chip');
-        if (parent) {
-          parent.classList.add('active');
+    const syncColorChipGroup = function (radio) {
+      const name = radio.getAttribute('name');
+      if (!name) {
+        return;
+      }
+      document.querySelectorAll('.logo-color-chip input[type="radio"][name="' + name + '"]').forEach(function (peer) {
+        const chip = peer.closest('.logo-color-chip');
+        if (chip) {
+          chip.classList.toggle('active', peer.checked);
         }
       });
+    };
+
+    document.querySelectorAll('.logo-color-chip input[type="radio"]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        syncColorChipGroup(radio);
+      });
+      syncColorChipGroup(radio);
     });
+
+    const toColorCustomWrap = document.getElementById('toColorCustomWrap');
+    const toColorCustomInput = document.getElementById('toColorCustomInput');
+    const toColorCustomDot = document.getElementById('toColorCustomDot');
+    const toColorCustomRadio = document.querySelector('input[name="to_color_mode"][value="custom"]');
+
+    const syncToColorCustom = function () {
+      if (!toColorCustomWrap || !toColorCustomRadio) {
+        return;
+      }
+      toColorCustomWrap.style.display = toColorCustomRadio.checked ? 'block' : 'none';
+    };
+
+    const updateCustomDot = function () {
+      if (!toColorCustomInput || !toColorCustomDot) {
+        return;
+      }
+      const value = toColorCustomInput.value.trim();
+      if (/^#([0-9a-fA-F]{6})$/.test(value)) {
+        toColorCustomDot.style.background = value;
+      }
+    };
+
+    document.querySelectorAll('input[name="to_color_mode"]').forEach(function (radio) {
+      radio.addEventListener('change', syncToColorCustom);
+    });
+    if (toColorCustomInput) {
+      toColorCustomInput.addEventListener('input', updateCustomDot);
+    }
+    syncToColorCustom();
+    updateCustomDot();
 
     const targetHash = '#upi-info-section';
     if (window.location.hash === targetHash) {
