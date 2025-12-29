@@ -16,7 +16,7 @@
     {% set totals_size = (sizes.totals if sizes is defined and sizes.totals is defined else 15) * size_scale %}
     {% set payment_size = (sizes.payment if sizes is defined and sizes.payment is defined else 13) * size_scale %}
     {% set footer_size = (sizes.footer if sizes is defined and sizes.footer is defined else 10) * size_scale %}
-    {% set logo_print_multiplier = 3.2 if app_info['business'].get('logo_color_mode') == 'blue' else 4 %}
+    {% set logo_print_multiplier = 3.4 * (0.8 if app_info['business'].get('logo_color_mode') == 'blue' else 1) %}
     {% set logo_print_height = header_size * logo_print_multiplier %}
     <style>
       body {
@@ -59,7 +59,8 @@
       .table-bordered td, .table-bordered th { border-width: 0.5px !important; }
       .table { border-color: #c8c8c8 !important; }
       @page {
-        size: 210mm 148mm;
+        size: 148mm 210mm;
+        size: A5 portrait;
         margin: 12mm;
       }
       @media print {
