@@ -61,6 +61,7 @@ Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Boots
 ### Document Layout and Rendering
 - Configurable “Invoice Visual Settings” (Config → Invoice Visual Settings) let you tune watermark colour and section font sizes stored in the database (`layoutConfig`).
 - Print-ready HTML templates for invoice previews and final statements.
+- Invoice preview now always opens in the default A4 layout, without extra size choices.
 - Optional exclusion of customer contact details on rendered invoices.
 
 ### Payments and Integrations
@@ -199,6 +200,11 @@ All API endpoints require the application to be running locally. Authentication 
 - **Packaging:** When building desktop distributions, set the `BG_DESKTOP_ENV=1` environment variable so the data directory resolves to the user’s application support folder. The provided `build_exe.bat` handles this automatically for Windows builds.
 
 ## Recent Changes
+
+### 2026-03-28 11:35:39 IST (+0530)
+- Bill preview now opens only in the default A4 layout.
+- The extra A5 and tiny bill preview routes and size picker were removed.
+- The A4 preview layout, print button, and QR toggle stay the same.
 
 ### 2026-03-28 10:55:36 IST (+0530)
 - The create bill page now uses more desktop space so the customer, invoice, items, and total cards feel less cramped.

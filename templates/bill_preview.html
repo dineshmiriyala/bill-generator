@@ -129,60 +129,6 @@
       }
       .phone-toggle .form-check-input { cursor: pointer; }
       .contact-line { display: block; }
-      .size-dropdown {
-        position: relative;
-        display: inline-block;
-      }
-      .size-dropdown summary {
-        list-style: none;
-        cursor: pointer;
-      }
-      .size-dropdown summary::-webkit-details-marker { display: none; }
-      .size-dropdown summary.btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-      }
-      .size-tag {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid rgba(26,42,108,0.35);
-        color: #1a2a6c;
-        border-radius: 4px;
-        padding: 0 6px;
-        font-size: 0.7rem;
-        line-height: 1.2;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-      }
-      .size-menu {
-        position: absolute;
-        top: calc(100% + 6px);
-        left: 0;
-        min-width: 200px;
-        background: #fff;
-        border: 1px solid rgba(0,0,0,0.12);
-        border-radius: 8px;
-        padding: 6px;
-        box-shadow: 0 12px 24px rgba(0,0,0,0.08);
-        display: none;
-        z-index: 10;
-      }
-      .size-dropdown[open] .size-menu { display: block; }
-      .size-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        padding: 6px 8px;
-        border-radius: 6px;
-        color: #1b1f24;
-        text-decoration: none;
-        font-size: 0.9rem;
-      }
-      .size-item:hover { background: #f2f5fb; }
-      .size-item.active { background: #e7eefc; font-weight: 600; }
     </style>
 </head>
 <body class="p-5">
@@ -341,14 +287,6 @@
 
         <div class="text-center mt-4 d-print-none">
             <button onclick="window.print()" class="btn btn-primary">Print / Save as PDF</button>
-            <details class="size-dropdown ms-2 d-inline-block">
-              <summary class="btn btn-outline-primary">Bill <span class="size-tag">A4</span></summary>
-              <div class="size-menu">
-                <a class="size-item active" href="{{ url_for('bill_preview', invoicenumber=invoice.invoiceId) }}">Bill <span class="size-tag">A4</span></a>
-                <a class="size-item" href="{{ url_for('bill_preview_a5', invoicenumber=invoice.invoiceId) }}">Bill <span class="size-tag">A5</span></a>
-                <a class="size-item" href="{{ url_for('bill_preview_tiny', invoicenumber=invoice.invoiceId) }}">Tiny Bill <span class="size-tag">Tiny</span></a>
-              </div>
-            </details>
             <button id="toggleQrBtn" class="btn btn-secondary ms-2">Hide UPI QR</button>
             <p class="mt-2 text-muted" style="font-size: 0.9rem;">Tip: Uncheck “Headers and footers” in print dialog for a clean copy.</p>
         </div>
