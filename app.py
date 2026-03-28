@@ -363,7 +363,60 @@ def _validate_bill_token(submitted: str) -> bool:
     return True
 
 
+def _get_customer_bill_history(customer_id: Optional[int], exclude_invoice_id: Optional[str] = None) -> List[Dict[str, object]]:
+    """Return non-deleted invoice summaries for the create-bill history panel."""
+    if not customer_id:
+        return []
+
+    history_query = (
+        db.session.query(
+            invoice.invoiceId.label('invoice_no'),
+            invoice.createdAt.label('created_at'),
+            invoice.totalAmount.label('total_amount'),
+            invoice.payment.label('is_paid'),
+            func.count(invoiceItem.id).label('item_count'),
+        )
+        .outerjoin(invoiceItem, invoiceItem.invoiceId == invoice.id)
+        .filter(
+            invoice.customerId == customer_id,
+            invoice.isDeleted.is_(False),
+        )
+    )
+
+    if exclude_invoice_id:
+        history_query = history_query.filter(invoice.invoiceId != exclude_invoice_id)
+
+    rows = (
+        history_query
+        .group_by(invoice.id)
+        .order_by(invoice.createdAt.desc(), invoice.id.desc())
+        .all()
+    )
+
+    return [
+        {
+            'invoice_no': row.invoice_no,
+            'created_at': row.created_at,
+            'total_amount': float(row.total_amount or 0.0),
+            'is_paid': bool(row.is_paid),
+            'item_count': int(row.item_count or 0),
+        }
+        for row in rows
+    ]
+
+
 def _render_create_bill(**context):
+    customer_obj = context.get('customer')
+    if customer_obj and 'customer_bill_history' not in context:
+        exclude_invoice_id = None
+        if context.get('edit_mode'):
+            exclude_invoice_id = context.get('invoice_no') or context.get('prev_invoice_no')
+        context['customer_bill_history'] = _get_customer_bill_history(
+            getattr(customer_obj, 'id', None),
+            exclude_invoice_id=exclude_invoice_id,
+        )
+    else:
+        context.setdefault('customer_bill_history', [])
     context['form_token'] = _issue_bill_token()
     return render_template('create_bill.html', **context)
 

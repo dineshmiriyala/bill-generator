@@ -14,6 +14,7 @@ Bill Generator is a production-ready, local-first invoicing platform designed fo
 - [API Reference](#api-reference)
 - [Project Layout](#project-layout)
 - [Development Notes](#development-notes)
+- [Recent Changes](#recent-changes)
 - [License](#license)
 
 ## Overview
@@ -35,6 +36,9 @@ Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Boots
 
 ### Billing and Inventory
 - Three-step bill creation flow: select/create customer, add items with live totals, preview and confirm.
+- After you pick a customer, the create bill page also shows that customer's older bills in a side panel.
+- Each older bill shows invoice number, date, total amount, paid or pending status, and item count.
+- Click any older bill in that panel to open a simple item list with unit price and add those items into the current invoice without leaving the create bill page.
 - Smart rounding: individual line items can be rounded to the nearest 10 with visual indicators and precise Decimal back-end calculations.
 - Editable totals with automatic recomputation of rate/quantity depending on the last edited field.
 - Inventory manager with SKU auto-assignment and duplicate detection.
@@ -132,6 +136,8 @@ The script installs/updates dependencies, clears previous artefacts, and emits `
 2. **Manage inventory** via `/add_inventory` and `/view_inventory`. SKUs are auto-generated if omitted.
 3. **Generate invoices:**
    - Start at `/select_customer` to pick or create a customer.
+   - On the create bill page, you can also see the selected customer's previous bills on the right side.
+   - Click an older bill to open a simple item list with unit price and add those items into the current invoice.
    - Add items, apply rounding, edit totals, and preview the invoice.
    - Finalise to persist an `invoice`, individual `invoiceItem` records, and a printable HTML page accessible from `/view_bills`.
 4. **Edit or delete invoices** with admin privileges only. Edits respect previous rounding choices and preserve totals on reload.
@@ -191,6 +197,31 @@ All API endpoints require the application to be running locally. Authentication 
 - **Testing:** Automated coverage lives under `tests/`; run `pytest` before raising PRs or cutting releases.
 - **Coding standards:** The codebase targets Python 3.11, uses type hints in newer modules, and prefers Decimal for currency math. Follow existing patterns when contributing.
 - **Packaging:** When building desktop distributions, set the `BG_DESKTOP_ENV=1` environment variable so the data directory resolves to the user’s application support folder. The provided `build_exe.bat` handles this automatically for Windows builds.
+
+## Recent Changes
+
+### 2026-03-28 10:55:36 IST (+0530)
+- The create bill page now uses more desktop space so the customer, invoice, items, and total cards feel less cramped.
+- The previous bills panel is now wider on large screens so older bill items are easier to read.
+- Older bill item details now show only the item name and unit price, and the page no longer shows the extra round note or the repeated customer bill count near the action buttons.
+- The red remove control is now a compact `-` button, and the items row stays usable even when Delivery Challan is turned on.
+- The create bill header is now cleaner, with the repeated customer name and top change-customer button removed.
+- The item header labels are easier to read now, and the red `-` button is square with the same height as the Round button.
+- The item row now fits without horizontal scrolling, so the action buttons stay visible and the top labels are not clipped.
+- The customer details card text is simpler now, the ID label says `ID/Phone`, and `Latest Bill Date` is now `Last Bill Date`.
+- The current bill's invoice number is no longer shown in the create or edit page cards and banners.
+- The new invoice item rows now have more breathing room, and the total card now shows only the main total amount.
+- Previous bill items now have an `Add` button that brings that item into the current invoice, keeps the old unit price, and moves the cursor straight to the quantity field.
+- Expanded previous bill items now use a stacked readable layout, so long item names are much easier to scan before adding them.
+
+### 2026-03-27 16:38:40 IST (+0530)
+- The create bill page now shows previous bills for the selected customer.
+- Each previous bill shows invoice number, date, total amount, paid or pending status, and item count.
+- Click any previous bill to load its items inside the same page.
+- The create bill page now uses a more dashboard-like layout with a bill history side panel, top info cards, a full invoice items section, and a separate total card.
+- The item editor now uses a wider layout on larger screens so the fields feel less cramped.
+- The action buttons in each item row now stay inside their own space instead of spilling out.
+- When you edit a bill, that current bill is hidden from the previous bills list so you only see the other bills for that customer.
 
 ## License
 
