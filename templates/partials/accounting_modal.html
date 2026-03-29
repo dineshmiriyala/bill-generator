@@ -2,7 +2,7 @@
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content" style="border-radius: 1rem;">
       <form method="post" action="{{ url_for('accounting_dashboard') }}">
-        <input type="hidden" name="next_url" value="{{ request.path }}">
+        <input type="hidden" name="next_url" value="{{ modal_next_url or request.path }}">
         <input type="hidden" id="businessExpenseId" value="{{ business_expense_id or '' }}">
         <div class="modal-header border-0">
           <h5 class="modal-title fw-semibold" id="recordTxnModalLabel">Record Payment / Expense</h5>
@@ -27,6 +27,7 @@
                   <option value="">Select customer</option>
                   {% for cust in customers %}
                     <option value="{{ cust.id }}"
+                            {% if preset_customer_id and cust.id == preset_customer_id %}selected{% endif %}
                             {% if business_expense_id and cust.id == business_expense_id %}data-business-option="true"{% endif %}>
                       {{ cust.name }}{% if cust.company %} — {{ cust.company }}{% endif %}
                     </option>

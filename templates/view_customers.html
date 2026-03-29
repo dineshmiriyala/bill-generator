@@ -15,7 +15,7 @@
     </div>
     <div class="col-auto d-flex gap-2">
       <a href="{{ url_for('add_customers') }}" class="btn btn-success">Add New Customer</a>
-      <a href="{{ url_for('accounting_statement') }}" class="btn btn-outline-primary">Accounting Statement</a>
+      <a href="{{ url_for('accounting_dashboard') }}" class="btn btn-outline-primary">Accounting</a>
     </div>
   </form>
 
@@ -47,11 +47,11 @@
             <td>{{ c.address }}</td>
             <td class="text-nowrap">{{ c.createdAt.strftime('%d %b %Y, %I:%M %p') if c.createdAt else '' }}</td>
             <td class="text-nowrap">
-              <a class="d-block" href="{{ url_for('statements_company', query=c.phone, start='start', end='end') }}">
-                Customer Statement
+              <a class="d-block" href="{{ url_for('accounting_customer_simple_statement', customer_id=c.id) }}" target="_blank">
+                Simple Statement
               </a>
-              <a class="d-block text-primary" href="{{ url_for('accounting_statement', customer=c.phone) }}">
-                Accounting Statement
+              <a class="d-block text-primary" href="{{ url_for('accounting_customer_detail', customer_id=c.id) }}">
+                Accounting Page
               </a>
             </td>
             <td>

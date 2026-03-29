@@ -158,21 +158,21 @@
       <img src="{{ url_for('static', filename='logos/view_bills.svg') }}" alt="View Bills" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
       View Bills
     </a>
-    <a href="/statements_company" class="btn btn-dark btn-lg text-center">
-      <img src="{{ url_for('static', filename='logos/statements_company.svg') }}" alt="Statements" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
-      Statements
-    </a>
     <a href="/accounting" class="btn btn-dark btn-lg text-center">
-      <img src="{{ url_for('static', filename='logos/accounting.svg') }}" alt="Accounting" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
-      Accounting
+      <img src="{{ url_for('static', filename='logos/accounting.svg') }}" alt="Client Statement" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
+      Client Statement
     </a>
+    <a href="{{ url_for('accounting_statement') }}" class="btn btn-dark btn-lg text-center">
+      <img src="{{ url_for('static', filename='logos/statements_company.svg') }}" alt="Company Books" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
+      Company Books
+    </a>
+    <button type="button" class="btn btn-dark btn-lg text-center" data-bs-toggle="modal" data-bs-target="#recordTxnModal">
+      <img src="{{ url_for('static', filename='logos/all_transactions.svg') }}" alt="Add Transaction" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
+      Add Transaction
+    </button>
     <a href="/accounting/transactions" class="btn btn-dark btn-lg text-center">
       <img src="{{ url_for('static', filename='logos/all_transactions.svg') }}" alt="All Transactions" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
       All Transactions
-    </a>
-    <a href="/qr_code" class="btn btn-dark btn-lg text-center">
-      <img src="{{ url_for('static', filename='logos/qr_code.svg') }}" alt="Generate UPI QR" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
-      Generate UPI QR
     </a>
     <a href="/more" class="btn btn-dark btn-lg">
       <img src="{{ url_for('static', filename='logos/more.svg') }}" alt="More" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
@@ -231,6 +231,9 @@
     </div>
   </div>
 </div>
+
+{% include 'partials/accounting_modal.html' %}
+{% include 'partials/accounting_modal_script.html' %}
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {

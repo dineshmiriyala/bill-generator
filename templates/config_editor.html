@@ -255,6 +255,14 @@
               <dd class="col-sm-8 text-muted">{{ app_info['bill_config']['footer'] }}</dd>
               <dt class="col-sm-4">Payment Footer</dt>
               <dd class="col-sm-8 text-muted">{{ app_info['bill_config']['payment-footer'] }}</dd>
+              <dt class="col-sm-4">Dues Table Position</dt>
+              <dd class="col-sm-8 text-muted">
+                {% if app_info['bill_config'].get('dues-table-position', 'below_totals') == 'below_logo' %}
+                  Below logo
+                {% else %}
+                  Below totals
+                {% endif %}
+              </dd>
             </dl>
           </div>
         </div>
@@ -740,6 +748,14 @@
                         <dd class="text-muted">{{ app_info['bill_config']['footer'] }}</dd>
                         <dt>Payment Footer</dt>
                         <dd class="text-muted">{{ app_info['bill_config']['payment-footer'] }}</dd>
+                        <dt>Dues Table Position</dt>
+                        <dd class="text-muted">
+                          {% if app_info['bill_config'].get('dues-table-position', 'below_totals') == 'below_logo' %}
+                            Below logo
+                          {% else %}
+                            Below totals
+                          {% endif %}
+                        </dd>
                       </dl>
                     </div>
                     <div class="col-md-6">
@@ -754,6 +770,13 @@
                       <div class="mb-3">
                         <label class="form-label">Payment Footer</label>
                         <input type="text" name="payment-footer" class="form-control" value="{{ app_info['bill_config']['payment-footer'] }}">
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">All Past Dues Table Position</label>
+                        <select name="dues-table-position" class="form-select">
+                          <option value="below_totals" {{ 'selected' if app_info['bill_config'].get('dues-table-position', 'below_totals') == 'below_totals' else '' }}>Below totals</option>
+                          <option value="below_logo" {{ 'selected' if app_info['bill_config'].get('dues-table-position', 'below_totals') == 'below_logo' else '' }}>Below logo</option>
+                        </select>
                       </div>
                     </div>
                   </div>

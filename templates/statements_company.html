@@ -1,182 +1,298 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div id="stmts-container" class="container py-4">
-  <h2 class="text-center fw-semibold mb-4">View Statements by Company</h2>
-
-  <form method="GET" action="/statements_company" class="mb-4">
-    <!-- Company / Phone -->
-    <div class="row justify-content-center align-items-end g-3">
-      <div class="col-md-5 col-lg-4 position-relative">
-        <label for="query" class="form-label fw-medium">Company / Phone</label>
-        <div class="input-group shadow-sm">
-          <input type="text" class="form-control" id="query" name="query"
-                 placeholder="Enter company name or phone/ID..." value="{{ request.args.get('query','') }}" required>
-          <button type="submit" class="btn btn-primary px-3" style="font-size: 0.96em;">Get</button>
-        </div>
-        <div id="suggestionsList" class="list-group position-absolute w-100 shadow-sm" style="z-index: 1000; display: none;"></div>
-      </div>
-      <div class="col-md-2 d-flex flex-wrap gap-2 justify-content-center">
-        <a href="{{ url_for('statements_company') }}" class="btn btn-outline-danger shadow-sm flex-grow-1 px-3 py-2">Clear</a>
-      </div>
-      <div class="col-md-3 d-flex flex-wrap gap-2 justify-content-center">
-        <a href="{{ url_for('statements') }}" class="btn btn-outline-secondary shadow-sm flex-grow-1 px-3 py-2">Date Wise</a>
-      </div>
-    </div>
-
-    <!-- Toggle -->
-    <div class="text-center my-4">
-      <button id="toggleDateFilter" type="button" class="btn btn-outline-secondary btn-sm px-4 py-2 shadow-sm">Add Time Filter</button>
-    </div>
-
-    <!-- Date Filter (same form so query persists) -->
-    <div id="dateFilter" class="mb-4 d-none">
-      <div class="row justify-content-center g-2">
-        <div class="col-md-3">
-          <label for="start" class="form-label fw-medium">From</label>
-          <input type="date" class="form-control" id="start" name="start" value="{{ request.args.get('start','') }}">
-        </div>
-        <div class="col-md-3">
-          <label for="end" class="form-label fw-medium">To</label>
-          <input type="date" class="form-control" id="end" name="end" value="{{ request.args.get('end','') }}">
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-          <button type="submit" class="btn btn-success w-100">Apply Filter</button>
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-          <a href="{{ url_for('statements_company', query=request.args.get('query','')) }}" class="btn btn-outline-danger w-100">Clear Dates</a>
-        </div>
-      </div>
-    </div>
-  </form>
-
-{% if total_invoices > 0 or customer_company or customer_phone %}
-<div class="card border-0 shadow-sm rounded-4 mt-4">
-  <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
-    <div>
-      {% if customer_company %}
-        <h5 class="fw-semibold text-dark mb-1">{{ customer_company }}</h5>
-      {% endif %}
-      {% if customer_phone %}
-        <p class="text-muted mb-2">Phone: <strong class="text-dark">{{ customer_phone }}</strong></p>
-      {% endif %}
-      <div class="fw-medium text-muted small">
-        Total Invoices: <strong class="text-dark">{{ total_invoices }}</strong><br>
-        Total Amount: <strong class="text-dark fs-6">INR: {{ total_amount|inr }}</strong>
-      </div>
-    </div>
-
-    <div class="d-flex flex-wrap gap-2">
-      <a class="btn btn-success rounded-pill shadow-sm px-4"
-         href="{{ url_for('statements_company', format='csv', phone=customer_phone, start=start_date, end=end_date) }}"
-         target="_blank" title="Download CSV — Legacy format (basic compatibility)">
-         Download CSV
-      </a>
-      <a class="btn btn-info rounded-pill shadow-sm px-4"
-         href="{{ url_for('statements_company', format='xlsx', phone=customer_phone, start=start_date, end=end_date) }}"
-         target="_blank" title="Download XLSX — Modern format (recommended)">
-         Download XLSX
-      </a>
-      <a class="btn btn-primary rounded-pill shadow-sm px-4"
-         href="{{ url_for('statements_company', format='pdf', phone=customer_phone, start=start_date, end=end_date) }}"
-         target="_blank" title="Save or Print PDF version">
-         Save/Print PDF
-      </a>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-{% if total_invoices > 0 %}
-<div class="table-responsive mt-4">
-  <table class="table table-bordered table-striped align-middle">
-    <thead class="table-light">
-      <tr class="text-center">
-        <th>Invoice No</th>
-        <th>Date</th>
-        <th class="text-end">Total (INR)</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in inv_rows %}
-      <tr>
-        <td><a href="{{ url_for('view_bill_locked', invoicenumber=r.invoice_no) }}">{{ r.invoice_no }}</a></td>
-        <td>{{ r.date | datetimeformat }}</td>
-        <td class="text-end">{{ r.total|inr }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}
-<p class="text-center text-muted mt-4">No statements found for the selected company.</p>
-{% endif %}
-
-<script>
-  document.getElementById('toggleDateFilter').addEventListener('click', () => {
-    document.getElementById('dateFilter').classList.toggle('d-none');
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('start') || params.get('end')) {
-      document.getElementById('dateFilter').classList.remove('d-none');
-    }
-  });
-
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('start') || params.get('end')) {
-    document.getElementById('dateFilter').classList.remove('d-none');
-  }
-</script>
-
-<script>
-  const suggestions = {{ suggestions|tojson }};
-  const input = document.getElementById('query');
-  const list = document.getElementById('suggestionsList');
-
-  input.addEventListener('input', () => {
-    const val = input.value.toLowerCase();
-    list.innerHTML = '';
-    if (!val) {
-      list.style.display = 'none';
-      return;
-    }
-    const matches = suggestions.filter(s =>
-      (s.company || '').toLowerCase().includes(val) || (s.phone || '').toLowerCase().includes(val)
-    ).slice(0, 8);
-    matches.forEach(m => {
-      const item = document.createElement('a');
-      item.className = 'list-group-item list-group-item-action';
-      item.textContent = m.company ? `${m.company} (${m.phone})` : m.phone;
-      item.addEventListener('click', () => {
-        input.value = m.company || m.phone;
-        list.style.display = 'none';
-      });
-      list.appendChild(item);
-    });
-    list.style.display = matches.length ? 'block' : 'none';
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!list.contains(e.target) && e.target !== input) list.style.display = 'none';
-  });
-</script>
 <style>
-  #stmts-container table.table td,
-  #stmts-container table.table th {
-    font-size: 0.9rem;
-    padding: 0.6rem;
+  .customer-statement-shell {
+    max-width: 1240px;
+    margin: 0 auto;
   }
-
-  .card-body h5 {
-    font-size: 1.2rem;
-    color: #111;
+  .customer-statement-card {
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 26px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    box-shadow: 0 20px 44px rgba(15, 23, 42, 0.08);
   }
-
-  .card-body .text-muted {
-    color: #6c757d !important;
+  .customer-statement-summary {
+    border: 1px solid rgba(15, 23, 42, 0.07);
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
   }
-
-  .card-body .fw-medium strong {
-    color: #000;
+  .customer-statement-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 0.75rem;
+    color: #6b7a90;
+    font-weight: 700;
+  }
+  .statement-suggestions {
+    z-index: 1000;
+    display: none;
   }
 </style>
+
+<div class="container-fluid py-4">
+  <div class="customer-statement-shell">
+    <section class="customer-statement-card p-4 p-lg-5 mb-4">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+        <div>
+          <p class="customer-statement-eyebrow mb-2">Customer Statement</p>
+          <h2 class="fw-semibold mb-1">Customer Ledger Statement</h2>
+          <p class="text-muted mb-0">Invoices, payments, and balance in one place.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a href="{{ url_for('statements') }}" class="btn btn-outline-secondary">Date Wise</a>
+          <a href="{{ url_for('statements_company') }}" class="btn btn-outline-danger">Clear</a>
+        </div>
+      </div>
+
+      <form method="GET" action="{{ url_for('statements_company') }}" autocomplete="off">
+        <div class="row g-3 align-items-end">
+          <div class="col-lg-5 position-relative">
+            <label for="query" class="form-label text-muted small text-uppercase">Company / Name / Phone</label>
+            <input
+              type="text"
+              class="form-control form-control-lg"
+              id="query"
+              name="query"
+              placeholder="Enter company, name, or phone"
+              value="{{ request.args.get('query', '') or customer_company or customer_name or customer_phone }}"
+            >
+            <div id="suggestionsList" class="list-group position-absolute w-100 shadow-sm statement-suggestions"></div>
+          </div>
+          <div class="col-lg-2">
+            <label for="start" class="form-label text-muted small text-uppercase">From</label>
+            <input type="date" class="form-control" id="start" name="start" value="{{ request.args.get('start', '') }}">
+          </div>
+          <div class="col-lg-2">
+            <label for="end" class="form-label text-muted small text-uppercase">To</label>
+            <input type="date" class="form-control" id="end" name="end" value="{{ request.args.get('end', '') }}">
+          </div>
+          <div class="col-lg-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary flex-grow-1">Get Statement</button>
+            {% if selected_customer %}
+            <a href="{{ url_for('statements_company', format='csv', phone=customer_phone, start=start_date, end=end_date) }}" target="_blank" class="btn btn-outline-success">CSV</a>
+            <a href="{{ url_for('statements_company', format='xlsx', phone=customer_phone, start=start_date, end=end_date) }}" target="_blank" class="btn btn-outline-info">XLSX</a>
+            <a href="{{ url_for('statements_company', format='pdf', phone=customer_phone, start=start_date, end=end_date) }}" target="_blank" class="btn btn-dark">PDF</a>
+            {% endif %}
+          </div>
+        </div>
+      </form>
+    </section>
+
+    {% if selected_customer and customer_statement_summary %}
+    <section class="customer-statement-card p-4 p-lg-5 mb-4">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+        <div>
+          <h4 class="fw-semibold mb-1">{{ customer_company or customer_name }}</h4>
+          <p class="text-muted mb-0">
+            {% if customer_name and customer_company and customer_name != customer_company %}
+              {{ customer_name }} ·
+            {% endif %}
+            {{ customer_phone or 'No phone saved' }}
+          </p>
+        </div>
+        <span class="badge rounded-pill text-bg-light px-3 py-2">{{ statement_range_label }}</span>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-3">
+          <div class="customer-statement-summary h-100 p-4">
+            <div class="text-muted text-uppercase small fw-semibold mb-2">Invoices Raised</div>
+            <h4 class="mb-1">INR {{ customer_statement_summary.invoice_total|inr }}</h4>
+            <div class="small text-muted">{{ customer_statement_summary.invoice_count }} invoices</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="customer-statement-summary h-100 p-4">
+            <div class="text-muted text-uppercase small fw-semibold mb-2">Payments Received</div>
+            <h4 class="mb-1 text-success">INR {{ customer_statement_summary.payment_total|inr }}</h4>
+            <div class="small text-muted">{{ customer_statement_summary.payment_count }} payments</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="customer-statement-summary h-100 p-4">
+            <div class="text-muted text-uppercase small fw-semibold mb-2">Outgoing</div>
+            <h4 class="mb-1 text-danger">INR {{ customer_statement_summary.adjustment_total|inr }}</h4>
+            <div class="small text-muted">Customer-linked expense entries</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="customer-statement-summary h-100 p-4">
+            <div class="text-muted text-uppercase small fw-semibold mb-2">Balance Due</div>
+            <h4 class="mb-1 {{ 'text-success' if customer_statement_summary.balance <= 0 else 'text-danger' }}">
+              INR {{ customer_statement_summary.balance|inr }}
+            </h4>
+            <div class="small text-muted">Invoices + outgoing - payments</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-lg-6">
+          <div class="border rounded-4 p-4 h-100 bg-white shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="fw-semibold mb-0">Invoices Raised</h5>
+              <small class="text-muted">{{ customer_invoices|length }} entries</small>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light text-uppercase small text-muted">
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Date</th>
+                    <th class="text-end">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% if customer_invoices %}
+                    {% for inv in customer_invoices %}
+                    <tr>
+                      <td><a href="{{ url_for('view_bill_locked', invoicenumber=inv.invoice_no) }}">{{ inv.invoice_no }}</a></td>
+                      <td>{{ inv.date.strftime('%d %b %Y') }}</td>
+                      <td class="text-end">{{ inv.total|inr }}</td>
+                    </tr>
+                    {% endfor %}
+                  {% else %}
+                    <tr><td colspan="3" class="text-center text-muted py-4">No invoices in this period.</td></tr>
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="border rounded-4 p-4 h-100 bg-white shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="fw-semibold mb-0">Payments Received</h5>
+              <small class="text-muted">{{ customer_payments|length }} entries</small>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light text-uppercase small text-muted">
+                  <tr>
+                    <th>Date</th>
+                    <th>Reference</th>
+                    <th class="text-end">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% if customer_payments %}
+                    {% for pay in customer_payments %}
+                    <tr>
+                      <td>{{ pay.date.strftime('%d %b %Y') }}</td>
+                      <td>
+                        {{ pay.mode|upper }} · {{ pay.txn_id }}
+                        {% if pay.invoice_no %}
+                          <div class="text-muted small">Invoice: {{ pay.invoice_no }}</div>
+                        {% endif %}
+                        {% if pay.remarks %}
+                          <div class="text-muted small">{{ pay.remarks }}</div>
+                        {% endif %}
+                      </td>
+                      <td class="text-end text-success">{{ pay.amount|inr }}</td>
+                    </tr>
+                    {% endfor %}
+                  {% else %}
+                    <tr><td colspan="3" class="text-center text-muted py-4">No payments recorded in this period.</td></tr>
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if customer_adjustments %}
+      <div class="border rounded-4 p-4 mt-4 bg-white shadow-sm">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="fw-semibold mb-0">Outgoing</h5>
+          <small class="text-muted">{{ customer_adjustments|length }} entries</small>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead class="table-light text-uppercase small text-muted">
+              <tr>
+                <th>Date</th>
+                <th>Reference</th>
+                <th class="text-end">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for adj in customer_adjustments %}
+              <tr>
+                <td>{{ adj.date.strftime('%d %b %Y') }}</td>
+                <td>
+                  {{ adj.mode|upper }} · {{ adj.txn_id }}
+                  {% if adj.invoice_no %}
+                    <div class="text-muted small">Invoice: {{ adj.invoice_no }}</div>
+                  {% endif %}
+                  {% if adj.remarks %}
+                    <div class="text-muted small">{{ adj.remarks }}</div>
+                  {% endif %}
+                </td>
+                <td class="text-end text-danger">{{ adj.amount|inr }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+    </section>
+    {% elif request.args.get('query') or request.args.get('phone') %}
+    <div class="customer-statement-card p-5 text-center text-muted">
+      <strong>No matching customer statement found.</strong>
+      <div class="small mt-2">Try company name, customer name, or phone again.</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  (function() {
+    const suggestions = {{ suggestions|tojson }};
+    const input = document.getElementById('query');
+    const list = document.getElementById('suggestionsList');
+    if (!input || !list) return;
+
+    input.addEventListener('input', () => {
+      const val = (input.value || '').toLowerCase().trim();
+      list.innerHTML = '';
+      if (!val) {
+        list.style.display = 'none';
+        return;
+      }
+      const matches = suggestions.filter((entry) => {
+        return (entry.company || '').toLowerCase().includes(val) ||
+               (entry.name || '').toLowerCase().includes(val) ||
+               (entry.phone || '').toLowerCase().includes(val);
+      }).slice(0, 8);
+
+      matches.forEach((entry) => {
+        const item = document.createElement('a');
+        item.href = '#';
+        item.className = 'list-group-item list-group-item-action';
+        const primary = entry.company || entry.name || entry.phone;
+        const secondary = [entry.name, entry.phone].filter(Boolean).join(' · ');
+        item.textContent = secondary ? `${primary} (${secondary})` : primary;
+        item.addEventListener('click', (event) => {
+          event.preventDefault();
+          input.value = entry.company || entry.name || entry.phone || '';
+          list.style.display = 'none';
+        });
+        list.appendChild(item);
+      });
+
+      list.style.display = matches.length ? 'block' : 'none';
+    });
+
+    document.addEventListener('click', (event) => {
+      if (event.target !== input && !list.contains(event.target)) {
+        list.style.display = 'none';
+      }
+    });
+  })();
+</script>
 {% endblock %}

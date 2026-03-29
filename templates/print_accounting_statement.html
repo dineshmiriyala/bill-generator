@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
 {% set hide_navbar = True %}
 {% set logo_color_mode = APP_INFO.business.logo_color_mode if APP_INFO.business and APP_INFO.business.logo_color_mode else 'black' %}
-{% set base_logo_height = 70 %}
+{% set base_logo_height = 52 %}
 {% set logo_print_height = base_logo_height * (0.8 if logo_color_mode == 'blue' else 1) %}
+{% block title %}{{ pdf_title | default('Accounting_Statement') }}{% endblock %}
 {% block head %}
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,10 +11,18 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+  .brand-logo {
+    height: {{ base_logo_height }}px;
+    width: auto;
+    max-width: 280px;
+    object-fit: contain;
+  }
   @media print {
     .brand-logo {
       max-height: {{ logo_print_height | round(1) }}px !important;
       height: {{ logo_print_height | round(1) }}px !important;
+      width: auto !important;
+      max-width: none !important;
     }
   }
 </style>
@@ -25,15 +34,13 @@
 <div class="container py-4" style="max-width: 940px;">
   <div class="text-center mb-4">
     <div class="mb-2">
-      <img class="brand-logo" src="{{ APP_INFO.business.logo_path }}"
+      <img class="brand-logo" src="{{ url_for('static', filename=APP_INFO.business.logo_path.replace('static/', '')) }}"
            alt="{{ APP_INFO.business.name }}"
-           style="max-height: {{ base_logo_height }}px;"
            onerror="this.style.display='none';">
     </div>
-    <h3 class="fw-bold mb-1">{{ APP_INFO.business.name or 'Business' }}</h3>
     <p class="text-muted mb-0">{{ APP_INFO.business.address }}</p>
     <p class="text-muted mb-1">{{ APP_INFO.business.phone }} · {{ APP_INFO.business.email }}</p>
-    <h5 class="fw-semibold mb-0">{{ 'Customer Accounting Statement' if is_customer_statement else 'Accounting Statement' }}</h5>
+    <h5 class="fw-semibold mb-0">{{ 'Customer Accounting Statement' if is_customer_statement else 'Company Accounting Statement' }}</h5>
     <small class="text-muted d-block mb-2">{{ statement_range_label }} · Generated {{ generated_at.strftime('%d %b %Y %H:%M') }}</small>
     {% if is_customer_statement and selected_customer %}
       <span class="badge bg-secondary-subtle text-secondary">
@@ -82,8 +89,9 @@
   <div class="row g-3 mb-4">
     <div class="col-md-3">
       <div class="border rounded-3 p-3 h-100">
-        <p class="text-muted text-uppercase small mb-1">Total Outstanding</p>
-        <h4 class="mb-0">INR {{ overall_totals.outstanding_total|inr }}</h4>
+        <p class="text-muted text-uppercase small mb-1">Invoices Raised</p>
+        <h4 class="mb-0">INR {{ statement_invoice_total|inr }}</h4>
+        <small class="text-muted">{{ statement_invoice_count }} invoices</small>
       </div>
     </div>
     <div class="col-md-3">
@@ -213,101 +221,40 @@
 
   {% else %}
 
-  <div class="row g-3 mb-4">
-    <div class="col-md-6">
-      <div class="border rounded-3 p-3 h-100">
-        <h6 class="fw-semibold mb-3">Mode Breakdown</h6>
-        <table class="table table-sm mb-0">
-          <thead>
-            <tr>
-              <th>Mode</th>
-              {% if show_income %}<th class="text-end">Payments</th>{% endif %}
-              {% if show_expense %}<th class="text-end">Outgoing</th>{% endif %}
-              <th class="text-end">Net</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in mode_breakdown %}
-              <tr>
-                <td>{{ row.label }}</td>
-                {% if show_income %}<td class="text-end">INR {{ row.income|inr }}</td>{% endif %}
-                {% if show_expense %}<td class="text-end">INR {{ row.expense|inr }}</td>{% endif %}
-                <td class="text-end">{{ row.net|inr }}</td>
-              </tr>
-            {% endfor %}
-            {% if not mode_breakdown %}
-              <tr><td colspan="4" class="text-center text-muted small">No entries.</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="border rounded-3 p-3 h-100">
-        <h6 class="fw-semibold mb-3">Account Breakdown</h6>
-        <table class="table table-sm mb-0">
-          <thead>
-            <tr>
-              <th>Account</th>
-              {% if show_income %}<th class="text-end">Payments</th>{% endif %}
-              {% if show_expense %}<th class="text-end">Outgoing</th>{% endif %}
-              <th class="text-end">Net</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in account_breakdown %}
-              <tr>
-                <td>{{ row.label }}</td>
-                {% if show_income %}<td class="text-end">INR {{ row.income|inr }}</td>{% endif %}
-                {% if show_expense %}<td class="text-end">INR {{ row.expense|inr }}</td>{% endif %}
-                <td class="text-end">{{ row.net|inr }}</td>
-              </tr>
-            {% endfor %}
-            {% if not account_breakdown %}
-              <tr><td colspan="4" class="text-center text-muted small">No entries.</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
   <div class="border rounded-3 p-3 mb-4">
-    <h5 class="fw-semibold mb-3">Customer Summary</h5>
+    <h5 class="fw-semibold mb-3">Invoices Raised</h5>
     <table class="table table-sm mb-0">
       <thead>
         <tr>
+          <th>Invoice</th>
+          <th>Date</th>
           <th>Customer</th>
-          {% if show_income %}<th class="text-end">Payments</th>{% endif %}
-        {% if show_expense %}<th class="text-end">Outgoing</th>{% endif %}
-          <th class="text-end">Net</th>
-          <th class="text-end">Entries</th>
-          <th>Last Activity</th>
+          <th class="text-end">Amount</th>
         </tr>
       </thead>
       <tbody>
-        {% for row in customer_summary %}
+        {% for row in statement_invoices %}
           <tr>
             <td>
-              <div class="fw-semibold">{{ row.customer }}</div>
-              {% if row.company %}<small class="text-muted">{{ row.company }}</small>{% endif %}
+              <div class="fw-semibold">{{ row.invoice_no }}</div>
             </td>
-            {% if show_income %}<td class="text-end">INR {{ row.income|inr }}</td>{% endif %}
-            {% if show_expense %}<td class="text-end">INR {{ row.expense|inr }}</td>{% endif %}
-            <td class="text-end">INR {{ row.net|inr }}</td>
-            <td class="text-end">{{ row.transactions }}</td>
-            <td>{{ row.last_txn_at.strftime('%d %b %Y') if row.last_txn_at else '—' }}</td>
+            <td>{{ row.date.strftime('%d %b %Y') }}</td>
+            <td>
+              <div>{{ row.company or row.customer_name or '—' }}</div>
+              {% if row.phone %}<small class="text-muted">{{ row.phone }}</small>{% endif %}
+            </td>
+            <td class="text-end">INR {{ row.total|inr }}</td>
           </tr>
         {% endfor %}
-        {% if not customer_summary %}
-          <tr><td colspan="6" class="text-center text-muted small">No customer-linked entries.</td></tr>
+        {% if not statement_invoices %}
+          <tr><td colspan="4" class="text-center text-muted small">No invoices in the selected period.</td></tr>
         {% endif %}
       </tbody>
     </table>
   </div>
 
   <div class="border rounded-3 p-3 mb-4">
-    <h5 class="fw-semibold mb-3">Ledger Entries</h5>
+    <h5 class="fw-semibold mb-3">All Transactions</h5>
     <table class="table table-sm mb-0">
       <thead>
         <tr>
@@ -375,6 +322,8 @@
 
 <script>
   window.onload = function () {
+    const pdfTitle = {{ pdf_title|tojson if pdf_title is defined else '"Accounting_Statement"' }};
+    document.title = pdfTitle;
     window.print();
   };
 </script>
