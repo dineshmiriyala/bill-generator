@@ -1013,6 +1013,8 @@ def test_bill_preview_moves_phone_toggle_to_action_buttons(app_module, monkeypat
 
 def test_bill_preview_with_dues_ignores_invalid_selected_invoices_and_totals(app_module, monkeypatch):
     module = app_module
+    original_due_heading = module.APP_INFO.setdefault("bill_config", {}).get("dues-table-heading")
+    module.APP_INFO["bill_config"]["dues-table-heading"] = "Outstanding Bills"
     qr_calls = []
 
     class _FakeQrResponse:
@@ -1028,83 +1030,89 @@ def test_bill_preview_with_dues_ignores_invalid_selected_invoices_and_totals(app
 
     monkeypatch.setattr(module.requests, "get", _fake_qr_get)
 
-    with module.app.app_context():
-        cust = module.customer(name="Preview Due User", company="Preview Due Co", phone="5550006666")
-        other_cust = module.customer(name="Preview Other", company="Preview Other Co", phone="5550007777")
-        module.db.session.add_all([cust, other_cust])
-        module.db.session.commit()
+    try:
+        with module.app.app_context():
+            cust = module.customer(name="Preview Due User", company="Preview Due Co", phone="5550006666")
+            other_cust = module.customer(name="Preview Other", company="Preview Other Co", phone="5550007777")
+            module.db.session.add_all([cust, other_cust])
+            module.db.session.commit()
 
-        current_invoice = _seed_invoice(
-            module,
-            cust,
-            "INV-PREVIEW-CURRENT",
-            120.0,
-            datetime(2026, 3, 28, 10, 0, tzinfo=timezone.utc),
-            item_names=["Current Preview Item"],
-        )
-        _seed_invoice(
-            module,
-            cust,
-            "INV-PREVIEW-OPEN",
-            80.0,
-            datetime(2026, 3, 24, 10, 0, tzinfo=timezone.utc),
-            item_names=["Open Preview Item"],
-        )
-        _seed_income_payment(
-            module,
-            cust,
-            30.0,
-            invoice_no="INV-PREVIEW-OPEN",
-            created_at=datetime(2026, 3, 25, 10, 0, tzinfo=timezone.utc),
-        )
-        _seed_invoice(
-            module,
-            cust,
-            "INV-PREVIEW-PAID",
-            60.0,
-            datetime(2026, 3, 23, 10, 0, tzinfo=timezone.utc),
-            item_names=["Paid Preview Item"],
-        )
-        _seed_income_payment(
-            module,
-            cust,
-            60.0,
-            invoice_no="INV-PREVIEW-PAID",
-            created_at=datetime(2026, 3, 24, 10, 0, tzinfo=timezone.utc),
-        )
-        _seed_invoice(
-            module,
-            other_cust,
-            "INV-PREVIEW-OTHER",
-            45.0,
-            datetime(2026, 3, 22, 10, 0, tzinfo=timezone.utc),
-            item_names=["Other Preview Item"],
-        )
-        module.db.session.commit()
+            current_invoice = _seed_invoice(
+                module,
+                cust,
+                "INV-PREVIEW-CURRENT",
+                120.0,
+                datetime(2026, 3, 28, 10, 0, tzinfo=timezone.utc),
+                item_names=["Current Preview Item"],
+            )
+            _seed_invoice(
+                module,
+                cust,
+                "INV-PREVIEW-OPEN",
+                80.0,
+                datetime(2026, 3, 24, 10, 0, tzinfo=timezone.utc),
+                item_names=["Open Preview Item"],
+            )
+            _seed_income_payment(
+                module,
+                cust,
+                30.0,
+                invoice_no="INV-PREVIEW-OPEN",
+                created_at=datetime(2026, 3, 25, 10, 0, tzinfo=timezone.utc),
+            )
+            _seed_invoice(
+                module,
+                cust,
+                "INV-PREVIEW-PAID",
+                60.0,
+                datetime(2026, 3, 23, 10, 0, tzinfo=timezone.utc),
+                item_names=["Paid Preview Item"],
+            )
+            _seed_income_payment(
+                module,
+                cust,
+                60.0,
+                invoice_no="INV-PREVIEW-PAID",
+                created_at=datetime(2026, 3, 24, 10, 0, tzinfo=timezone.utc),
+            )
+            _seed_invoice(
+                module,
+                other_cust,
+                "INV-PREVIEW-OTHER",
+                45.0,
+                datetime(2026, 3, 22, 10, 0, tzinfo=timezone.utc),
+                item_names=["Other Preview Item"],
+            )
+            module.db.session.commit()
 
-        client = module.app.test_client()
-        response = client.get(
-            "/bill_preview/INV-PREVIEW-CURRENT"
-            "?with_dues=1"
-            "&include_current=1"
-            "&selected_due=INV-PREVIEW-OPEN"
-            "&selected_due=INV-PREVIEW-PAID"
-            "&selected_due=INV-PREVIEW-OTHER"
-            "&selected_due=INV-PREVIEW-CURRENT",
-            follow_redirects=False,
-        )
+            client = module.app.test_client()
+            response = client.get(
+                "/bill_preview/INV-PREVIEW-CURRENT"
+                "?with_dues=1"
+                "&include_current=1"
+                "&selected_due=INV-PREVIEW-OPEN"
+                "&selected_due=INV-PREVIEW-PAID"
+                "&selected_due=INV-PREVIEW-OTHER"
+                "&selected_due=INV-PREVIEW-CURRENT",
+                follow_redirects=False,
+            )
 
-        html = response.get_data(as_text=True)
-        assert response.status_code == 200
-        assert 'data-due-summary-invoice="INV-PREVIEW-CURRENT"' in html
-        assert html.count('data-due-summary-invoice="INV-PREVIEW-CURRENT"') == 1
-        assert 'data-due-summary-invoice="INV-PREVIEW-OPEN"' in html
-        assert 'data-due-summary-invoice="INV-PREVIEW-PAID"' not in html
-        assert 'data-due-summary-invoice="INV-PREVIEW-OTHER"' not in html
-        assert 'data-due-summary-total="170.00"' in html
-        assert "All Past Dues" in html
-        assert qr_calls
-        assert qr_calls[-1].get("am") == "170.00"
+            html = response.get_data(as_text=True)
+            assert response.status_code == 200
+            assert 'data-due-summary-invoice="INV-PREVIEW-CURRENT"' in html
+            assert html.count('data-due-summary-invoice="INV-PREVIEW-CURRENT"') == 1
+            assert 'data-due-summary-invoice="INV-PREVIEW-OPEN"' in html
+            assert 'data-due-summary-invoice="INV-PREVIEW-PAID"' not in html
+            assert 'data-due-summary-invoice="INV-PREVIEW-OTHER"' not in html
+            assert 'data-due-summary-total="170.00"' in html
+            assert "Outstanding Bills" in html
+            assert qr_calls
+            assert qr_calls[-1].get("am") == "170.00"
+    finally:
+        if original_due_heading is None:
+            module.APP_INFO["bill_config"].pop("dues-table-heading", None)
+        else:
+            module.APP_INFO["bill_config"]["dues-table-heading"] = original_due_heading
 
 
 def test_bill_preview_with_dues_excludes_current_when_include_current_is_off(app_module, monkeypatch):

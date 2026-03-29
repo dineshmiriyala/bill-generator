@@ -263,6 +263,8 @@
                   Below totals
                 {% endif %}
               </dd>
+              <dt class="col-sm-4">Dues Table Heading</dt>
+              <dd class="col-sm-8 text-muted">{{ app_info['bill_config'].get('dues-table-heading', 'All Past Dues') or 'All Past Dues' }}</dd>
             </dl>
           </div>
         </div>
@@ -777,6 +779,10 @@
                           <option value="below_totals" {{ 'selected' if app_info['bill_config'].get('dues-table-position', 'below_totals') == 'below_totals' else '' }}>Below totals</option>
                           <option value="below_logo" {{ 'selected' if app_info['bill_config'].get('dues-table-position', 'below_totals') == 'below_logo' else '' }}>Below logo</option>
                         </select>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">All Past Dues Table Heading</label>
+                        <input type="text" name="dues-table-heading" class="form-control" value="{{ app_info['bill_config'].get('dues-table-heading', 'All Past Dues') or 'All Past Dues' }}">
                       </div>
                     </div>
                   </div>

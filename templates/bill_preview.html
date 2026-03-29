@@ -10,12 +10,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     {% set header_size = (sizes.header if sizes is defined and sizes.header is defined else 13) %}
     {% set dues_table_position = app_info['bill_config'].get('dues-table-position', 'below_totals') %}
+    {% set due_summary_heading = app_info['bill_config'].get('dues-table-heading', 'All Past Dues') or 'All Past Dues' %}
     {% set logo_print_multiplier = 3.2 if app_info['business'].get('logo_color_mode') == 'blue' else 4 %}
     {% set logo_print_height = header_size * logo_print_multiplier %}
     {% macro render_due_summary_block(extra_classes='') -%}
       {% if show_due_summary %}
       <div class="{{ extra_classes }}" id="dueSummaryBlock" data-due-summary-total="{{ '%.2f' | format(due_summary_total) }}">
-        <h6 class="mb-2">All Past Dues</h6>
+        <h6 class="mb-2">{{ due_summary_heading }}</h6>
         <div class="table-responsive">
           <table class="table table-sm table-bordered align-middle mb-0">
             <thead class="table-light">

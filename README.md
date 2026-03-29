@@ -165,7 +165,7 @@ The first run can take a little longer because the script may need to create the
 
 - **Onboarding screen:** Captures business name, owner details, GSTIN, address, UPI ID, and optional banking information. Completing onboarding writes `info.json`, marks onboarding as complete, and unlocks the rest of the application.
 - **Account Settings (`/config`):** Cards and modals expose each configuration slice (business, bank, UPI, invoice layout, payment terms, services, Supabase credentials, backup folder). Submit changes and refresh the live application state using “Reload Settings”.
-- **Invoice settings:** Under `bill_config`, you can now choose where the `All Past Dues` table shows on printed bills: keep it below totals or move it below the logo and above `Tax Invoice`.
+- **Invoice settings:** Under `bill_config`, you can choose where the dues table shows on printed bills and also change the dues table heading text without changing the style.
 - **Configuration file (`info.json`):**
   - `business`, `bank`, `payment`, `statement`, `services`, `bill_config`, `upi_info`, `appearance`, and `account_defaults` power the UI and exports.
   - `supabase` holds `url`, `key`, and last upload timestamps.
@@ -299,6 +299,10 @@ All API endpoints require the application to be running locally. Authentication 
 - `Accounting Statement` keeps the invoice list and the transaction ledger for the selected dates.
 - The company statement page no longer has customer search or transaction-type filters. It now uses only the date filter.
 - Customer accounting PDFs now use their own customer route, so the company statement page stays company-only.
+
+### 2026-03-29 18:15:52 IST (+0530)
+- The printed dues table heading can now be changed from Invoice Settings without changing the styling.
+- The same dues heading setting works for both normal lower placement and the upper below-logo placement.
 
 ### 2026-03-29 11:30:54 IST (+0530)
 - The home page labels are now shorter and clearer: `Client Statement` for customer accounting and `Company Books` for the company-wide numbers page.

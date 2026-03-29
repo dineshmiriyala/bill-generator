@@ -162,6 +162,7 @@ def _default_info_sections(reference_dt: Optional[datetime] = None) -> dict:
             "footer": "Composition Taxable Person. Not eligible to collect Tax on supplies.",
             "payment-footer": "Computer generated receipt - Signature not required",
             "dues-table-position": "below_totals",
+            "dues-table-heading": "All Past Dues",
         },
         "file_location": "",
         "supabase": {
