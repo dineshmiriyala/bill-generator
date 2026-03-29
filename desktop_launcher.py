@@ -6,22 +6,31 @@ from waitress import serve
 os.environ.setdefault("FLASK_ENV", "production")
 os.environ.setdefault("BG_DESKTOP", "1")
 
-from app import app
+from app import app, APP_PORT
+
+HOST = "0.0.0.0"
+PORT = APP_PORT
 
 
-def find_free_port():
-    """Find a free localhost port dynamically."""
+def _port_available(host: str, port: int) -> bool:
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind((host, port))
+        except OSError:
+            return False
+    return True
 
 
 def run_server(port: int):
-    serve(app, host="127.0.0.1", port=port, threads=8)
+    serve(app, host=HOST, port=port, threads=8)
 
 
 def main():
-    port = find_free_port()
+    port = PORT
+    if not _port_available(HOST, port):
+        print(f"Port {port} is already in use. Close the other SLO BILL instance and try again.")
+        return 1
     t = threading.Thread(target=run_server, args=(port,), daemon=True)
     t.start()
 
@@ -44,6 +53,7 @@ def main():
                 time.sleep(0.5)
         except KeyboardInterrupt:
             pass
+    return 0
 
 
 if __name__ == "__main__":

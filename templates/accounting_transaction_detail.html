@@ -9,6 +9,9 @@
     <div class="d-flex gap-2">
       <a href="{{ url_for('accounting_transactions_list') }}" class="btn btn-outline-secondary btn-sm">← All Transactions</a>
       {% if not txn.is_deleted %}
+        <a href="{{ url_for('accounting_transaction_edit', txn_id=txn.id) }}" class="btn btn-primary btn-sm">Edit Transaction</a>
+      {% endif %}
+      {% if not txn.is_deleted %}
         <form method="post" onsubmit="return confirm('Delete this transaction?');">
           <button type="submit" class="btn btn-danger btn-sm">Delete Transaction</button>
         </form>
@@ -29,7 +32,7 @@
 
             <dt class="col-sm-4">Amount</dt>
             <dd class="col-sm-8 {{ 'text-success' if txn.txn_type == 'income' else 'text-danger' }}">
-              &#8377; {{ '{:,.2f}'.format(txn.amount) }}
+              INR {{ txn.amount|inr }}
             </dd>
 
             <dt class="col-sm-4">Customer</dt>
@@ -82,7 +85,7 @@
                 <li class="d-flex justify-content-between border-bottom py-1">
                   <span>{{ item.description }}</span>
                   {% if item.amount %}
-                    <span>&#8377; {{ '{:,.2f}'.format(item.amount) }}</span>
+                    <span>INR {{ item.amount|inr }}</span>
                   {% endif %}
                 </li>
               {% endfor %}

@@ -5,6 +5,22 @@ from datetime import datetime, date
 from pathlib import Path
 import os, json, sys
 
+_activity_pending = False
+
+
+def _mark_activity_pending() -> None:
+    global _activity_pending
+    _activity_pending = True
+
+
+def activity_logs_pending() -> bool:
+    return _activity_pending
+
+
+def clear_activity_pending_flag() -> None:
+    global _activity_pending
+    _activity_pending = False
+
 # Define tables to be tracked
 SYNCED_TABLES = {"customer", "invoice", "item", "invoice_item", "accounting_transaction"}
 APP_NAME = "SLO BILL"
@@ -68,6 +84,7 @@ def stage_sync(table, action, data):
             json.dump(existing, f, indent=2, ensure_ascii=False)
 
         print(f"[append OK] Logged {table} {action} in {filename}")
+        _mark_activity_pending()
     except Exception as e:
         print(f"[append WARN] Failed to log {table} {action}: {e}")
 

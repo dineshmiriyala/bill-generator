@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify
 from db.models import invoice, invoiceItem, item
 import io, base64
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from urllib.parse import urlencode, quote_plus
 from flask import request
 import segno
 
@@ -52,33 +54,49 @@ def generate_upi_qr():
     """Generate QR code for the given amounta and upi_id.
     Default currency: INR, can be explicitly provided.
     UPIs will be generated as scalable UPI QR code as base64 SVG.
-    Example: /api/generate_upi_qr?upi_id=abc@upi&amount=500&name=Dinesh&cur=INR"""
+    Example: /api/generate_upi_qr?upi_id=abc@upi&am=500&pn=Dinesh&cu=INR"""
 
-    upi_id = request.args.get('upi_id')
-    amount = request.args.get('amount')
-    name = request.args.get('name')
+    def _format_amount(raw):
+        if raw is None or raw == '':
+            return None
+        try:
+            value = Decimal(str(raw)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        except (InvalidOperation, ValueError):
+            return None
+        if value <= 0:
+            return None
+        return format(value, 'f')
 
-    cur = request.args.get('cur')
-    if not cur:
-        cur = 'INR'
+    # Accept both canonical and legacy param names for backwards compatibility
+    upi_id = (request.args.get('upi_id') or request.args.get('pa') or '').strip()
+    raw_amount = request.args.get('am') or request.args.get('amount')
+    amount = _format_amount(raw_amount)
+    name = (request.args.get('pn') or request.args.get('name') or request.args.get('company_name') or '').strip()
+    note = (request.args.get('tn') or request.args.get('note') or '').strip()
+
+    cur = (request.args.get('cu') or request.args.get('cur') or 'INR').strip().upper()
 
     if not upi_id:
         return jsonify({"Error": "No UPI ID provided"}), 400
 
-    upi_url = f"upi://pay?pa={upi_id}"
+    upi_params = {
+        "pa": upi_id,
+        "cu": cur or "INR",
+    }
 
     if name:
-        upi_url += f"&name={name}"
-
+        upi_params["pn"] = name
     if amount:
-        upi_url += f"&amount={amount}"
+        upi_params["am"] = amount
+    if note:
+        upi_params["tn"] = note
 
-    upi_url += f"&cur={cur}"
+    upi_url = f"upi://pay?{urlencode(upi_params, quote_via=quote_plus)}"
 
-    qr = segno.make(upi_url, micro = False)
+    qr = segno.make(upi_url, micro=False)
 
     buffer = io.BytesIO()
-    qr.save(buffer, kind = "svg", scale = 5)
+    qr.save(buffer, kind="svg", scale=5)
 
     svg_data = buffer.getvalue().decode("utf-8")
 

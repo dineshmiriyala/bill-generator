@@ -49,10 +49,10 @@
         .then(data => {
           summaryTitle.textContent = `${data.customer_name}${data.company ? ' — ' + data.company : ''}`;
           summaryValues.innerHTML = `
-            <div>Invoiced: &#8377; ${Number(data.total_invoiced).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-            <div>Paid: &#8377; ${Number(data.total_payments).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-            <div>Expenses: &#8377; ${Number(data.total_expenses).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-            <div>Balance: &#8377; ${Number(data.balance).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+            <div>Invoiced: ${Number(data.total_invoiced).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+            <div>Paid: ${Number(data.total_payments).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+            <div>Expenses: ${Number(data.total_expenses).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+            <div>Balance: ${Number(data.balance).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
           `;
           summaryBox.dataset.balance = data.balance;
           updateProjectedBalance();
@@ -89,7 +89,7 @@
       } else {
         projected = currentBalance - amt;
       }
-      projectedBalance.innerHTML = `&#8377; ${projected.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+      projectedBalance.innerHTML = `INR ${projected.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
     }
 
     function toggleBlocks() {

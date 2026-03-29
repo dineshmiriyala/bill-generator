@@ -1,210 +1,291 @@
 {% extends 'base.html' %}
-{% macro sort_link(label, field, current_sort, current_dir) %}
-  {% set is_active = current_sort == field %}
-  {% if is_active %}
-    {% set icon = '↑' if current_dir == 'asc' else '↓' %}
-    {% set next_dir = 'desc' if current_dir == 'asc' else 'asc' %}
-  {% else %}
-    {% set icon = '' %}
-    {% set next_dir = 'desc' %}
-  {% endif %}
-  <a href="{{ url_for('accounting_dashboard', sort=field, dir=next_dir) }}"
-     class="text-decoration-none text-muted fw-semibold">
-    {{ label }}{% if icon %}<span class="ms-1">{{ icon }}</span>{% endif %}
-  </a>
-{% endmacro %}
 {% block content %}
+<style>
+  .accounting-shell {
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  .accounting-hero,
+  .accounting-card {
+    border: 1px solid rgba(27, 78, 160, 0.10);
+    border-radius: 28px;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  }
+  .accounting-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.76rem;
+    color: #6b7a90;
+    font-weight: 700;
+  }
+  .accounting-search-input {
+    min-height: 62px;
+    border-radius: 18px;
+    padding: 0 1rem;
+    font-size: 1.05rem;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+  }
+  .accounting-search-btn {
+    min-width: 140px;
+    border-radius: 18px;
+    font-weight: 600;
+  }
+  .accounting-stats-card {
+    border: 1px solid rgba(15, 23, 42, 0.07);
+    border-radius: 24px;
+    background: #fff;
+    box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+  }
+  .accounting-top-list {
+    display: grid;
+    gap: 1rem;
+  }
+  .accounting-top-entry {
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid rgba(27, 78, 160, 0.12);
+    border-radius: 18px;
+    padding: 0.95rem 1rem;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.05);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  }
+  .accounting-top-entry:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.10);
+    border-color: rgba(27, 78, 160, 0.20);
+  }
+  .accounting-top-company {
+    color: #6b7280;
+    font-size: 0.88rem;
+  }
+  .accounting-top-metrics {
+    display: flex;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+  }
+  .accounting-top-metric {
+    min-width: 0;
+  }
+  .accounting-top-metric-label {
+    display: block;
+    font-size: 0.69rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    margin-bottom: 0.15rem;
+    font-weight: 700;
+  }
+  .accounting-suggestion-list {
+    z-index: 1000;
+    display: none;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  @media (max-width: 575.98px) {
+    .accounting-search-btn {
+      width: 100%;
+    }
+  }
+</style>
+
 <div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <div>
-      <h2 class="fw-semibold mb-1">Accounting</h2>
-      <p class="text-muted mb-0">Track receivables, record payments, and log expenses in one place.</p>
-    </div>
-    <a href="{{ url_for('home') }}" class="btn btn-outline-secondary btn-sm">← Back to Home</a>
-  </div>
+  <div class="accounting-shell">
+    <section class="accounting-hero p-4 p-lg-5 mb-4">
+      <div class="row g-4 align-items-start">
+        <div class="col-lg-8">
+          <p class="accounting-eyebrow mb-2">Accounting</p>
+          <h2 class="fw-semibold mb-2">See the due customers first.</h2>
+          <p class="text-muted mb-4">
+            Search any customer by name, company, or phone to open a cleaner accounting page with invoices,
+            payments, and print options. Use the accounting statement page when you want the full company ledger view.
+          </p>
 
-  <div class="row g-3 mb-4">
-    <div class="col-md-3">
-      <div class="card shadow-sm border-0 h-100">
-        <div class="card-body">
-          <p class="text-muted text-uppercase small mb-1">Total Outstanding</p>
-          <h4 class="mb-0">&#8377; {{ '{:,.2f}'.format(totals.outstanding_total) }}</h4>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card shadow-sm border-0 h-100">
-        <div class="card-body">
-          <p class="text-muted text-uppercase small mb-1">Income</p>
-          <h4 class="mb-0 text-success">&#8377; {{ '{:,.2f}'.format(totals.income_total) }}</h4>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card shadow-sm border-0 h-100">
-        <div class="card-body">
-          <p class="text-muted text-uppercase small mb-1">Expenses</p>
-          <h4 class="mb-0 text-danger">&#8377; {{ '{:,.2f}'.format(totals.expense_total) }}</h4>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card shadow-sm border-0 h-100">
-        <div class="card-body">
-          <p class="text-muted text-uppercase small mb-1">Net Flow</p>
-          <h4 class="mb-0 {{ 'text-success' if totals.net_flow >= 0 else 'text-danger' }}">
-            &#8377; {{ '{:,.2f}'.format(totals.net_flow) }}
-          </h4>
-        </div>
-      </div>
-    </div>
-  </div>
+          <form method="get" class="position-relative" autocomplete="off">
+            <div class="row g-2 align-items-stretch">
+              <div class="col-lg-9 position-relative">
+                <input
+                  type="text"
+                  class="form-control accounting-search-input"
+                  id="accountingDashboardSearch"
+                  name="customer"
+                  value="{{ customer_search }}"
+                  placeholder="Search customer, company, or phone"
+                >
+                <div id="accountingSuggestionsList" class="list-group position-absolute w-100 shadow-sm accounting-suggestion-list"></div>
+              </div>
+              <div class="col-lg-3 d-grid">
+                <button type="submit" class="btn btn-primary accounting-search-btn">Open Customer</button>
+              </div>
+            </div>
+          </form>
 
-  <div class="card shadow-sm border-0">
-    <div class="card-body">
-      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          {% if search_error %}
+          <div class="alert alert-warning border-0 shadow-sm mt-3 mb-0">
+            {{ search_error }}
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="col-lg-4">
+          <div class="d-flex justify-content-lg-end gap-2 flex-wrap">
+            <a href="{{ url_for('home') }}" class="btn btn-outline-secondary btn-sm">Back to Home</a>
+            <a href="{{ url_for('accounting_statement') }}" class="btn btn-outline-primary btn-sm">Company Books</a>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#recordTxnModal">
+              Record Payment / Expense
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-4">
+        <div class="accounting-stats-card h-100 p-4">
+          <div class="text-muted text-uppercase small fw-semibold mb-2">Total Due</div>
+          <h3 class="mb-1 fw-semibold">INR {{ totals.outstanding_total|inr }}</h3>
+          <div class="small text-muted">Current customer balance still pending.</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="accounting-stats-card h-100 p-4">
+          <div class="text-muted text-uppercase small fw-semibold mb-2">Payments Received</div>
+          <h3 class="mb-1 fw-semibold text-success">INR {{ totals.income_total|inr }}</h3>
+          <div class="small text-muted">All recorded income transactions.</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="accounting-stats-card h-100 p-4">
+          <div class="text-muted text-uppercase small fw-semibold mb-2">Customers With Dues</div>
+          <h3 class="mb-1 fw-semibold">{{ customers_with_dues }}</h3>
+          <div class="small text-muted">Only the top 3 are shown below.</div>
+        </div>
+      </div>
+    </div>
+
+    <section class="accounting-card p-4 p-lg-5">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
         <div>
-          <h5 class="fw-semibold mb-0">Outstanding Balances by Customer</h5>
-          <small class="text-muted">{{ outstanding|length }} customers with dues</small>
+          <p class="accounting-eyebrow mb-1">Priority</p>
+          <h4 class="fw-semibold mb-1">Top Dues</h4>
+          <p class="text-muted mb-0">Open any customer to see full accounting details.</p>
         </div>
-        <div class="d-flex gap-2 flex-wrap">
-          <a class="btn btn-outline-secondary" href="{{ url_for('accounting_transactions_list') }}">View All Transactions</a>
-          <a class="btn btn-outline-primary" href="{{ url_for('accounting_statement') }}">Accounting Statement</a>
-          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#recordTxnModal">
-            Record Payment / Expense
-          </button>
-        </div>
+        <span class="badge rounded-pill text-bg-light px-3 py-2">{{ top_due_customers|length }} shown</span>
       </div>
-      {% if outstanding %}
-        <div class="table-responsive">
-          <table class="table align-middle mb-0">
-            <colgroup>
-              <col style="width:28%">
-              <col style="width:10%">
-              <col style="width:18%">
-              <col style="width:18%">
-              <col style="width:13%">
-              <col style="width:13%">
-              <col style="width:12%">
-            </colgroup>
-            <thead class="table-light text-muted text-uppercase small">
-              <tr>
-                <th>Customer</th>
-                <th class="text-center">{{ sort_link('Invoices', 'invoices', current_sort, current_dir) }}</th>
-                <th class="text-end">{{ sort_link('Invoiced', 'invoiced', current_sort, current_dir) }}</th>
-                <th class="text-end">{{ sort_link('Paid', 'paid', current_sort, current_dir) }}</th>
-                <th class="text-end">{{ sort_link('Expenses', 'expenses', current_sort, current_dir) }}</th>
-                <th class="text-end">{{ sort_link('Balance', 'balance', current_sort, current_dir) }}</th>
-                <th class="text-end">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for entry in outstanding %}
-                <tr>
-                  <td>
-                    <div class="fw-semibold">{{ entry.customer }}</div>
-                    {% if entry.company %}
-                      <small class="text-muted text-truncate d-block" style="max-width: 260px;">
-                        {{ entry.company }}
-                      </small>
-                    {% endif %}
-                    {% if entry.latest_invoice_date %}
-                      <small class="text-muted d-block">Latest: {{ entry.latest_invoice_date | datetimeformat('%d %b %Y') }}</small>
-                    {% endif %}
-                  </td>
-                  <td class="text-center fw-semibold">{{ entry.invoice_count }}</td>
-                  <td class="text-end">&#8377; {{ '{:,.2f}'.format(entry.total) }}</td>
-                  <td class="text-end text-success">&#8377; {{ '{:,.2f}'.format(entry.paid) }}</td>
-                  <td class="text-end text-warning">&#8377; {{ '{:,.2f}'.format(entry.expenses or 0) }}</td>
-                  <td class="text-end text-danger fw-semibold">&#8377; {{ '{:,.2f}'.format(entry.balance) }}</td>
-                  <td class="text-end">
-                    <form method="post"
-                          action="{{ url_for('accounting_quick_clear', customer_id=entry.customer_id) }}"
-                          class="d-inline">
-                      <button type="submit"
-                              class="btn btn-sm btn-outline-success"
-                              {% if not entry.customer_id or entry.balance <= 0 %}disabled{% endif %}
-                              onclick="return confirm('Clear all dues for {{ entry.customer }}?');">
-                        Clear Dues
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <div class="text-center text-muted py-4">
-          <p class="mb-0">All caught up! No outstanding invoices.</p>
-        </div>
-      {% endif %}
-    </div>
-  </div>
 
-  <div class="card shadow-sm border-0 mt-4">
-    <div class="card-body">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="fw-semibold mb-0">Recent Transactions</h5>
-        <a href="{{ url_for('accounting_transactions_list') }}" class="btn btn-outline-primary btn-sm">View All</a>
+      {% if top_due_customers %}
+      <div class="accounting-top-list">
+        {% for entry in top_due_customers %}
+        <a
+          href="{{ url_for('accounting_customer_detail', customer_id=entry.customer_id) }}"
+          class="accounting-top-entry"
+          data-accounting-top-due="{{ entry.customer_id }}"
+        >
+          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
+            <div>
+              <div class="fw-semibold fs-6">{{ entry.customer }}</div>
+              {% if entry.company %}
+              <div class="accounting-top-company">{{ entry.company }}</div>
+              {% endif %}
+            </div>
+            <span class="badge bg-danger-subtle text-danger rounded-pill px-3 py-2 small">
+              Due INR {{ entry.balance|inr }}
+            </span>
+          </div>
+
+          <div class="accounting-top-metrics">
+            <div class="accounting-top-metric">
+              <span class="accounting-top-metric-label">Due</span>
+              <strong class="small">INR {{ entry.balance|inr }}</strong>
+            </div>
+            <div class="accounting-top-metric">
+              <span class="accounting-top-metric-label">Paid</span>
+              <strong class="text-success small">INR {{ entry.paid|inr }}</strong>
+            </div>
+            <div class="accounting-top-metric">
+              <span class="accounting-top-metric-label">Bills</span>
+              <strong class="small">{{ entry.invoice_count }}</strong>
+            </div>
+            <div class="accounting-top-metric">
+              <span class="accounting-top-metric-label">Last Bill</span>
+              <strong class="small">
+                {% if entry.latest_invoice_date %}
+                  {{ entry.latest_invoice_date | datetimeformat('%d %b %Y') }}
+                {% else %}
+                  —
+                {% endif %}
+              </strong>
+            </div>
+          </div>
+        </a>
+        {% endfor %}
       </div>
-      {% if recent_transactions %}
-        <div class="table-responsive">
-          <table class="table align-middle mb-0">
-            <thead class="table-light text-muted text-uppercase small">
-              <tr>
-                <th>Txn ID</th>
-                <th>Type</th>
-                <th>Customer / Invoice</th>
-                <th>Mode</th>
-                <th class="text-end">Amount</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for txn in recent_transactions %}
-                <tr>
-                  <td class="fw-semibold">{{ txn.txn_id }}</td>
-                  <td>
-                    <span class="badge {{ 'bg-success-subtle text-success' if txn.txn_type == 'income' else 'bg-danger-subtle text-danger' }}">
-                      {{ txn.txn_type|capitalize }}
-                    </span>
-                  </td>
-                  <td>
-                    {% if txn.customer %}
-                      <div>{{ txn.customer.name }}</div>
-                      {% if txn.customer.company %}
-                        <small class="text-muted">{{ txn.customer.company }}</small>
-                      {% endif %}
-                    {% else %}
-                      <span class="text-muted">—</span>
-                    {% endif %}
-                    {% if txn.invoice_no %}
-                      <small class="text-muted d-block">Invoice: {{ txn.invoice_no }}</small>
-                    {% endif %}
-                    {% if txn.remarks %}
-                      <small class="text-muted d-block">{{ txn.remarks }}</small>
-                    {% endif %}
-                  </td>
-                  <td class="text-capitalize">{{ txn.mode or '—' }}</td>
-                  <td class="text-end {{ 'text-success' if txn.txn_type == 'income' else 'text-danger' }}">
-                    &#8377; {{ '{:,.2f}'.format(txn.amount) }}
-                  </td>
-                  <td>{{ txn.created_at | datetimeformat('%d %b %Y') }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
       {% else %}
-        <div class="text-center text-muted py-4">
-          <p class="mb-0">No transactions recorded yet.</p>
-        </div>
+      <div class="text-center py-5 text-muted">
+        <strong>No due customers right now.</strong>
+        <div class="small mt-2">Once there are unpaid balances, the highest ones will show here.</div>
+      </div>
       {% endif %}
-    </div>
+    </section>
   </div>
 </div>
 
 {% include 'partials/accounting_modal.html' %}
 {% include 'partials/accounting_modal_script.html' %}
+
+<script>
+  (function() {
+    const suggestions = {{ suggestions|tojson }};
+    const input = document.getElementById('accountingDashboardSearch');
+    const list = document.getElementById('accountingSuggestionsList');
+    if (!input || !list) return;
+
+    input.addEventListener('input', () => {
+      const value = (input.value || '').toLowerCase().trim();
+      list.innerHTML = '';
+      if (!value) {
+        list.style.display = 'none';
+        return;
+      }
+
+      const matches = suggestions.filter((entry) => {
+        return (entry.name || '').toLowerCase().includes(value) ||
+               (entry.company || '').toLowerCase().includes(value) ||
+               (entry.phone || '').toLowerCase().includes(value);
+      }).slice(0, 8);
+
+      matches.forEach((entry) => {
+        const item = document.createElement('a');
+        item.href = '#';
+        item.className = 'list-group-item list-group-item-action';
+        const primary = entry.company || entry.name || entry.phone;
+        const secondary = [entry.name, entry.phone].filter(Boolean).join(' · ');
+        const strong = document.createElement('strong');
+        strong.textContent = primary;
+        item.appendChild(strong);
+        if (secondary) {
+          const secondaryEl = document.createElement('div');
+          secondaryEl.className = 'small text-muted mt-1';
+          secondaryEl.textContent = secondary;
+          item.appendChild(secondaryEl);
+        }
+        item.addEventListener('click', (event) => {
+          event.preventDefault();
+          input.value = entry.company || entry.name || entry.phone || '';
+          list.style.display = 'none';
+        });
+        list.appendChild(item);
+      });
+
+      list.style.display = matches.length ? 'block' : 'none';
+    });
+
+    document.addEventListener('click', (event) => {
+      if (event.target !== input && !list.contains(event.target)) {
+        list.style.display = 'none';
+      }
+    });
+  })();
+</script>
 {% endblock %}

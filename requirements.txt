@@ -27,3 +27,4 @@ structlog
 # HTTP & integrations
 requests
 segno
+waitress
