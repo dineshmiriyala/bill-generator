@@ -26,6 +26,23 @@ def run_server(port: int):
     serve(app, host=HOST, port=port, threads=8)
 
 
+def start_desktop_webview(webview_module):
+    start_kwargs = {}
+    if sys.platform.startswith("win"):
+        start_kwargs["gui"] = "edgechromium"
+
+    try:
+        webview_module.start(**start_kwargs)
+    except TypeError:
+        webview_module.start()
+    except Exception as exc:
+        if start_kwargs:
+            print(f"Preferred webview renderer unavailable ({exc}). Falling back to default renderer.")
+            webview_module.start()
+        else:
+            raise
+
+
 def main():
     port = PORT
     if not _port_available(HOST, port):
@@ -45,7 +62,7 @@ def main():
             min_size=(1024, 720),
             confirm_close=True,
         )
-        webview.start()
+        start_desktop_webview(webview)
     except ImportError:
         webbrowser.open(url)
         try:

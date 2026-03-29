@@ -1,38 +1,118 @@
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    const txnTypeIncome = document.getElementById('txnTypeIncome');
-    const txnTypeExpense = document.getElementById('txnTypeExpense');
+    var txnTypeIncome = document.getElementById('txnTypeIncome');
+    var txnTypeExpense = document.getElementById('txnTypeExpense');
     if (!txnTypeIncome || !txnTypeExpense) return;
 
-    const customerBlock = document.querySelector('[data-block="customer-fields"]');
-    const invoiceBlock = document.querySelector('[data-block="invoice-fields"]');
-    const expenseWrapper = document.getElementById('expenseItemsWrapper');
-    const expenseRepeater = document.getElementById('expenseItemsRepeater');
-    const expenseTemplate = document.getElementById('expenseRowTemplate')?.content;
-    const addExpenseBtn = document.getElementById('addExpenseRow');
-    const customerSelect = document.getElementById('customerSelect');
-    const businessExpenseId = document.getElementById('businessExpenseId')?.value || '';
-    const summaryBox = document.getElementById('customerSummaryBox');
-    const summaryTitle = document.getElementById('customerSummaryTitle');
-    const summaryValues = document.getElementById('customerSummaryValues');
-    const amountInput = document.getElementById('amountInput');
-    const amountInWords = document.getElementById('amountInWords');
-    const projectedBalance = document.getElementById('projectedBalance');
-    const fillBalanceBtn = document.getElementById('fillBalanceBtn');
-    const fillBalanceActions = document.getElementById('fillBalanceActions');
-    const txnDateInput = document.getElementById('txnDateInput');
+    var customerBlock = document.querySelector('[data-block="customer-fields"]');
+    var expenseWrapper = document.getElementById('expenseItemsWrapper');
+    var expenseRepeater = document.getElementById('expenseItemsRepeater');
+    var expenseTemplate = document.getElementById('expenseRowTemplate');
+    var addExpenseBtn = document.getElementById('addExpenseRow');
+    var customerSelect = document.getElementById('customerSelect');
+    var businessExpenseId = document.getElementById('businessExpenseId') ? document.getElementById('businessExpenseId').value : '';
+    var summaryBox = document.getElementById('customerSummaryBox');
+    var summaryTitle = document.getElementById('customerSummaryTitle');
+    var summaryValues = document.getElementById('customerSummaryValues');
+    var amountInput = document.getElementById('amountInput');
+    var amountInWords = document.getElementById('amountInWords');
+    var projectedBalance = document.getElementById('projectedBalance');
+    var fillBalanceBtn = document.getElementById('fillBalanceBtn');
+    var fillBalanceActions = document.getElementById('fillBalanceActions');
+    var txnDateInput = document.getElementById('txnDateInput');
+    var billsPane = document.getElementById('customerBillsPane');
+    var billsHelp = document.getElementById('customerBillsHelp');
+    var billsState = document.getElementById('customerBillsState');
+    var billsList = document.getElementById('customerBillsList');
+    var loadBillsBtn = document.getElementById('loadCustomerBillsBtn');
+    var selectAllBillsBtn = document.getElementById('selectAllCustomerBillsBtn');
+
+    function formatMoney(value) {
+      return Number(value || 0).toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
     function addExpenseRow() {
       if (!expenseTemplate || !expenseRepeater) return;
-      const clone = document.importNode(expenseTemplate, true);
-      const row = clone.querySelector('.expense-item-row');
-      const removeBtn = row.querySelector('.remove-expense-row');
+      var clone = document.importNode(expenseTemplate.content, true);
+      var row = clone.querySelector('.expense-item-row');
+      var removeBtn = row ? row.querySelector('.remove-expense-row') : null;
       if (removeBtn) {
         removeBtn.addEventListener('click', function () {
-          row.remove();
+          if (row && row.parentNode) {
+            row.parentNode.removeChild(row);
+          }
         });
       }
       expenseRepeater.appendChild(clone);
+    }
+
+    function renderInvoiceItems(items) {
+      if (!items || !items.length) {
+        return '<div class="text-center text-muted small py-3">No item details found for this bill.</div>';
+      }
+
+      var rows = items.map(function (item) {
+        return (
+          '<tr>' +
+            '<td>' + escapeHtml(item.name || '—') + '</td>' +
+            '<td class="text-center">' + escapeHtml(item.quantity || '0') + '</td>' +
+            '<td class="text-end">INR ' + formatMoney(item.rate || 0) + '</td>' +
+            '<td class="text-end">' + escapeHtml(item.tax || 0) + '%</td>' +
+            '<td class="text-end">INR ' + formatMoney(item.amount || 0) + '</td>' +
+          '</tr>'
+        );
+      }).join('');
+
+      return (
+        '<table class="table table-sm align-middle mb-0">' +
+          '<thead class="table-light">' +
+            '<tr>' +
+              '<th>Item</th>' +
+              '<th class="text-center">Qty</th>' +
+              '<th class="text-end">Unit Price</th>' +
+              '<th class="text-end">Tax</th>' +
+              '<th class="text-end">Amount</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>'
+      );
+    }
+
+    function updateAmountWords() {
+      if (!amountInput || !amountInWords) return;
+      var value = amountInput.value || '0';
+      fetch('/accounting/amount_to_words?amount=' + encodeURIComponent(value))
+        .then(function (resp) { return resp.ok ? resp.json() : Promise.reject(); })
+        .then(function (data) {
+          amountInWords.textContent = data.words || '';
+        })
+        .catch(function () {
+          amountInWords.textContent = '';
+        });
+    }
+
+    function updateProjectedBalance() {
+      if (!projectedBalance || !summaryBox) return;
+      var currentBalance = parseFloat(summaryBox.dataset.balance || '0') || 0;
+      var amountValue = parseFloat((amountInput && amountInput.value) || '0') || 0;
+      var projected = txnTypeExpense.checked ? (currentBalance + amountValue) : (currentBalance - amountValue);
+      projectedBalance.innerHTML = 'INR ' + projected.toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
     }
 
     function updateCustomerSummary(customerId) {
@@ -44,20 +124,19 @@
         updateProjectedBalance();
         return;
       }
-      fetch(`/accounting/customer_summary/${customerId}`)
-        .then(resp => resp.ok ? resp.json() : Promise.reject())
-        .then(data => {
-          summaryTitle.textContent = `${data.customer_name}${data.company ? ' — ' + data.company : ''}`;
-          summaryValues.innerHTML = `
-            <div>Invoiced: ${Number(data.total_invoiced).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-            <div>Paid: ${Number(data.total_payments).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-            <div>Expenses: ${Number(data.total_expenses).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-            <div>Balance: ${Number(data.balance).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-          `;
+      fetch('/accounting/customer_summary/' + customerId)
+        .then(function (resp) { return resp.ok ? resp.json() : Promise.reject(); })
+        .then(function (data) {
+          summaryTitle.textContent = (data.customer_name || '') + (data.company ? ' — ' + data.company : '');
+          summaryValues.innerHTML =
+            '<div>Invoiced: ' + formatMoney(data.total_invoiced) + '</div>' +
+            '<div>Paid: ' + formatMoney(data.total_payments) + '</div>' +
+            '<div>Expenses: ' + formatMoney(data.total_expenses) + '</div>' +
+            '<div>Balance: ' + formatMoney(data.balance) + '</div>';
           summaryBox.dataset.balance = data.balance;
           updateProjectedBalance();
         })
-        .catch(() => {
+        .catch(function () {
           summaryTitle.textContent = 'Unable to load summary.';
           summaryValues.innerHTML = '';
           summaryBox.dataset.balance = '';
@@ -65,37 +144,307 @@
         });
     }
 
-    function updateAmountWords() {
-      if (!amountInput || !amountInWords) return;
-      const value = amountInput.value || '0';
-      fetch(`/accounting/amount_to_words?amount=${encodeURIComponent(value)}`)
-        .then(resp => resp.ok ? resp.json() : Promise.reject())
-        .then(data => {
-          amountInWords.textContent = data.words || '';
+    function getSelectedBillCheckboxes() {
+      if (!billsList) return [];
+      return Array.prototype.slice.call(
+        billsList.querySelectorAll('input[name="selected_invoice_no[]"]:checked')
+      );
+    }
+
+    function getSelectableBillCheckboxes() {
+      if (!billsList) return [];
+      return Array.prototype.slice.call(
+        billsList.querySelectorAll('input[name="selected_invoice_no[]"]:not(:disabled)')
+      );
+    }
+
+    function syncAmountWithSelectedBills() {
+      if (!amountInput || !billsPane) return;
+
+      var selectedCheckboxes = getSelectedBillCheckboxes();
+      var selectedTotal = 0;
+      selectedCheckboxes.forEach(function (checkbox) {
+        selectedTotal += parseFloat(checkbox.getAttribute('data-outstanding-amount') || '0') || 0;
+      });
+
+      if (selectedCheckboxes.length > 0) {
+        if (billsPane.dataset.selectionActive !== '1') {
+          billsPane.dataset.lastManualAmount = amountInput.value || '';
+        }
+        billsPane.dataset.selectionActive = '1';
+        amountInput.value = selectedTotal.toFixed(2);
+        amountInput.setAttribute('readonly', 'readonly');
+        amountInput.classList.add('bg-light');
+        if (fillBalanceActions) {
+          fillBalanceActions.classList.add('d-none');
+        }
+      } else {
+        if (billsPane.dataset.selectionActive === '1') {
+          amountInput.value = billsPane.dataset.lastManualAmount || '';
+        }
+        billsPane.dataset.selectionActive = '0';
+        amountInput.removeAttribute('readonly');
+        amountInput.classList.remove('bg-light');
+        if (fillBalanceActions && !txnTypeExpense.checked) {
+          fillBalanceActions.classList.remove('d-none');
+        }
+      }
+
+      updateAmountWords();
+      updateProjectedBalance();
+    }
+
+    function resetLoadedBills(clearAmount) {
+      var hadSelected = billsPane && (
+        billsPane.dataset.selectionActive === '1' ||
+        getSelectedBillCheckboxes().length > 0
+      );
+
+      if (billsPane) {
+        billsPane.dataset.loadedCustomer = '';
+        billsPane.dataset.selectionActive = '0';
+        billsPane.dataset.lastManualAmount = '';
+      }
+      if (billsList) {
+        billsList.innerHTML = '';
+        billsList.classList.add('d-none');
+      }
+      if (billsState) {
+        billsState.textContent = '';
+      }
+      if (selectAllBillsBtn) {
+        selectAllBillsBtn.classList.add('d-none');
+      }
+
+      if (amountInput) {
+        amountInput.removeAttribute('readonly');
+        amountInput.classList.remove('bg-light');
+        if (clearAmount || hadSelected) {
+          amountInput.value = '';
+        }
+      }
+      if (fillBalanceActions && !txnTypeExpense.checked) {
+        fillBalanceActions.classList.remove('d-none');
+      }
+      updateAmountWords();
+      updateProjectedBalance();
+    }
+
+    function setBillPaneState(message) {
+      if (billsState) {
+        billsState.textContent = message || '';
+      }
+      if (billsList && !billsList.children.length) {
+        billsList.classList.add('d-none');
+      }
+    }
+
+    function renderCustomerBills(invoices) {
+      if (!billsList) return;
+
+      if (!invoices || !invoices.length) {
+        billsList.innerHTML = '';
+        billsList.classList.add('d-none');
+        setBillPaneState('No bills found for this customer.');
+        if (selectAllBillsBtn) {
+          selectAllBillsBtn.classList.add('d-none');
+        }
+        return;
+      }
+
+      var selectableCount = 0;
+      var html = invoices.map(function (entry) {
+        if (entry.selectable) {
+          selectableCount += 1;
+        }
+        var checkboxHtml = entry.selectable
+          ? (
+            '<input class="form-check-input mt-1 modal-bill-checkbox" type="checkbox" ' +
+            'name="selected_invoice_no[]" value="' + escapeHtml(entry.invoice_no) + '" ' +
+            'data-outstanding-amount="' + escapeHtml(entry.outstanding_amount) + '">' 
+          )
+          : (
+            '<input class="form-check-input mt-1 modal-bill-checkbox" type="checkbox" disabled>'
+          );
+        var statusBadge = entry.selectable
+          ? '<span class="badge bg-warning-subtle text-warning rounded-pill px-3 py-2">Pending</span>'
+          : '<span class="badge bg-success-subtle text-success rounded-pill px-3 py-2">Paid</span>';
+
+        return (
+          '<div class="border rounded bg-white px-3 py-3" data-modal-bill="' + escapeHtml(entry.invoice_no) + '">' +
+            '<div class="d-flex justify-content-between align-items-start gap-3">' +
+              '<div class="form-check flex-grow-1 d-flex gap-2 mb-0">' +
+                checkboxHtml +
+                '<label class="form-check-label flex-grow-1">' +
+                  '<div class="fw-semibold">' + escapeHtml(entry.invoice_no) + '</div>' +
+                  '<div class="small text-muted">' + escapeHtml(entry.date_label) + '</div>' +
+                '</label>' +
+              '</div>' +
+              '<div class="text-end">' +
+                '<div class="fw-semibold">INR ' + formatMoney(entry.outstanding_amount) + '</div>' +
+                '<div class="small text-muted">Total INR ' + formatMoney(entry.total_amount) + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="d-flex justify-content-between align-items-center gap-3 mt-3 flex-wrap">' +
+              statusBadge +
+              '<button type="button" class="btn btn-link btn-sm p-0" data-modal-bill-toggle="' + escapeHtml(entry.invoice_no) + '" data-modal-bill-target="modal-bill-details-' + escapeHtml(entry.invoice_no) + '">' +
+                'Expand' +
+              '</button>' +
+            '</div>' +
+            '<div class="d-none mt-3" id="modal-bill-details-' + escapeHtml(entry.invoice_no) + '">' +
+              '<div class="table-responsive" data-modal-bill-items-body>' +
+                '<div class="text-center text-muted small py-3">Loading item details only when expanded.</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+
+      billsList.innerHTML = html;
+      billsList.classList.remove('d-none');
+      setBillPaneState('Select one or more unpaid bills to match this payment.');
+      if (selectAllBillsBtn) {
+        selectAllBillsBtn.classList.toggle('d-none', selectableCount === 0);
+      }
+
+      Array.prototype.slice.call(
+        billsList.querySelectorAll('input[name="selected_invoice_no[]"]')
+      ).forEach(function (checkbox) {
+        checkbox.addEventListener('change', syncAmountWithSelectedBills);
+      });
+
+      Array.prototype.slice.call(
+        billsList.querySelectorAll('[data-modal-bill-toggle]')
+      ).forEach(function (toggle) {
+        toggle.addEventListener('click', function () {
+          var targetId = toggle.getAttribute('data-modal-bill-target');
+          var details = document.getElementById(targetId);
+          if (!details) return;
+
+          Array.prototype.slice.call(
+            billsList.querySelectorAll('[data-modal-bill-toggle]')
+          ).forEach(function (otherToggle) {
+            var otherTargetId = otherToggle.getAttribute('data-modal-bill-target');
+            var otherDetails = document.getElementById(otherTargetId);
+            if (!otherDetails || otherToggle === toggle) return;
+            otherDetails.classList.add('d-none');
+            otherToggle.textContent = 'Expand';
+            otherToggle.setAttribute('aria-expanded', 'false');
+          });
+
+          if (!details.classList.contains('d-none')) {
+            details.classList.add('d-none');
+            toggle.textContent = 'Expand';
+            toggle.setAttribute('aria-expanded', 'false');
+            return;
+          }
+
+          details.classList.remove('d-none');
+          toggle.textContent = 'Collapse';
+          toggle.setAttribute('aria-expanded', 'true');
+
+          var body = details.querySelector('[data-modal-bill-items-body]');
+          if (!body || body.getAttribute('data-loaded') === 'true') return;
+
+          body.innerHTML = '<div class="text-center text-muted small py-3">Loading item details...</div>';
+          fetch('/api/bill_items/' + encodeURIComponent(toggle.getAttribute('data-modal-bill-toggle')))
+            .then(function (response) {
+              return response.ok ? response.json() : Promise.reject();
+            })
+            .then(function (payload) {
+              body.innerHTML = renderInvoiceItems(payload.items || []);
+              body.setAttribute('data-loaded', 'true');
+            })
+            .catch(function () {
+              body.innerHTML = '<div class="text-center text-danger small py-3">Unable to load bill items.</div>';
+            });
+        });
+      });
+    }
+
+    function loadCustomerBills() {
+      if (!customerSelect || !billsPane || !loadBillsBtn || txnTypeExpense.checked) {
+        return;
+      }
+      var customerId = customerSelect.value;
+      if (!customerId) {
+        return;
+      }
+      if (billsPane.dataset.loadedCustomer === customerId && billsList && billsList.children.length) {
+        billsList.classList.remove('d-none');
+        setBillPaneState('Select one or more unpaid bills to match this payment.');
+        return;
+      }
+
+      loadBillsBtn.disabled = true;
+      setBillPaneState('Loading bills...');
+      fetch('/accounting/customer_invoices/' + encodeURIComponent(customerId))
+        .then(function (response) {
+          return response.ok ? response.json() : Promise.reject();
         })
-        .catch(() => {
-          amountInWords.textContent = '';
+        .then(function (payload) {
+          billsPane.dataset.loadedCustomer = customerId;
+          renderCustomerBills(payload.invoices || []);
+        })
+        .catch(function () {
+          if (billsList) {
+            billsList.innerHTML = '';
+            billsList.classList.add('d-none');
+          }
+          setBillPaneState('Unable to load bills for this customer.');
+          if (selectAllBillsBtn) {
+            selectAllBillsBtn.classList.add('d-none');
+          }
+          loadBillsBtn.disabled = false;
+        })
+        .then(function () {
+          loadBillsBtn.disabled = false;
         });
     }
 
-    function updateProjectedBalance() {
-      if (!projectedBalance || !summaryBox) return;
-      const currentBalance = parseFloat(summaryBox.dataset.balance || '0') || 0;
-      const amt = parseFloat(amountInput?.value || '0') || 0;
-      const isExpense = txnTypeExpense.checked;
-      let projected = currentBalance;
+    function updateBillPaneVisibility() {
+      if (!billsPane) return;
+
+      var isExpense = txnTypeExpense.checked;
+      var customerId = customerSelect ? customerSelect.value : '';
+
+      billsPane.classList.toggle('d-none', isExpense);
       if (isExpense) {
-        projected = currentBalance + amt;
-      } else {
-        projected = currentBalance - amt;
+        resetLoadedBills(true);
+        return;
       }
-      projectedBalance.innerHTML = `INR ${projected.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+
+      if (!customerId) {
+        resetLoadedBills(false);
+        if (billsHelp) {
+          billsHelp.textContent = 'Select a customer to load bills.';
+        }
+        if (loadBillsBtn) {
+          loadBillsBtn.classList.add('d-none');
+        }
+        setBillPaneState('No customer selected.');
+        return;
+      }
+
+      if (loadBillsBtn) {
+        loadBillsBtn.classList.remove('d-none');
+      }
+      if (billsPane.dataset.loadedCustomer !== customerId && billsList && billsList.children.length) {
+        resetLoadedBills(true);
+      }
+      if (billsHelp) {
+        billsHelp.textContent = billsPane.dataset.loadedCustomer === customerId
+          ? 'Select one or more unpaid bills to match this payment.'
+          : 'Click load to fetch this customer\'s bills.';
+      }
+      if (!billsPane.dataset.loadedCustomer) {
+        setBillPaneState('Bills will load only after you click the button.');
+      }
     }
 
     function toggleBlocks() {
-      const isExpense = txnTypeExpense.checked;
+      var isExpense = txnTypeExpense.checked;
       if (customerBlock) customerBlock.classList.remove('d-none');
-      if (invoiceBlock) invoiceBlock.classList.toggle('d-none', isExpense);
       if (expenseWrapper) expenseWrapper.classList.toggle('d-none', !isExpense);
       if (isExpense && customerSelect && businessExpenseId) {
         customerSelect.value = businessExpenseId;
@@ -107,6 +456,7 @@
       if (fillBalanceActions) {
         fillBalanceActions.classList.toggle('d-none', isExpense);
       }
+      updateBillPaneVisibility();
       updateProjectedBalance();
     }
 
@@ -115,27 +465,27 @@
     }
     txnTypeIncome.addEventListener('change', toggleBlocks);
     txnTypeExpense.addEventListener('change', toggleBlocks);
-    toggleBlocks();
 
     if (customerSelect) {
       customerSelect.addEventListener('change', function () {
         updateCustomerSummary(this.value);
+        updateBillPaneVisibility();
       });
     }
-    updateCustomerSummary(customerSelect?.value || '');
 
     if (amountInput) {
       amountInput.addEventListener('input', function () {
+        if (billsPane && billsPane.dataset.selectionActive !== '1') {
+          billsPane.dataset.lastManualAmount = amountInput.value || '';
+        }
         updateAmountWords();
         updateProjectedBalance();
       });
-      updateAmountWords();
-      updateProjectedBalance();
     }
 
     if (fillBalanceBtn) {
       fillBalanceBtn.addEventListener('click', function () {
-        const currentBalance = parseFloat(summaryBox?.dataset.balance || '0') || 0;
+        var currentBalance = parseFloat((summaryBox && summaryBox.dataset.balance) || '0') || 0;
         if (txnTypeIncome.checked) {
           amountInput.value = Math.max(currentBalance, 0).toFixed(2);
         } else {
@@ -145,12 +495,30 @@
       });
     }
 
-    if (txnDateInput && !txnDateInput.value) {
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      txnDateInput.value = `${yyyy}-${mm}-${dd}`;
+    if (loadBillsBtn) {
+      loadBillsBtn.addEventListener('click', loadCustomerBills);
     }
+
+    if (selectAllBillsBtn) {
+      selectAllBillsBtn.addEventListener('click', function () {
+        getSelectableBillCheckboxes().forEach(function (checkbox) {
+          checkbox.checked = true;
+        });
+        syncAmountWithSelectedBills();
+      });
+    }
+
+    if (txnDateInput && !txnDateInput.value) {
+      var today = new Date();
+      var yyyy = today.getFullYear();
+      var mm = String(today.getMonth() + 1).padStart(2, '0');
+      var dd = String(today.getDate()).padStart(2, '0');
+      txnDateInput.value = yyyy + '-' + mm + '-' + dd;
+    }
+
+    updateCustomerSummary(customerSelect ? customerSelect.value : '');
+    updateAmountWords();
+    updateProjectedBalance();
+    toggleBlocks();
   });
 </script>

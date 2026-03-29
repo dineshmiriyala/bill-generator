@@ -2,7 +2,7 @@
 {% block content %}
 <div class="container py-4">
   {% if session.persistent_notice %}
-    <div class="alert alert-success alert-dismissible fade show shadow-sm rounded-4 border-0 mb-4" role="alert">
+    <div class="alert alert-success alert-dismissible fade show shadow-sm rounded-4 border-0 mb-4" role="alert" data-auto-dismiss-ms="4000">
       <strong>{{ session.persistent_notice }}</strong>
       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       {% set _ = session.pop('persistent_notice') %}

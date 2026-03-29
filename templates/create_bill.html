@@ -132,11 +132,12 @@
         {% endif %}
 
         {% if success %}
-        <div class="alert alert-success mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="alert alert-success alert-dismissible fade show position-relative mb-4 pe-5 d-flex justify-content-between align-items-center flex-wrap gap-2" role="alert" data-auto-dismiss-ms="4000">
           <div>
             <strong>Bill {{ 'updated' if edit_mode else 'generated' }} successfully</strong>
           </div>
           <a href="{{ url_for('bill_preview', invoicenumber=invoice_no) if edit_mode else url_for('latest_bill_preview') }}" target="_blank" class="btn btn-outline-primary btn-sm">Preview Bill</a>
+          <button type="button" class="btn-close position-absolute top-0 end-0 mt-3 me-3" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         {% endif %}
 

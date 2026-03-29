@@ -78,6 +78,7 @@ Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Boots
 - The customer accounting page also has `+` buttons for invoices and transactions, so staff can start a new bill or open the normal payment/expense modal without leaving that customer page.
 - The customer accounting page also has a quick `Mark as Paid` button on each unpaid invoice.
 - The home page now has a direct `Add Transaction` button that opens the normal payment or expense modal right there.
+- The shared payment modal now keeps loaded bills inside a scrollable bill pane, so long bill lists do not push the save button out of reach.
 - Record incoming payments or expenses (with itemised breakdowns) that link back to customers and invoices.
 - Automatic transaction IDs (`SLP-TXN-DDMMYY-######`) keep records ordered without manual effort.
 
@@ -201,6 +202,7 @@ The first run can take a little longer because the script may need to create the
    - Use `Simple Statement` there if you only want the older simple PDF with invoice rows and one total, without the accounting payment sections.
    - Use the `+` beside bills to start a new bill for that customer right away.
    - Use the `+` beside transactions to open the normal payment/expense modal with that customer already selected.
+   - In the transaction modal, you can now load that customer's bills on demand, expand bill items, and select one or more unpaid bills to auto-fill the payment amount.
    - You can also use `Add Transaction` directly from the home page for a faster entry flow.
 
 ## Data Management and Recovery
@@ -254,8 +256,24 @@ All API endpoints require the application to be running locally. Authentication 
 - **Testing:** Automated coverage lives under `tests/`; run `pytest` before raising PRs or cutting releases.
 - **Coding standards:** The codebase targets Python 3.11, uses type hints in newer modules, and prefers Decimal for currency math. Follow existing patterns when contributing.
 - **Packaging:** Desktop builds use the `BG_DESKTOP=1` environment variable so the data directory resolves to the user’s application support folder. The provided `build_exe.bat` handles this automatically for Windows builds.
+- **Desktop alerts:** Success, warning, and error alerts now auto-close in the packaged Windows app too, so they do not stay stuck on screen after normal actions.
 
 ## Recent Changes
+
+### 2026-03-29 22:19:17 IST (+0530)
+- The shared transaction modal now keeps loaded bills inside a scrollable bill pane, so the save button stays easy to reach even for customers with many bills.
+- Home now shows the normal success alert after recording a transaction from the modal, so staff get a clear confirmation there too.
+- The cloud sync floating button was removed from the home page, and only the settings button stays there.
+
+### 2026-03-29 22:09:32 IST (+0530)
+- The shared add-transaction modal no longer shows the old invoice dropdown.
+- Payment mode can now load the selected customer's bills on demand, show compact bill rows, and expand item details before saving.
+- If you select bills in that modal, the amount now follows the selected outstanding totals and the app records one linked payment entry per selected bill.
+
+### 2026-03-29 21:49:52 IST (+0530)
+- Alerts now auto-close more reliably across the whole app, including the packaged Windows desktop build.
+- The shared alert script no longer depends on Bootstrap's alert close helper, so bill-created and other page-level alerts now disappear on their own more consistently.
+- The main page-level alerts now use the same dismissible alert pattern, and the desktop launcher now prefers the newer Windows webview when it is available.
 
 ### 2026-03-29 16:34:23 IST (+0530)
 - Windows packaging is now one-step again.

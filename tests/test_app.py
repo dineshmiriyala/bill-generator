@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 import re
 
 
@@ -7,6 +8,10 @@ def _read_info_json(module):
     info_path = module.get_info_json_path()
     with open(info_path, "r", encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def _read_repo_file(module, relative_path):
+    return Path(module.app.root_path, relative_path).read_text(encoding="utf-8")
 
 
 def _seed_invoice(
@@ -268,6 +273,46 @@ def test_edit_user_page_uses_refreshed_layout(app_module):
     assert "Current Record" in html
     assert "Save Changes" in html
     assert "Update Customer" not in html
+
+
+def test_base_template_uses_renderer_safe_alert_autodismiss_helper(app_module):
+    module = app_module
+    template_text = _read_repo_file(module, "templates/base.html")
+
+    assert "function closeAlertElement" in template_text
+    assert "data-auto-dismiss-ms" in template_text
+    assert "window.addEventListener('pageshow', bindAlerts);" in template_text
+    assert "bootstrap.Alert.getOrCreateInstance" not in template_text
+
+
+def test_page_level_alert_templates_use_shared_dismissible_contract(app_module):
+    module = app_module
+
+    create_bill_template = _read_repo_file(module, "templates/create_bill.html")
+    view_bill_template = _read_repo_file(module, "templates/view_bill_locked.html")
+    add_customer_template = _read_repo_file(module, "templates/add_customer.html")
+    edit_user_template = _read_repo_file(module, "templates/edit_user.html")
+    add_inventory_template = _read_repo_file(module, "templates/add_inventory.html")
+    accounting_template = _read_repo_file(module, "templates/accounting.html")
+
+    assert 'alert alert-success alert-dismissible fade show' in create_bill_template
+    assert 'data-auto-dismiss-ms="4000"' in create_bill_template
+    assert 'data-auto-dismiss-ms="4000"' in view_bill_template
+    assert 'alert alert-danger alert-dismissible fade show' in add_customer_template
+    assert 'alert alert-success alert-dismissible fade show' in add_customer_template
+    assert 'alert alert-danger alert-dismissible fade show' in edit_user_template
+    assert 'alert alert-danger alert-dismissible fade show' in add_inventory_template
+    assert 'alert alert-success alert-dismissible fade show' in add_inventory_template
+    assert 'alert alert-warning alert-dismissible fade show' in accounting_template
+
+
+def test_desktop_launcher_prefers_modern_windows_renderer_with_fallback(app_module):
+    module = app_module
+    launcher_text = _read_repo_file(module, "desktop_launcher.py")
+
+    assert 'start_kwargs["gui"] = "edgechromium"' in launcher_text
+    assert "Preferred webview renderer unavailable" in launcher_text
+    assert "start_desktop_webview(webview)" in launcher_text
 
 
 def test_missing_customer_routes_redirect_safely(app_module):
@@ -1357,6 +1402,210 @@ def test_accounting_dashboard_shows_search_error_for_unknown_customer(app_module
         assert "No customer matched that search." in html
 
 
+def test_accounting_modal_uses_lazy_bill_loading_layout(app_module):
+    module = app_module
+    modal_template = _read_repo_file(module, "templates/partials/accounting_modal.html")
+    modal_script = _read_repo_file(module, "templates/partials/accounting_modal_script.html")
+
+    assert "Invoice (optional)" not in modal_template
+    assert "Load Customer Bills" in modal_template
+    assert 'id="amountInput"' in modal_template
+    assert 'id="projectedBalanceBox"' in modal_template
+    assert modal_template.index('id="amountInput"') < modal_template.index('id="projectedBalanceBox"')
+    assert modal_template.index('name="remarks"') < modal_template.index('id="customerBillsPane"')
+    assert 'class="accounting-modal-bills-list d-grid gap-2 mt-3 d-none"' in modal_template
+    assert '/accounting/customer_invoices/' in modal_script
+    assert 'selected_invoice_no[]' in modal_script
+    assert 'Select All' in modal_template
+
+
+def test_accounting_customer_invoices_api_returns_customer_bills_with_outstanding_amounts(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Modal Bills User", company="Modal Bills Co", phone="5553330001")
+        other = module.customer(name="Other Modal User", company="Other Modal Co", phone="5553330002")
+        module.db.session.add_all([cust, other])
+        module.db.session.commit()
+
+        _seed_invoice(
+            module,
+            cust,
+            "INV-MODAL-NEW",
+            120.0,
+            datetime(2026, 3, 29, 10, 0, tzinfo=timezone.utc),
+            item_names=["New Modal Item"],
+        )
+        _seed_invoice(
+            module,
+            cust,
+            "INV-MODAL-PAID",
+            80.0,
+            datetime(2026, 3, 27, 10, 0, tzinfo=timezone.utc),
+            is_paid=True,
+            item_names=["Paid Modal Item"],
+        )
+        _seed_income_payment(
+            module,
+            cust,
+            80.0,
+            invoice_no="INV-MODAL-PAID",
+            created_at=datetime(2026, 3, 28, 10, 0, tzinfo=timezone.utc),
+        )
+        _seed_invoice(
+            module,
+            cust,
+            "INV-MODAL-DELETED",
+            55.0,
+            datetime(2026, 3, 26, 10, 0, tzinfo=timezone.utc),
+            is_deleted=True,
+            item_names=["Deleted Modal Item"],
+        )
+        _seed_invoice(
+            module,
+            other,
+            "INV-MODAL-OTHER",
+            90.0,
+            datetime(2026, 3, 25, 10, 0, tzinfo=timezone.utc),
+            item_names=["Other Modal Item"],
+        )
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.get(f"/accounting/customer_invoices/{cust.id}", follow_redirects=False)
+
+        payload = response.get_json()
+        assert response.status_code == 200
+        assert payload["customer_id"] == cust.id
+        assert [row["invoice_no"] for row in payload["invoices"]] == ["INV-MODAL-NEW", "INV-MODAL-PAID"]
+        assert payload["invoices"][0]["outstanding_amount"] == 120.0
+        assert payload["invoices"][0]["selectable"] is True
+        assert payload["invoices"][1]["outstanding_amount"] == 0.0
+        assert payload["invoices"][1]["is_paid"] is True
+        assert payload["invoices"][1]["selectable"] is False
+
+
+def test_accounting_dashboard_post_with_selected_bills_creates_split_income_transactions(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Split Pay User", company="Split Pay Co", phone="5553330010")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+        _seed_invoice(
+            module,
+            cust,
+            "INV-SPLIT-ONE",
+            100.0,
+            datetime(2026, 3, 20, 10, 0, tzinfo=timezone.utc),
+            item_names=["Split Item One"],
+        )
+        _seed_invoice(
+            module,
+            cust,
+            "INV-SPLIT-TWO",
+            90.0,
+            datetime(2026, 3, 21, 10, 0, tzinfo=timezone.utc),
+            item_names=["Split Item Two"],
+        )
+        _seed_income_payment(
+            module,
+            cust,
+            30.0,
+            invoice_no="INV-SPLIT-TWO",
+            created_at=datetime(2026, 3, 22, 10, 0, tzinfo=timezone.utc),
+        )
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.post(
+            "/accounting",
+            data={
+                "next_url": "/accounting",
+                "txn_type": "income",
+                "customer_id": str(cust.id),
+                "txn_date": "2026-03-29",
+                "amount": "999.00",
+                "mode": "bank",
+                "account": "current",
+                "remarks": "Split payment from modal",
+                "selected_invoice_no[]": ["INV-SPLIT-ONE", "INV-SPLIT-TWO"],
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/accounting")
+
+        txns = (
+            module.accountingTransaction.query
+            .filter_by(customerId=cust.id, remarks="Split payment from modal", is_deleted=False)
+            .order_by(module.accountingTransaction.invoice_no.asc(), module.accountingTransaction.id.asc())
+            .all()
+        )
+        assert len(txns) == 2
+        assert [(txn.invoice_no, txn.amount) for txn in txns] == [
+            ("INV-SPLIT-ONE", 100.0),
+            ("INV-SPLIT-TWO", 60.0),
+        ]
+
+        invoice_one = module.invoice.query.filter_by(invoiceId="INV-SPLIT-ONE").one()
+        invoice_two = module.invoice.query.filter_by(invoiceId="INV-SPLIT-TWO").one()
+        assert invoice_one.payment is True
+        assert invoice_two.payment is True
+
+
+def test_accounting_dashboard_post_rejects_selected_bills_from_another_customer(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Valid Split User", company="Valid Split Co", phone="5553330020")
+        other = module.customer(name="Wrong Split User", company="Wrong Split Co", phone="5553330021")
+        module.db.session.add_all([cust, other])
+        module.db.session.commit()
+
+        _seed_invoice(
+            module,
+            cust,
+            "INV-SPLIT-VALID",
+            70.0,
+            datetime(2026, 3, 24, 10, 0, tzinfo=timezone.utc),
+            item_names=["Valid Split Item"],
+        )
+        _seed_invoice(
+            module,
+            other,
+            "INV-SPLIT-WRONG",
+            85.0,
+            datetime(2026, 3, 25, 10, 0, tzinfo=timezone.utc),
+            item_names=["Wrong Split Item"],
+        )
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.post(
+            "/accounting",
+            data={
+                "next_url": "/accounting",
+                "txn_type": "income",
+                "customer_id": str(cust.id),
+                "txn_date": "2026-03-29",
+                "amount": "155.00",
+                "mode": "cash",
+                "account": "cash",
+                "remarks": "Should not save",
+                "selected_invoice_no[]": ["INV-SPLIT-VALID", "INV-SPLIT-WRONG"],
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/accounting")
+        assert (
+            module.accountingTransaction.query
+            .filter_by(remarks="Should not save", is_deleted=False)
+            .count()
+        ) == 0
+
+
 def test_home_page_uses_company_books_and_client_statement_buttons(app_module):
     module = app_module
     with module.app.app_context():
@@ -1370,6 +1619,7 @@ def test_home_page_uses_company_books_and_client_statement_buttons(app_module):
         assert ">Client Statement<" in html
         assert "Add Transaction" in html
         assert "Generate UPI QR" not in html
+        assert 'cloudUploadBtn' not in html
         assert 'data-bs-target="#recordTxnModal"' in html
         assert 'name="next_url" value="/"' in html
 
@@ -1409,6 +1659,34 @@ def test_accounting_dashboard_post_can_return_to_home(app_module):
         )
         assert txn is not None
         assert txn.amount == 55.0
+
+
+def test_accounting_dashboard_post_shows_success_flash_on_home(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Home Flash User", company="Home Flash Co", phone="5552000100")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.post(
+            "/accounting",
+            data={
+                "next_url": "/",
+                "txn_type": "income",
+                "customer_id": str(cust.id),
+                "txn_date": "2026-03-29",
+                "amount": "75.00",
+                "mode": "cash",
+                "account": "cash",
+                "remarks": "Posted with flash",
+            },
+            follow_redirects=True,
+        )
+
+        html = response.get_data(as_text=True)
+        assert response.status_code == 200
+        assert "Transaction recorded successfully." in html
 
 
 def test_company_statement_page_defaults_to_simple_mode_and_legacy_accounting_redirects(app_module):

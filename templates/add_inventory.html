@@ -4,14 +4,16 @@
   <h2 class="mb-4 text-center">Add Inventory Item</h2>
 
   {% if duplicate %}
-    <div class="alert alert-danger text-center w-100 mx-auto" role="alert" style="max-width: 500px; margin: 0 auto;">
+    <div class="alert alert-danger alert-dismissible fade show text-center w-100 mx-auto pe-5 position-relative" role="alert" data-auto-dismiss-ms="6000" style="max-width: 500px; margin: 0 auto;">
       An item with the same <strong>SKU</strong> already exists!
+      <button type="button" class="btn-close position-absolute top-0 end-0 mt-2 me-2" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
   {% endif %}
 
   {% if success %}
-    <div class="alert alert-success text-center w-100 mx-auto" role="alert" style="max-width: 500px; margin: 0 auto;">
+    <div class="alert alert-success alert-dismissible fade show text-center w-100 mx-auto pe-5 position-relative" role="alert" data-auto-dismiss-ms="4000" style="max-width: 500px; margin: 0 auto;">
       Item added successfully!
+      <button type="button" class="btn-close position-absolute top-0 end-0 mt-2 me-2" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
   {% endif %}
 

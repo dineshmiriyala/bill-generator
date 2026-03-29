@@ -425,6 +425,42 @@ def _get_customer_bill_history(
     ]
 
 
+def _get_customer_transaction_invoice_rows(customer_id: Optional[int]) -> List[Dict[str, object]]:
+    if not customer_id:
+        return []
+
+    payments_subq = _invoice_income_payments_subquery()
+    history_rows = (
+        db.session.query(
+            invoice.invoiceId.label('invoice_no'),
+            invoice.createdAt.label('created_at'),
+            invoice.totalAmount.label('total_amount'),
+            func.coalesce(payments_subq.c.paid_amount, 0.0).label('paid_amount'),
+        )
+        .outerjoin(payments_subq, payments_subq.c.invoice_no == invoice.invoiceId)
+        .filter(
+            invoice.customerId == customer_id,
+            invoice.isDeleted.is_(False),
+        )
+        .order_by(invoice.createdAt.desc(), invoice.id.desc())
+        .all()
+    )
+
+    rows = []
+    for row in history_rows:
+        outstanding_amount = round(max(float(row.total_amount or 0.0) - float(row.paid_amount or 0.0), 0.0), 2)
+        rows.append({
+            'invoice_no': row.invoice_no,
+            'created_at': row.created_at,
+            'date_label': row.created_at.strftime('%d %b %Y') if row.created_at else '',
+            'total_amount': float(round(row.total_amount or 0.0, 2)),
+            'outstanding_amount': float(round(outstanding_amount or 0.0, 2)),
+            'is_paid': bool(outstanding_amount <= 0.01),
+            'selectable': bool(outstanding_amount > 0.01),
+        })
+    return rows
+
+
 def _safe_local_redirect(raw_target: Optional[str], fallback: str) -> str:
     target = (raw_target or '').strip()
     if not target:
@@ -804,17 +840,8 @@ def _get_customer_activity_date_bounds(customer_id: int) -> Dict[str, object]:
 
 def _build_accounting_modal_context(*, preset_customer_id: Optional[int] = None, next_url: Optional[str] = None) -> Dict[str, object]:
     customers_list = customer.alive().order_by(customer.name.asc()).all()
-    invoice_choices = []
-    seen_invoices = set()
-    for entry in _accounting_totals(sort_by='balance', sort_dir='desc').get('outstanding_invoices_raw', []):
-        inv_code = entry.get('invoice_no')
-        if inv_code and inv_code not in seen_invoices:
-            seen_invoices.add(inv_code)
-            invoice_choices.append(inv_code)
-
     return {
         'customers': customers_list,
-        'invoice_choices': invoice_choices,
         'payment_modes': ['cash', 'bank', 'upi'],
         'account_options': ['cash', 'savings', 'current'],
         'business_expense_id': _ensure_business_expense_customer().id,
@@ -1934,12 +1961,8 @@ def _flash_test():
 @app.route('/')
 def home():
     session['persistent_notice'] = None
-    supabase_meta = APP_INFO.get('supabase', {})
-    last_incremental = supabase_meta.get('last_incremental_uploaded')
-    last_full = supabase_meta.get('last_uploaded')
-    display_last = _format_sync_timestamp(last_incremental or last_full)
     modal_context = _build_accounting_modal_context(next_url=url_for('home'))
-    return render_template('home.html', last_uploaded=display_last, **modal_context)
+    return render_template('home.html', **modal_context)
 
 
 @app.route('/config', methods=['GET', 'POST'])
@@ -2435,14 +2458,6 @@ def _persist_accounting_transaction(form, existing_txn=None):
     if txn_type not in ('income', 'expense'):
         txn_type = 'income'
 
-    amount_raw = (form.get('amount') or '').strip()
-    try:
-        amount_decimal = Decimal(amount_raw)
-    except (InvalidOperation, TypeError):
-        return "Enter a valid amount."
-    if amount_decimal <= 0:
-        return "Amount must be greater than zero."
-
     customer_id_val = form.get('customer_id')
     customer_obj = None
     if customer_id_val:
@@ -2459,9 +2474,19 @@ def _persist_accounting_transaction(form, existing_txn=None):
     if txn_type == 'expense' and not customer_obj:
         customer_obj = _ensure_business_expense_customer()
 
+    selected_invoice_nos = []
+    seen_invoices = set()
+    if not existing_txn and txn_type == 'income':
+        for raw_invoice_no in form.getlist('selected_invoice_no[]'):
+            invoice_code = (raw_invoice_no or '').strip()
+            if not invoice_code or invoice_code in seen_invoices:
+                continue
+            selected_invoice_nos.append(invoice_code)
+            seen_invoices.add(invoice_code)
+
     invoice_no = (form.get('invoice_no') or '').strip() or None
     invoice_obj = None
-    if invoice_no:
+    if invoice_no and not selected_invoice_nos:
         invoice_obj = invoice.query.filter_by(invoiceId=invoice_no).first()
         if not invoice_obj:
             return "Invoice number could not be located."
@@ -2485,64 +2510,113 @@ def _persist_accounting_transaction(form, existing_txn=None):
         txn_kwargs['created_at'] = txn_created_at
         txn_kwargs['updated_at'] = txn_created_at
 
+    mode_value = (form.get('mode') or '').strip().lower() or 'cash'
+    account_value = (form.get('account') or '').strip().lower() or 'cash'
+    remarks_value = (form.get('remarks') or '').strip() or None
+
+    amount_raw = (form.get('amount') or '').strip()
+    amount_decimal = None
+    if not selected_invoice_nos or existing_txn:
+        try:
+            amount_decimal = Decimal(amount_raw)
+        except (InvalidOperation, TypeError):
+            return "Enter a valid amount."
+        if amount_decimal <= 0:
+            return "Amount must be greater than zero."
+
     txn = existing_txn
-    if txn:
-        txn.customerId = customer_obj.id if customer_obj else None
-        txn.amount = float(amount_decimal)
-        txn.txn_type = txn_type
-        txn.mode = (form.get('mode') or '').strip().lower() or 'cash'
-        txn.account = (form.get('account') or '').strip().lower() or 'cash'
-        txn.invoice_no = invoice_no
-        txn.remarks = (form.get('remarks') or '').strip() or None
-        if txn_created_at:
-            txn.created_at = txn_created_at
-        txn.updated_at = datetime.now(timezone.utc)
-        db.session.flush()
-    else:
-        txn = accountingTransaction(
-            customerId=customer_obj.id if customer_obj else None,
-            amount=float(amount_decimal),
-            txn_type=txn_type,
-            mode=(form.get('mode') or '').strip().lower() or 'cash',
-            account=(form.get('account') or '').strip().lower() or 'cash',
-            invoice_no=invoice_no,
-            remarks=(form.get('remarks') or '').strip() or None,
-            **txn_kwargs
-        )
-        db.session.add(txn)
-        db.session.flush()
-
-    if existing_txn:
-        for entry in list(existing_txn.expense_items):
-            db.session.delete(entry)
-
-    if txn_type == 'expense':
-        descriptions = form.getlist('expense_desc[]')
-        amounts = form.getlist('expense_amount[]')
-        for idx, desc in enumerate(descriptions):
-            desc_text = (desc or '').strip()
-            if not desc_text:
-                continue
-            amount_val = None
-            if idx < len(amounts):
-                amt_raw = (amounts[idx] or '').strip()
-                if amt_raw:
-                    try:
-                        amount_val = float(Decimal(amt_raw))
-                    except (InvalidOperation, TypeError):
-                        amount_val = None
-            expense_entry = expenseItem(
-                transactionId=txn.id,
-                description=desc_text,
-                amount=amount_val
+    if selected_invoice_nos:
+        invoice_rows = (
+            invoice.query
+            .filter(
+                invoice.invoiceId.in_(selected_invoice_nos),
+                invoice.isDeleted.is_(False),
             )
-            db.session.add(expense_entry)
+            .all()
+        )
+        invoice_map = {inv.invoiceId: inv for inv in invoice_rows}
+        invoices_to_sync = set()
 
-    invoices_to_sync = set()
-    if txn_type == 'income' and invoice_no:
-        invoices_to_sync.add(invoice_no)
-    if previous_txn_type == 'income' and previous_invoice_no:
-        invoices_to_sync.add(previous_invoice_no)
+        for invoice_code in selected_invoice_nos:
+            selected_invoice = invoice_map.get(invoice_code)
+            if not selected_invoice:
+                return "One or more selected bills could not be found."
+            if customer_obj and selected_invoice.customerId != customer_obj.id:
+                return "One or more selected bills do not belong to the selected customer."
+
+            outstanding_amount = _get_invoice_outstanding_amount(selected_invoice)
+            if outstanding_amount <= 0.01:
+                return f"Invoice {invoice_code} no longer has any outstanding balance."
+
+            db.session.add(accountingTransaction(
+                customerId=customer_obj.id if customer_obj else None,
+                amount=float(outstanding_amount),
+                txn_type=txn_type,
+                mode=mode_value,
+                account=account_value,
+                invoice_no=invoice_code,
+                remarks=remarks_value,
+                **txn_kwargs
+            ))
+            invoices_to_sync.add(invoice_code)
+    else:
+        if txn:
+            txn.customerId = customer_obj.id if customer_obj else None
+            txn.amount = float(amount_decimal)
+            txn.txn_type = txn_type
+            txn.mode = mode_value
+            txn.account = account_value
+            txn.invoice_no = invoice_no
+            txn.remarks = remarks_value
+            if txn_created_at:
+                txn.created_at = txn_created_at
+            txn.updated_at = datetime.now(timezone.utc)
+            db.session.flush()
+        else:
+            txn = accountingTransaction(
+                customerId=customer_obj.id if customer_obj else None,
+                amount=float(amount_decimal),
+                txn_type=txn_type,
+                mode=mode_value,
+                account=account_value,
+                invoice_no=invoice_no,
+                remarks=remarks_value,
+                **txn_kwargs
+            )
+            db.session.add(txn)
+            db.session.flush()
+
+        if existing_txn:
+            for entry in list(existing_txn.expense_items):
+                db.session.delete(entry)
+
+        if txn_type == 'expense':
+            descriptions = form.getlist('expense_desc[]')
+            amounts = form.getlist('expense_amount[]')
+            for idx, desc in enumerate(descriptions):
+                desc_text = (desc or '').strip()
+                if not desc_text:
+                    continue
+                amount_val = None
+                if idx < len(amounts):
+                    amt_raw = (amounts[idx] or '').strip()
+                    if amt_raw:
+                        try:
+                            amount_val = float(Decimal(amt_raw))
+                        except (InvalidOperation, TypeError):
+                            amount_val = None
+                expense_entry = expenseItem(
+                    transactionId=txn.id,
+                    description=desc_text,
+                    amount=amount_val
+                )
+                db.session.add(expense_entry)
+
+        invoices_to_sync = set()
+        if txn_type == 'income' and invoice_no:
+            invoices_to_sync.add(invoice_no)
+        if previous_txn_type == 'income' and previous_invoice_no:
+            invoices_to_sync.add(previous_invoice_no)
 
     for inv_code in invoices_to_sync:
         _sync_invoice_payment_flag(inv_code)
@@ -2605,7 +2679,15 @@ def accounting_dashboard():
             db.session.rollback()
             flash(error, 'danger')
         else:
-            flash('Transaction recorded successfully.', 'success')
+            selected_invoices = [
+                (invoice_code or '').strip()
+                for invoice_code in request.form.getlist('selected_invoice_no[]')
+                if (invoice_code or '').strip()
+            ]
+            flash(
+                'Payments recorded successfully.' if selected_invoices else 'Transaction recorded successfully.',
+                'success',
+            )
         return redirect(next_url)
 
     search_query = (request.args.get('customer') or '').strip()
@@ -2628,14 +2710,6 @@ def accounting_dashboard():
         if cust.name or cust.company or cust.phone
     ]
 
-    invoice_choices = []
-    seen_invoices = set()
-    for entry in totals.get('outstanding_invoices_raw', []):
-        inv_code = entry.get('invoice_no')
-        if inv_code and inv_code not in seen_invoices:
-            seen_invoices.add(inv_code)
-            invoice_choices.append(inv_code)
-
     payment_modes = ['cash', 'bank', 'upi']
     account_options = ['cash', 'savings', 'current']
     business_expense_id = _ensure_business_expense_customer().id
@@ -2646,7 +2720,6 @@ def accounting_dashboard():
         top_due_customers=top_due_customers,
         customers_with_dues=len(outstanding),
         customers=customers_list,
-        invoice_choices=invoice_choices,
         payment_modes=payment_modes,
         account_options=account_options,
         business_expense_id=business_expense_id,
@@ -2760,13 +2833,6 @@ def accounting_transactions_list():
     transactions = q.all()
 
     customers_list = customer.alive().order_by(customer.name.asc()).all()
-    invoice_choices = []
-    seen = set()
-    for row in _outstanding_invoice_rows():
-        inv = row.get('invoice_no')
-        if inv and inv not in seen:
-            seen.add(inv)
-            invoice_choices.append(inv)
     payment_modes = ['cash', 'bank', 'upi']
     account_options = ['cash', 'savings', 'current']
     business_expense_id = _ensure_business_expense_customer().id
@@ -2780,7 +2846,6 @@ def accounting_transactions_list():
         current_sort=sort_by,
         current_dir=sort_dir,
         customers=customers_list,
-        invoice_choices=invoice_choices,
         payment_modes=payment_modes,
         account_options=account_options,
         business_expense_id=business_expense_id,
@@ -3233,6 +3298,19 @@ def accounting_customer_summary(customer_id):
     summary['customer_name'] = cust.name
     summary['company'] = cust.company
     return jsonify(summary)
+
+
+@app.route('/accounting/customer_invoices/<int:customer_id>')
+def accounting_customer_invoices(customer_id):
+    cust = customer.query.filter_by(id=customer_id, isDeleted=False).first()
+    if not cust:
+        return jsonify({'error': 'Customer not found'}), 404
+    return jsonify({
+        'customer_id': cust.id,
+        'customer_name': cust.name,
+        'company': cust.company,
+        'invoices': _get_customer_transaction_invoice_rows(cust.id),
+    })
 
 
 @app.route('/accounting/customer/<int:customer_id>')

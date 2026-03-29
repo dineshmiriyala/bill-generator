@@ -122,8 +122,9 @@
           </form>
 
           {% if search_error %}
-          <div class="alert alert-warning border-0 shadow-sm mt-3 mb-0">
+          <div class="alert alert-warning alert-dismissible fade show border-0 shadow-sm mt-3 mb-0 pe-5 position-relative" role="alert" data-auto-dismiss-ms="6000">
             {{ search_error }}
+            <button type="button" class="btn-close position-absolute top-0 end-0 mt-3 me-3" data-bs-dismiss="alert" aria-label="Close"></button>
           </div>
           {% endif %}
         </div>
