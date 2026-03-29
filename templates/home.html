@@ -150,6 +150,10 @@
       <img src="{{ url_for('static', filename='logos/select_customer.svg') }}" alt="Create New Bill" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
       Create New Bill
     </a>
+    <a href="{{ url_for('bill_drafts') }}" class="btn btn-dark btn-lg">
+      <img src="{{ url_for('static', filename='logos/view_bills.svg') }}" alt="Draft Bills" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
+      Draft Bills
+    </a>
     <a href="/create_customers" class="btn btn-dark btn-lg">
       <img src="{{ url_for('static', filename='logos/create_customers.svg') }}" alt="Add New Customer" width="22" height="22" style="margin-right:8px; vertical-align:middle;">
       Add New Customer

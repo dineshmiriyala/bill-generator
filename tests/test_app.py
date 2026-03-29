@@ -9,8 +9,22 @@ def _read_info_json(module):
         return json.load(fh)
 
 
-def _seed_invoice(module, cust, invoice_no, total_amount, created_at, *, is_deleted=False, is_paid=False, item_names=None):
+def _seed_invoice(
+    module,
+    cust,
+    invoice_no,
+    total_amount,
+    created_at,
+    *,
+    is_deleted=False,
+    is_paid=False,
+    item_names=None,
+    dc_numbers=None,
+    rounded_flags=None,
+):
     item_names = item_names or ["Seed Item"]
+    dc_numbers = dc_numbers or [''] * len(item_names)
+    rounded_flags = rounded_flags or [False] * len(item_names)
 
     inv = module.invoice(
         invoiceId=invoice_no,
@@ -45,6 +59,8 @@ def _seed_invoice(module, cust, invoice_no, total_amount, created_at, *, is_dele
             discount=0,
             taxPercentage=0,
             line_total=line_total,
+            dcNo=dc_numbers[index - 1] if len(dc_numbers) >= index else None,
+            rounded=bool(rounded_flags[index - 1]) if len(rounded_flags) >= index else False,
         ))
 
     return inv
@@ -148,6 +164,531 @@ def test_create_bill_endpoint_creates_invoice(app_module):
         assert len(items) == 1
         assert items[0].quantity == 2
         assert items[0].rate == 450.0
+
+
+def test_create_customers_page_uses_refreshed_layout(app_module):
+    module = app_module
+    client = module.app.test_client()
+
+    response = client.get("/create_customers?bill_generation=true&next_url=/create-bill", follow_redirects=False)
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Customer Setup" in html
+    assert "Add New Customer" in html
+    assert "Back to customer picker" in html
+    assert "What This Record Uses" in html
+    assert "Use computer-generated ID" in html
+    assert "Keep It Clean" not in html
+    assert 'name="next_url" value="/create-bill"' in html
+    assert 'name="bill_generation" value="1"' in html
+
+
+def test_view_customers_page_uses_refreshed_layout(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Directory User", company="Directory Co", phone="5557770011")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+    client = module.app.test_client()
+    response = client.get("/view_customers", follow_redirects=False)
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Customer Directory" in html
+    assert "View Customers" in html
+    assert "Search by phone, name, or company" in html
+    assert "Simple Statement" in html
+    assert "Accounting Page" in html
+    assert "Create Bill" in html
+    assert "Customer List" not in html
+
+
+def test_create_customer_bill_flow_redirects_into_create_bill(app_module):
+    module = app_module
+    client = module.app.test_client()
+
+    response = client.post(
+        "/create_customers",
+        data={
+            "company": "Flow Co",
+            "name": "Flow User",
+            "phone": "5557770098",
+            "email": "",
+            "gst": "",
+            "address": "",
+            "businessType": "",
+            "bill_generation": "1",
+            "next_url": "/create-bill",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].startswith("/create-bill?customer_id=")
+
+    with module.app.app_context():
+        created = module.customer.query.filter_by(phone="5557770098", isDeleted=False).first()
+        assert created is not None
+        assert response.headers["Location"].endswith(f"customer_id={created.id}")
+
+
+def test_about_user_page_uses_refreshed_layout(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Profile User", company="Profile Co", phone="5557770012")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.get(f"/about_user?customer_id={cust.id}", follow_redirects=False)
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Customer Profile" in html
+    assert "Saved Details" in html
+    assert "Open customer accounting" in html
+    assert "About User" not in html
+
+
+def test_edit_user_page_uses_refreshed_layout(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Edit User", company="Edit Co", phone="5557770013")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.get(f"/edit_user/{cust.id}", follow_redirects=False)
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Edit Customer" in html
+    assert "Current Record" in html
+    assert "Save Changes" in html
+    assert "Update Customer" not in html
+
+
+def test_missing_customer_routes_redirect_safely(app_module):
+    module = app_module
+    client = module.app.test_client()
+
+    start_bill_response = client.get("/create-bill?customer_id=999999", follow_redirects=False)
+    about_response = client.get("/about_user?customer_id=999999", follow_redirects=False)
+    edit_response = client.get("/edit_user/999999", follow_redirects=False)
+
+    assert start_bill_response.status_code == 302
+    assert start_bill_response.headers["Location"].endswith("/select_customer")
+    assert about_response.status_code == 302
+    assert about_response.headers["Location"].endswith("/view_customers")
+    assert edit_response.status_code == 302
+    assert edit_response.headers["Location"].endswith("/view_customers")
+
+
+def test_select_customer_page_handles_customers_without_company_names(app_module):
+    module = app_module
+    with module.app.app_context():
+        alpha = module.customer(name="Alpha User", company=None, phone="5557770014")
+        beta = module.customer(name="Beta User", company="Beta Co", phone="5557770015")
+        module.db.session.add_all([beta, alpha])
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.get("/select_customer", follow_redirects=False)
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Alpha User" in html
+    assert "Beta Co" in html
+    assert html.index("Alpha User") < html.index("Beta Co")
+
+
+def test_save_bill_draft_creates_draft_without_invoice(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Draft User", company="Draft Co", phone="5557770000")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.post(
+            "/bill-drafts/save",
+            data={
+                "customer_phone": cust.phone,
+                "exclude_phone": "on",
+                "exclude_addr": "on",
+                "dc_enabled": "1",
+                "description[]": ["Draft Poster"],
+                "quantity[]": ["2"],
+                "rate[]": ["125.50"],
+                "total[]": ["251.00"],
+                "dc_no[]": ["DC-101"],
+                "rounded[]": ["1"],
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        assert response.headers["Location"].startswith("/bill-drafts/")
+
+        saved_draft = module.billDraft.query.filter_by(customerId=cust.id, status="draft").one()
+        assert module.invoice.query.count() == 0
+        assert saved_draft.itemCount == 1
+        assert saved_draft.totalAmount == 250.0
+
+        payload = json.loads(saved_draft.payloadJson)
+        assert payload["exclude_phone"] is True
+        assert payload["exclude_addr"] is True
+        assert payload["dc_enabled"] is True
+        assert payload["items"][0]["description"] == "Draft Poster"
+        assert payload["items"][0]["dc_no"] == "DC-101"
+        assert payload["items"][0]["rounded"] is True
+
+
+def test_open_bill_draft_restores_saved_form_state(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Restore User", company="Restore Co", phone="5557770001")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+        payload = {
+            "exclude_phone": True,
+            "exclude_gst": False,
+            "exclude_addr": True,
+            "dc_enabled": True,
+            "items": [
+                {
+                    "description": "Restore Item",
+                    "quantity": "3",
+                    "rate": "99.50",
+                    "dc_no": "DC-RESTORE",
+                    "rounded": True,
+                }
+            ],
+        }
+        draft = module.billDraft(
+            customerId=cust.id,
+            status="draft",
+            payloadJson=json.dumps(payload),
+            totalAmount=300.0,
+            itemCount=1,
+        )
+        module.db.session.add(draft)
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.get(f"/bill-drafts/{draft.id}", follow_redirects=False)
+
+        html = response.get_data(as_text=True)
+        assert response.status_code == 200
+        assert "Draft mode" in html
+        assert 'name="draft_id" value="' in html
+        assert 'value="Restore Item"' in html
+        assert 'value="3"' in html
+        assert 'value="99.50"' in html
+        assert 'value="DC-RESTORE"' in html
+        assert 'name="dc_enabled" id="dcEnabledInput" value="1"' in html
+        assert 'name="rounded[]" value="1"' in html
+        assert "Update Draft" in html
+        assert "Delete Draft" in html
+
+
+def test_update_draft_and_generate_bill_converts_draft(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Convert User", company="Convert Co", phone="5557770002")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+        draft = module.billDraft(
+            customerId=cust.id,
+            status="draft",
+            payloadJson=json.dumps(
+                {
+                    "exclude_phone": False,
+                    "exclude_gst": False,
+                    "exclude_addr": False,
+                    "dc_enabled": False,
+                    "items": [
+                        {
+                            "description": "Old Draft Item",
+                            "quantity": "1",
+                            "rate": "10.00",
+                            "dc_no": "",
+                            "rounded": False,
+                        }
+                    ],
+                }
+            ),
+            totalAmount=10.0,
+            itemCount=1,
+        )
+        module.db.session.add(draft)
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        update_response = client.post(
+            "/bill-drafts/save",
+            data={
+                "draft_id": str(draft.id),
+                "customer_phone": cust.phone,
+                "exclude_gst": "on",
+                "dc_enabled": "1",
+                "description[]": ["Updated Draft Item"],
+                "quantity[]": ["4"],
+                "rate[]": ["75.00"],
+                "total[]": ["300.00"],
+                "dc_no[]": ["DC-UPDATE"],
+                "rounded[]": ["0"],
+            },
+            follow_redirects=False,
+        )
+        assert update_response.status_code == 302
+
+        module.db.session.refresh(draft)
+        assert draft.itemCount == 1
+        assert draft.totalAmount == 300.0
+        updated_payload = json.loads(draft.payloadJson)
+        assert updated_payload["exclude_gst"] is True
+        assert updated_payload["dc_enabled"] is True
+        assert updated_payload["items"][0]["description"] == "Updated Draft Item"
+
+        open_response = client.get(f"/bill-drafts/{draft.id}", follow_redirects=False)
+        open_html = open_response.get_data(as_text=True)
+        token_match = re.search(r'name="form_token" value="([^"]+)"', open_html)
+        assert token_match
+        token = token_match.group(1)
+
+        generate_response = client.post(
+            "/create-bill",
+            data={
+                "draft_id": str(draft.id),
+                "customer_phone": cust.phone,
+                "description[]": ["Updated Draft Item"],
+                "quantity[]": ["4"],
+                "rate[]": ["75.00"],
+                "total[]": ["300.00"],
+                "dc_no[]": ["DC-UPDATE"],
+                "rounded[]": ["0"],
+                "exclude_gst": "on",
+                "form_token": token,
+            },
+            follow_redirects=False,
+        )
+
+        assert generate_response.status_code == 302
+        assert generate_response.headers["Location"].startswith("/view-bill/")
+
+        module.db.session.refresh(draft)
+        created_invoice = module.invoice.query.filter_by(customerId=cust.id).one()
+        assert draft.status == "converted"
+        assert draft.convertedInvoiceId == created_invoice.id
+
+        draft_list_html = client.get("/bill-drafts", follow_redirects=False).get_data(as_text=True)
+        assert f"/bill-drafts/{draft.id}" not in draft_list_html
+
+
+def test_duplicate_bill_as_draft_copies_items_and_hides_non_active_drafts(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Duplicate User", company="Duplicate Co", phone="5557770003")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+        source_invoice = _seed_invoice(
+            module,
+            cust,
+            "INV-DRAFT-DUPE",
+            200.0,
+            datetime(2026, 3, 28, 12, 0, tzinfo=timezone.utc),
+            item_names=["Draft Copy Item"],
+            dc_numbers=["DC-DUPE"],
+            rounded_flags=[True],
+        )
+        archived_draft = module.billDraft(
+            customerId=cust.id,
+            status="archived",
+            payloadJson=json.dumps({"items": []}),
+            totalAmount=0.0,
+            itemCount=0,
+        )
+        module.db.session.add(archived_draft)
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.post(f"/bills/{source_invoice.invoiceId}/duplicate-draft", follow_redirects=False)
+
+        assert response.status_code == 302
+        assert response.headers["Location"].startswith("/bill-drafts/")
+
+        active_drafts = module.billDraft.query.filter_by(customerId=cust.id, status="draft").all()
+        assert len(active_drafts) == 1
+        duplicated_draft = active_drafts[0]
+        payload = json.loads(duplicated_draft.payloadJson)
+        assert payload["dc_enabled"] is True
+        assert payload["items"][0]["description"] == "Draft Copy Item"
+        assert payload["items"][0]["dc_no"] == "DC-DUPE"
+        assert payload["items"][0]["rounded"] is True
+
+        list_html = client.get("/bill-drafts", follow_redirects=False).get_data(as_text=True)
+        assert "Draft Copy Item" not in list_html
+        assert f"/bill-drafts/{duplicated_draft.id}" in list_html
+        assert f"/bill-drafts/{archived_draft.id}" not in list_html
+
+
+def test_archive_bill_draft_removes_it_from_active_list(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Archive Draft User", company="Archive Co", phone="5557770005")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+        draft = module.billDraft(
+            customerId=cust.id,
+            status="draft",
+            payloadJson=json.dumps({"items": [{"description": "Archive Item"}]}),
+            totalAmount=50.0,
+            itemCount=1,
+        )
+        module.db.session.add(draft)
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.post(
+            f"/bill-drafts/{draft.id}/archive",
+            data={"next": f"/bill-drafts?customer_id={cust.id}"},
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        assert response.headers["Location"] == f"/bill-drafts?customer_id={cust.id}"
+
+        module.db.session.refresh(draft)
+        assert draft.status == "archived"
+        list_html = client.get("/bill-drafts", follow_redirects=False).get_data(as_text=True)
+        assert f"/bill-drafts/{draft.id}" not in list_html
+
+
+def test_bill_drafts_page_shows_bulk_delete_actions(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Bulk UI User", company="Bulk UI Co", phone="5557770006")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+        draft = module.billDraft(
+            customerId=cust.id,
+            status="draft",
+            payloadJson=json.dumps({"items": [{"description": "Bulk UI Item"}]}),
+            totalAmount=60.0,
+            itemCount=1,
+        )
+        module.db.session.add(draft)
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        all_html = client.get("/bill-drafts", follow_redirects=False).get_data(as_text=True)
+        customer_html = client.get(f"/bill-drafts?customer_id={cust.id}", follow_redirects=False).get_data(as_text=True)
+
+        assert "Delete All Drafts" in all_html
+        assert "Delete Customer Drafts" not in all_html
+        assert "Delete All Drafts" in customer_html
+        assert "Delete Customer Drafts" in customer_html
+
+
+def test_bulk_archive_all_bill_drafts_archives_every_active_draft(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust_one = module.customer(name="Bulk All User 1", company="Bulk All Co 1", phone="5557770007")
+        cust_two = module.customer(name="Bulk All User 2", company="Bulk All Co 2", phone="5557770008")
+        module.db.session.add_all([cust_one, cust_two])
+        module.db.session.commit()
+
+        active_one = module.billDraft(customerId=cust_one.id, status="draft", payloadJson=json.dumps({"items": []}), totalAmount=10.0, itemCount=0)
+        active_two = module.billDraft(customerId=cust_two.id, status="draft", payloadJson=json.dumps({"items": []}), totalAmount=20.0, itemCount=0)
+        converted = module.billDraft(customerId=cust_one.id, status="converted", payloadJson=json.dumps({"items": []}), totalAmount=30.0, itemCount=0)
+        module.db.session.add_all([active_one, active_two, converted])
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.post(
+            "/bill-drafts/archive-bulk",
+            data={"scope": "all", "next": "/bill-drafts"},
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        assert response.headers["Location"] == "/bill-drafts"
+
+        module.db.session.refresh(active_one)
+        module.db.session.refresh(active_two)
+        module.db.session.refresh(converted)
+        assert active_one.status == "archived"
+        assert active_two.status == "archived"
+        assert converted.status == "converted"
+
+
+def test_bulk_archive_customer_bill_drafts_only_affects_that_customer(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust_one = module.customer(name="Bulk Customer User 1", company="Bulk Customer Co 1", phone="5557770009")
+        cust_two = module.customer(name="Bulk Customer User 2", company="Bulk Customer Co 2", phone="5557770010")
+        module.db.session.add_all([cust_one, cust_two])
+        module.db.session.commit()
+
+        customer_draft = module.billDraft(customerId=cust_one.id, status="draft", payloadJson=json.dumps({"items": []}), totalAmount=15.0, itemCount=0)
+        other_draft = module.billDraft(customerId=cust_two.id, status="draft", payloadJson=json.dumps({"items": []}), totalAmount=25.0, itemCount=0)
+        module.db.session.add_all([customer_draft, other_draft])
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        response = client.post(
+            "/bill-drafts/archive-bulk",
+            data={
+                "scope": "customer",
+                "customer_id": str(cust_one.id),
+                "next": f"/bill-drafts?customer_id={cust_one.id}",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        assert response.headers["Location"] == f"/bill-drafts?customer_id={cust_one.id}"
+
+        module.db.session.refresh(customer_draft)
+        module.db.session.refresh(other_draft)
+        assert customer_draft.status == "archived"
+        assert other_draft.status == "draft"
+
+
+def test_home_and_select_customer_surface_draft_entry_points(app_module):
+    module = app_module
+    with module.app.app_context():
+        cust = module.customer(name="Entry User", company="Entry Co", phone="5557770004")
+        module.db.session.add(cust)
+        module.db.session.commit()
+
+        draft = module.billDraft(
+            customerId=cust.id,
+            status="draft",
+            payloadJson=json.dumps({"items": []}),
+            totalAmount=0.0,
+            itemCount=0,
+        )
+        module.db.session.add(draft)
+        module.db.session.commit()
+
+        client = module.app.test_client()
+        home_html = client.get("/", follow_redirects=False).get_data(as_text=True)
+        select_html = client.get("/select_customer", follow_redirects=False).get_data(as_text=True)
+
+        assert "Draft Bills" in home_html
+        assert 'href="/bill-drafts"' in home_html
+        assert "Open Drafts" in select_html
+        assert "Drafts 1" in select_html
+        assert f'href="/bill-drafts?customer_id={cust.id}"' in select_html
 
 
 def test_create_bill_page_shows_previous_bills_for_selected_customer(app_module):

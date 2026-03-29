@@ -6,12 +6,12 @@
     <h2 class="fw-semibold mb-2">Choose a customer</h2>
     <p class="text-muted mb-3">All customers are laid out A–Z. Jump with the alphabet rail or scroll through the list.</p>
     <div class="d-flex justify-content-center gap-2 flex-wrap">
-      <a href="/create_customers?next_url=/create-bill&bill_generation=true" class="btn btn-dark px-4 rounded-pill shadow-sm">+ New Customer</a>
+      <a href="{{ url_for('add_customers', next_url=url_for('start_bill'), bill_generation='true') }}" class="btn btn-dark px-4 rounded-pill shadow-sm">+ New Customer</a>
       <a href="{{ url_for('home') }}" class="btn btn-outline-secondary px-4 rounded-pill">Back to home</a>
     </div>
   </div>
 
-  {% set sorted_customers = customers|sort(attribute='company') if customers else [] %}
+  {% set sorted_customers = customers or [] %}
   {% set alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' %}
   {% set letters_ns = namespace(letters=[]) %}
   {% for c in sorted_customers %}
@@ -63,14 +63,25 @@
 
           <div class="customer-card glass-panel">
             <div class="flex-grow-1">
-              <div class="fw-semibold mb-1">{{ c.company or 'Untitled Company' }}</div>
+              <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                <div class="fw-semibold">{{ c.company or 'Untitled Company' }}</div>
+                {% set draft_count = draft_counts.get(c.id, 0) if draft_counts is defined else 0 %}
+                {% if draft_count %}
+                <span class="badge rounded-pill text-bg-warning">Drafts {{ draft_count }}</span>
+                {% endif %}
+              </div>
               {% if c.phone %}<div class="text-muted small">Phone · {{ c.phone }}</div>{% endif %}
               {% if c.address %}<div class="text-muted small">Address · {{ c.address }}</div>{% endif %}
             </div>
-            <form method="POST" action="{{ url_for('start_bill') }}" class="ms-3">
-              <input type="hidden" name="customer" value="{{ c.phone }}">
-              <button type="submit" class="btn btn-primary rounded-pill px-3">Select</button>
-            </form>
+            <div class="d-flex align-items-center gap-2 ms-3 flex-wrap justify-content-end">
+              {% if draft_count %}
+              <a href="{{ url_for('bill_drafts', customer_id=c.id) }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">Open Drafts</a>
+              {% endif %}
+              <form method="POST" action="{{ url_for('start_bill') }}">
+                <input type="hidden" name="customer" value="{{ c.phone }}">
+                <button type="submit" class="btn btn-primary rounded-pill px-3">Select</button>
+              </form>
+            </div>
           </div>
 
           {% if loop.last %}</div>{% endif %}
@@ -78,7 +89,7 @@
       {% else %}
         <div class="glass-panel text-center py-5">
           <p class="mb-3">Can't find a company with that name.</p>
-          <a href="/create_customers?next_url=/create-bill&bill_generation=true" class="btn btn-dark rounded-pill px-4">Add new customer</a>
+          <a href="{{ url_for('add_customers', next_url=url_for('start_bill'), bill_generation='true') }}" class="btn btn-dark rounded-pill px-4">Add new customer</a>
         </div>
       {% endif %}
     </div>

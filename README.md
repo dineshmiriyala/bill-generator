@@ -36,6 +36,12 @@ Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Boots
 
 ### Billing and Inventory
 - Three-step bill creation flow: select/create customer, add items with live totals, preview and confirm.
+- Bills can now be saved as drafts without creating a real invoice yet.
+- Drafts stay separate from real invoices until you click `Generate Bill`.
+- The create bill page now has `Save Draft` or `Update Draft`, and draft mode also gives a `Delete Draft` action.
+- There is a dedicated `Draft Bills` page for opening, searching, and removing active drafts.
+- The `Draft Bills` page also supports bulk cleanup, so you can delete all active drafts or all drafts for one customer in one step.
+- You can also create a draft straight from an existing bill by using `Duplicate as Draft`.
 - After you pick a customer, the create bill page also shows that customer's older bills in a side panel.
 - Each older bill shows invoice number, date, total amount, paid or pending status, and item count.
 - Click any older bill in that panel to open a simple item list with unit price and add those items into the current invoice without leaving the create bill page.
@@ -48,7 +54,11 @@ Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Boots
 
 ### Customer Management
 - Full CRUD for customers with soft-delete support and duplicate prevention (phone + company/name).
-- Dedicated “About Customer” view summarises history and a recovery centre for restoring deleted customers or invoices.
+- The `Add New Customer` page now uses the same newer card-based layout as the billing pages, so the form is easier to read at a glance.
+- When a new customer is created from the bill picker flow, the app now takes you straight back into bill creation for that customer.
+- The customer list page now also follows the newer design style, with search-first customer cards instead of the older large table.
+- The `About Customer` and `Edit Customer` pages now follow the same newer card layout too, instead of the older plain form pages.
+- Dedicated customer profile pages still work alongside the recovery centre for restoring deleted customers or invoices.
 
 ### Statements and Analytics
 - The full company statement now lives under accounting, with one interactive page and matching PDF exports.
@@ -126,13 +136,30 @@ python app.py
 The development server listens on `http://127.0.0.1:42069/` by default. For LAN access, browse to `http://<machine-ip>:42069/`. On first launch, the onboarding workflow will guide you through initial setup.
 
 ### Desktop Packaging
-For Windows packaging the project ships a `build_exe.bat` script that wraps PyInstaller to produce a standalone executable. Before packaging, run `pytest` to ensure the latest test suite passes, then execute:
+For Windows packaging the project ships a `build_exe.bat` script that wraps PyInstaller to produce a standalone executable.
+
+You only need Python 3 installed on the Windows machine. You do **not** need to create or activate a venv yourself anymore.
+
+The normal flow is:
 
 ```
 build_exe.bat
 ```
 
-The script installs/updates dependencies, clears previous artefacts, and emits `BillGenerator_V4.0.exe` under `dist/`. Launch the generated binary from `cmd.exe` or PowerShell for first-run smoke testing so any console logs remain visible.
+The script now:
+- creates or reuses a local `.build-venv` automatically
+- installs or updates the required packages
+- installs PyInstaller automatically
+- clears old build output
+- builds the Windows executable into `dist/`
+
+The final file is:
+
+```text
+dist\BillGenerator_V4.5.1.exe
+```
+
+The first run can take a little longer because the script may need to create the local build environment and download packages.
 
 ## Configuration and Onboarding
 
@@ -148,17 +175,20 @@ The script installs/updates dependencies, clears previous artefacts, and emits `
 ## Daily Operations
 
 1. **Create or edit customers** from `/create_customers` or `/view_customers`. Soft deletes can be reversed from the recovery centre.
+   - If you add a customer from the bill picker flow, the app now returns you straight into bill creation for that new customer.
 2. **Manage inventory** via `/add_inventory` and `/view_inventory`. SKUs are auto-generated if omitted.
 3. **Generate invoices:**
    - Start at `/select_customer` to pick or create a customer.
+   - If that customer already has active drafts, the customer picker now shows a `Drafts` badge and an `Open Drafts` shortcut.
    - On the create bill page, you can also see the selected customer's previous bills on the right side.
    - Click an older bill to open a simple item list with unit price and add those items into the current invoice.
+   - Use `Save Draft` if the bill is not ready yet, or reopen older drafts later from the `Draft Bills` page on the home screen.
    - Add items, apply rounding, edit totals, and preview the invoice.
    - The bill detail page now shows the same customer's other bills in a left-side panel, with the current bill highlighted.
    - From the bill detail page, use `Bill with Dues` to choose the current bill and any older unpaid bills, then print one combined summary with one final total.
    - Finalise to persist an `invoice`, individual `invoiceItem` records, and a printable HTML page accessible from `/view_bills`.
 4. **Edit or delete invoices** with admin privileges only. Edits respect previous rounding choices and preserve totals on reload.
-5. **Company Statement:** Use `/accounting/statement` for the whole-company statement page, filters, and print/save PDF.
+5. **Company Books:** Use `/accounting/statement` for the whole-company statement page, filters, and print/save PDF.
    - Use the `Simple` tab there if you only want invoice rows and one total.
    - Use the `Accounting Statement` tab there if you want invoices plus transactions for the selected dates.
    - Both company statement invoice lists now have a quick `Mark as Paid` button for unpaid bills.
@@ -223,13 +253,47 @@ All API endpoints require the application to be running locally. Authentication 
 - **Database migrations:** Use Flask-Migrate commands (e.g., `flask db migrate`, `flask db upgrade`) to evolve the schema. The app runs `migrate_db()` on startup to ensure the SQLite file is up to date.
 - **Testing:** Automated coverage lives under `tests/`; run `pytest` before raising PRs or cutting releases.
 - **Coding standards:** The codebase targets Python 3.11, uses type hints in newer modules, and prefers Decimal for currency math. Follow existing patterns when contributing.
-- **Packaging:** When building desktop distributions, set the `BG_DESKTOP_ENV=1` environment variable so the data directory resolves to the user’s application support folder. The provided `build_exe.bat` handles this automatically for Windows builds.
+- **Packaging:** Desktop builds use the `BG_DESKTOP=1` environment variable so the data directory resolves to the user’s application support folder. The provided `build_exe.bat` handles this automatically for Windows builds.
 
 ## Recent Changes
 
+### 2026-03-29 16:34:23 IST (+0530)
+- Windows packaging is now one-step again.
+- `build_exe.bat` now creates its own local `.build-venv`, installs dependencies and PyInstaller, and builds the `.exe` without requiring a manually prepared venv.
+- The packaging docs now match the actual current Windows build flow and output file name.
+
+### 2026-03-29 16:25:59 IST (+0530)
+- The add-customer bill flow is now airtight: when you create a customer from the bill picker, the app takes you straight back into bill creation for that customer.
+- Missing-customer routes now fail safely with redirects instead of falling into a 404 path.
+- The customer picker now uses one safe alphabetical order from the server instead of re-sorting in the template.
+- The old unused statement template leftovers were cleaned up.
+- The `About Customer` and `Edit Customer` pages now match the newer card-based design language.
+- The README now reflects the current customer flow and current company-statement entry wording.
+
+### 2026-03-29 12:14:11 IST (+0530)
+- The customer list page now uses the newer card-based design instead of the older table layout.
+- The add-customer page now keeps only the useful preview panel and no longer shows the extra tips panel.
+
+### 2026-03-29 12:09:22 IST (+0530)
+- The `Add New Customer` page now uses the newer design style instead of the older centered form.
+- The customer form now has a cleaner two-column layout, a live preview card, clearer helper notes, and a better back action when you come from the billing flow.
+
+### 2026-03-29 12:03:06 IST (+0530)
+- The `Draft Bills` page now has bulk delete actions.
+- You can delete all active drafts at once, or delete all active drafts for one customer when that customer filter is open.
+
+### 2026-03-29 11:57:50 IST (+0530)
+- The app now has a full bill draft workflow.
+- Drafts are stored separately from real invoices and only become real bills when `Generate Bill` is used.
+- The create bill page now supports `Save Draft`, `Update Draft`, and `Delete Draft`.
+- The home page now has a `Draft Bills` entry point.
+- The customer picker now shows draft counts and an `Open Drafts` shortcut for customers with active drafts.
+- The bill detail page now has `Duplicate as Draft`.
+- Draft rows also keep delivery challan and rounded-line settings when they are reopened or duplicated from a real invoice.
+
 ### 2026-03-29 11:22:06 IST (+0530)
 - The home page no longer shows the `Generate UPI QR` shortcut.
-- The home page statement button now says `Company Statement`.
+- The home page company-wide statement entry was simplified.
 - The company statement page now has two modes: `Simple` and `Accounting Statement`.
 - `Simple` is the default mode and shows only invoice rows with one total.
 - `Accounting Statement` keeps the invoice list and the transaction ledger for the selected dates.
@@ -244,13 +308,13 @@ All API endpoints require the application to be running locally. Authentication 
 ### 2026-03-28 17:26:33 IST (+0530)
 - The whole-company statement page is now much simpler.
 - It now shows the date filter, compact totals, the invoice list for that period, and the transaction list, without the extra breakdown sections.
-- The home page statement button now simply says `Statement`.
+- The home page company-wide statement entry was shortened.
 
 ### 2026-03-28 17:20:33 IST (+0530)
 - The app now treats accounting as the only statement flow.
 - The whole-company statement now lives at `/accounting/statement`, and the customer `Simple Statement` now uses its own accounting-owned PDF route.
 - The old statement pages are no longer used directly in the UI; they now only redirect into the accounting flow for compatibility.
-- The home page now has separate `Accounting` and `Accounting Statement` buttons, plus a direct `Add Transaction` button that opens the normal transaction modal.
+- The home page now has separate customer/company accounting entry points, plus a direct `Add Transaction` button that opens the normal transaction modal.
 
 ### 2026-03-28 16:54:51 IST (+0530)
 - The accounting PDF header now keeps just the logo and removes the extra repeated company name text.

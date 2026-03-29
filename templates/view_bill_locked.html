@@ -120,6 +120,9 @@
 
           <div class="d-flex gap-2 flex-wrap view-bill-top-actions">
             <a class="btn btn-warning btn-sm shadow-sm" href="{{ url_for('edit_bill', invoicenumber=invoice_no) }}">Edit</a>
+            <form method="POST" action="{{ url_for('duplicate_bill_as_draft', invoice_no=invoice_no) }}" class="d-inline">
+              <button type="submit" class="btn btn-outline-primary btn-sm shadow-sm">Duplicate as Draft</button>
+            </form>
             <form id="deleteForm" method="POST" action="{{ url_for('delete_bill', invoicenumber=invoice_no) }}" class="d-inline">
               <input type="hidden" name="next" id="nextField" value="">
               <button type="submit" class="btn btn-danger btn-sm shadow-sm">Delete</button>

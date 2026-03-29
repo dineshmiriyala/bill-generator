@@ -76,6 +76,24 @@ class invoiceItem(db.Model):
     discount = db.Column(db.Float, default=0.0)
     taxPercentage = db.Column(db.Float, default=0.0)
     line_total = db.Column(db.Float, nullable=False)
+    rounded = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class billDraft(db.Model):
+    __tablename__ = "bill_draft"
+
+    id = db.Column(db.Integer, primary_key=True)
+    customerId = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=False, index=True)
+    status = db.Column(db.String(16), nullable=False, default="draft", index=True)
+    payloadJson = db.Column(db.Text, nullable=False, default="{}")
+    totalAmount = db.Column(db.Float, nullable=False, default=0.0)
+    itemCount = db.Column(db.Integer, nullable=False, default=0)
+    convertedInvoiceId = db.Column(db.Integer, db.ForeignKey("invoice.id"), nullable=True, index=True)
+    createdAt = db.Column(db.DateTime, nullable=False, default=_utcnow, index=True)
+    updatedAt = db.Column(db.DateTime, nullable=False, default=_utcnow, onupdate=_utcnow, index=True)
+
+    customer = db.relationship("customer", backref="bill_drafts", lazy=True)
+    converted_invoice = db.relationship("invoice", lazy=True, foreign_keys=[convertedInvoiceId])
 
 
 class role(db.Model):

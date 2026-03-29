@@ -10,6 +10,7 @@ import uuid
 import re
 from collections import defaultdict
 from copy import deepcopy
+from types import SimpleNamespace
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
@@ -47,7 +48,7 @@ from analytics import (
 from analytics_tracking import log_user_event
 from api import api_bp
 from db.db_events import activity_logs_pending, clear_activity_pending_flag  # noqa: F401
-from db.models import db, customer, invoice, invoiceItem, item, layoutConfig, accountingTransaction, expenseItem
+from db.models import db, customer, invoice, invoiceItem, item, layoutConfig, accountingTransaction, expenseItem, billDraft
 from migration import migrate_db
 from supabase_upload import SupabaseUploadError, upload_full_database, upload_to_supabase
 
@@ -423,6 +424,272 @@ def _get_customer_bill_history(
     ]
 
 
+def _safe_local_redirect(raw_target: Optional[str], fallback: str) -> str:
+    target = (raw_target or '').strip()
+    if not target:
+        return fallback
+    parsed = urlparse(target)
+    if parsed.netloc and parsed.netloc != request.host:
+        return fallback
+    if not parsed.path:
+        return fallback
+    return target
+
+
+def _redirect_missing_customer(
+    fallback: str,
+    *,
+    raw_target: Optional[str] = None,
+    message: str = 'This customer does not exist anymore.',
+):
+    flash(message, 'warning')
+    target = _safe_local_redirect(raw_target or request.referrer, fallback)
+    current_candidates = {
+        request.path,
+        request.full_path.rstrip('?'),
+        request.url,
+    }
+    if target in current_candidates:
+        target = fallback
+    return redirect(target)
+
+
+def _post_create_customer_redirect(customer_obj) -> str:
+    requested_next = _safe_local_redirect(request.form.get('next_url'), '')
+    wants_bill_flow = _draft_flag_enabled(request.form.get('bill_generation'))
+
+    if wants_bill_flow or urlparse(requested_next).path == url_for('start_bill'):
+        return url_for('start_bill', customer_id=customer_obj.id)
+    if requested_next:
+        return requested_next
+    return url_for('about_user', customer_id=customer_obj.id)
+
+
+def _draft_flag_enabled(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _clean_form_text(value) -> str:
+    return (value or '').strip()
+
+
+def _format_form_number(value, *, places: Optional[int] = None) -> str:
+    if value in (None, ''):
+        return ''
+    try:
+        numeric = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return str(value)
+    if places is not None:
+        quantizer = Decimal('1') if places == 0 else Decimal(f"1.{'0' * places}")
+        numeric = numeric.quantize(quantizer, rounding=ROUND_HALF_UP)
+        return f"{numeric:.{places}f}"
+    normalized = format(numeric.normalize(), 'f')
+    if '.' in normalized:
+        normalized = normalized.rstrip('0').rstrip('.')
+    return normalized or '0'
+
+
+def _compute_bill_row_total(quantity_raw, rate_raw, rounded) -> Optional[Decimal]:
+    quantity_text = _clean_form_text(quantity_raw)
+    rate_text = _clean_form_text(rate_raw)
+    if not quantity_text or not rate_text:
+        return None
+    try:
+        quantity_value = Decimal(quantity_text)
+        rate_value = Decimal(rate_text)
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+    raw_total = quantity_value * rate_value
+    if rounded:
+        rounded_total = Decimal(str(rounding_to_nearest_zero(raw_total)))
+        return rounded_total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    return raw_total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+def _load_bill_draft_payload(raw_payload: Optional[str]) -> Dict[str, object]:
+    if not raw_payload:
+        return {}
+    try:
+        payload = json.loads(raw_payload)
+    except (TypeError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _serialize_bill_draft_payload(form) -> Dict[str, object]:
+    descriptions = form.getlist('description[]')
+    quantities = form.getlist('quantity[]')
+    rates = form.getlist('rate[]')
+    dc_numbers = form.getlist('dc_no[]')
+    rounded_flags = form.getlist('rounded[]')
+    submitted_totals = form.getlist('total[]')
+
+    row_count = max(
+        len(descriptions),
+        len(quantities),
+        len(rates),
+        len(dc_numbers),
+        len(rounded_flags),
+        len(submitted_totals),
+        1,
+    )
+
+    items_payload = []
+    total_amount = Decimal('0.00')
+
+    for index in range(row_count):
+        description = _clean_form_text(descriptions[index] if index < len(descriptions) else '')
+        quantity = _clean_form_text(quantities[index] if index < len(quantities) else '')
+        rate = _clean_form_text(rates[index] if index < len(rates) else '')
+        dc_no = _clean_form_text(dc_numbers[index] if index < len(dc_numbers) else '')
+        rounded = index < len(rounded_flags) and rounded_flags[index] == '1'
+        submitted_total = _clean_form_text(submitted_totals[index] if index < len(submitted_totals) else '')
+
+        if not any([description, quantity, rate, dc_no, submitted_total, rounded]):
+            continue
+
+        items_payload.append({
+            'description': description,
+            'quantity': quantity,
+            'rate': rate,
+            'dc_no': dc_no,
+            'rounded': bool(rounded),
+        })
+
+        line_total = _compute_bill_row_total(quantity, rate, rounded)
+        if line_total is not None:
+            total_amount += line_total
+
+    payload = {
+        'exclude_phone': _draft_flag_enabled(form.get('exclude_phone')),
+        'exclude_gst': _draft_flag_enabled(form.get('exclude_gst')),
+        'exclude_addr': _draft_flag_enabled(form.get('exclude_addr')),
+        'dc_enabled': _draft_flag_enabled(form.get('dc_enabled')),
+        'items': items_payload,
+    }
+
+    return {
+        'payload': payload,
+        'payload_json': json.dumps(payload),
+        'item_count': len(items_payload),
+        'total_amount': float(total_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+    }
+
+
+def _build_bill_draft_form_context(draft_record: billDraft) -> Dict[str, object]:
+    payload = _load_bill_draft_payload(draft_record.payloadJson)
+    items_payload = payload.get('items') or []
+
+    descriptions = []
+    quantities = []
+    rates = []
+    dc_numbers = []
+    rounded_flags = []
+    line_totals = []
+    total_amount = Decimal('0.00')
+
+    for row in items_payload:
+        if not isinstance(row, dict):
+            continue
+        description = _clean_form_text(row.get('description'))
+        quantity = _clean_form_text(row.get('quantity'))
+        rate = _clean_form_text(row.get('rate'))
+        dc_no = _clean_form_text(row.get('dc_no'))
+        rounded = _draft_flag_enabled(row.get('rounded'))
+        line_total = _compute_bill_row_total(quantity, rate, rounded)
+
+        descriptions.append(description)
+        quantities.append(quantity)
+        rates.append(rate)
+        dc_numbers.append(dc_no)
+        rounded_flags.append('1' if rounded else '0')
+        line_totals.append(_format_form_number(line_total, places=2) if line_total is not None else '')
+
+        if line_total is not None:
+            total_amount += line_total
+
+    total_amount = total_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    return {
+        'descriptions': descriptions,
+        'quantities': quantities,
+        'rates': rates,
+        'dc_numbers': dc_numbers,
+        'rounded_flags': rounded_flags,
+        'line_totals': line_totals,
+        'dcno': _draft_flag_enabled(payload.get('dc_enabled')),
+        'exclude_phone': _draft_flag_enabled(payload.get('exclude_phone')),
+        'exclude_gst': _draft_flag_enabled(payload.get('exclude_gst')),
+        'exclude_addr': _draft_flag_enabled(payload.get('exclude_addr')),
+        'total': float(total_amount),
+        'grand_total': float(total_amount),
+        'show_prefilled_rows': bool(descriptions),
+    }
+
+
+def _get_active_draft_counts(customer_ids: Optional[List[int]] = None) -> Dict[int, int]:
+    counts_query = (
+        db.session.query(
+            billDraft.customerId,
+            func.count(billDraft.id),
+        )
+        .join(customer, customer.id == billDraft.customerId)
+        .filter(
+            billDraft.status == 'draft',
+            customer.isDeleted.is_(False),
+        )
+    )
+    if customer_ids is not None:
+        if not customer_ids:
+            return {}
+        counts_query = counts_query.filter(billDraft.customerId.in_(customer_ids))
+
+    rows = counts_query.group_by(billDraft.customerId).all()
+    return {int(customer_id): int(count or 0) for customer_id, count in rows}
+
+
+def _build_bill_draft_payload_from_invoice(invoice_obj: invoice) -> Dict[str, object]:
+    items_payload = []
+    line_items = (
+        invoiceItem.query
+        .filter_by(invoiceId=invoice_obj.id)
+        .order_by(invoiceItem.id.asc())
+        .all()
+    )
+    dc_enabled = False
+    for line_item in line_items:
+        inventory_item = db.session.get(item, line_item.itemId)
+        dc_no = _clean_form_text(line_item.dcNo)
+        if dc_no:
+            dc_enabled = True
+        items_payload.append({
+            'description': inventory_item.name if inventory_item else 'Unknown',
+            'quantity': _format_form_number(line_item.quantity),
+            'rate': _format_form_number(line_item.rate, places=2),
+            'dc_no': dc_no,
+            'rounded': bool(getattr(line_item, 'rounded', False)),
+        })
+
+    payload = {
+        'exclude_phone': bool(getattr(invoice_obj, 'exclude_phone', False)),
+        'exclude_gst': bool(getattr(invoice_obj, 'exclude_gst', False)),
+        'exclude_addr': bool(getattr(invoice_obj, 'exclude_addr', False)),
+        'dc_enabled': dc_enabled,
+        'items': items_payload,
+    }
+
+    return {
+        'payload': payload,
+        'payload_json': json.dumps(payload),
+        'item_count': len(items_payload),
+        'total_amount': float(Decimal(str(invoice_obj.totalAmount or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+    }
+
+
 def _resolve_accounting_customer_search(raw_query: str):
     query = (raw_query or '').strip()
     if not query:
@@ -793,6 +1060,8 @@ def _render_create_bill(**context):
         )
     else:
         context.setdefault('customer_bill_history', [])
+    context.setdefault('show_prefilled_rows', bool(context.get('success') or context.get('edit_mode')))
+    context.setdefault('rounded_flags', [])
     context['form_token'] = _issue_bill_token()
     return render_template('create_bill.html', **context)
 
@@ -1508,8 +1777,14 @@ def analytics():
 
 @app.route('/about_user', methods=['GET', 'POST'])
 def about_user():
-    customer_id = request.args.get('customer_id')
-    cust = customer.query.filter_by(id=customer_id, isDeleted=False).first_or_404()
+    customer_id = request.args.get('customer_id', type=int)
+    cust = customer.query.filter_by(id=customer_id, isDeleted=False).first() if customer_id else None
+    if not cust:
+        return _redirect_missing_customer(
+            url_for('view_customers'),
+            raw_target=request.args.get('next'),
+        )
+
     data = {
         'id': cust.id,
         'name': cust.name,
@@ -1520,20 +1795,35 @@ def about_user():
         'address': cust.address,
         'businessType': cust.businessType
     }
+    back_href = _safe_local_redirect(request.args.get('next') or request.referrer, url_for('view_customers'))
     return render_template(
         'about_user.html',
         data=data,
-        app_info=APP_INFO
+        app_info=APP_INFO,
+        back_href=back_href,
+        edit_href=url_for('edit_user', customer_id=cust.id, next=back_href),
+        create_bill_href=url_for('start_bill', customer_id=cust.id),
+        accounting_href=url_for('accounting_customer_detail', customer_id=cust.id),
 
     )
 
 
 @app.route('/edit_user/<int:customer_id>', methods=['GET', 'POST'])
 def edit_user(customer_id):
-    cust = customer.query.filter_by(id=customer_id, isDeleted=False).first_or_404()
+    cust = customer.query.filter_by(id=customer_id, isDeleted=False).first()
+    if not cust:
+        return _redirect_missing_customer(
+            url_for('view_customers'),
+            raw_target=request.args.get('next'),
+        )
+
+    next_url = _safe_local_redirect(
+        request.values.get('next') or request.referrer,
+        url_for('about_user', customer_id=customer_id),
+    )
 
     if request.method == 'GET':
-        return render_template('edit_user.html', customer=cust)
+        return render_template('edit_user.html', customer=cust, next_url=next_url)
 
     # POST logic: update values
     name = request.form.get('name', '').strip()
@@ -1545,8 +1835,22 @@ def edit_user(customer_id):
     company = request.form.get('company', '').strip()
 
     if not name or not phone:
-        flash('Name and Phone are required fields.', 'warning')
-        return redirect(request.referrer or url_for('about_user', customer_id=customer_id))
+        preview_customer = SimpleNamespace(
+            id=cust.id,
+            name=name,
+            phone=phone,
+            address=address,
+            gst=gst,
+            email=email,
+            businessType=businessType,
+            company=company,
+        )
+        return render_template(
+            'edit_user.html',
+            customer=preview_customer,
+            next_url=next_url,
+            error='Name and Phone are required fields.',
+        )
 
     cust.name = name
     cust.phone = phone
@@ -1561,10 +1865,24 @@ def edit_user(customer_id):
         flash('Customer updated successfully!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error updating customer: {e}', 'danger')
+        preview_customer = SimpleNamespace(
+            id=cust.id,
+            name=name,
+            phone=phone,
+            address=address,
+            gst=gst,
+            email=email,
+            businessType=businessType,
+            company=company,
+        )
+        return render_template(
+            'edit_user.html',
+            customer=preview_customer,
+            next_url=next_url,
+            error=f'Error updating customer: {e}',
+        )
 
-    next_url = request.form.get('next') or url_for('about_user', customer_id=customer_id)
-    return redirect(next_url)
+    return redirect(_safe_local_redirect(next_url, url_for('about_user', customer_id=customer_id)))
 
 
 @app.route('/recover_invoice/<int:id>')
@@ -2984,6 +3302,14 @@ def accounting_amount_to_words():
 # customers page (temperory placeholder)
 @app.route('/create_customers', methods=['GET', 'POST'])
 def add_customers():
+    def _render_add_customer(**context):
+        context.setdefault('next_url', (request.form.get('next_url') or request.args.get('next_url') or '').strip())
+        context.setdefault(
+            'bill_generation',
+            _draft_flag_enabled(request.form.get('bill_generation') or request.args.get('bill_generation'))
+        )
+        return render_template('add_customer.html', **context)
+
     if request.method == 'POST':
         use_auto = bool(request.form.get('use_auto_id'))
         phone = (request.form.get('phone') or '').strip()
@@ -2996,8 +3322,7 @@ def add_customers():
 
         # --- Basic validation ---
         if not name or (not use_auto and not phone):
-            return render_template(
-                'add_customer.html',
+            return _render_add_customer(
                 success=False,
                 duplicate=False,
                 error='Name is required. Phone is required unless you use computer-generated ID.',
@@ -3016,8 +3341,7 @@ def add_customers():
                               .filter(func.lower(customer.phone) == phone.lower(), not_deleted)
                               .first())
             if existing_phone:
-                return render_template(
-                    'add_customer.html',
+                return _render_add_customer(
                     duplicate=True,
                     error='A customer with this phone already exists.',
                     name=name, company=company, phone=phone, email=email,
@@ -3033,8 +3357,7 @@ def add_customers():
                                      not_deleted)
                              .first())
             if existing_pair:
-                return render_template(
-                    'add_customer.html',
+                return _render_add_customer(
                     duplicate=True,
                     error='A customer with the same Company + Name already exists.',
                     name=name, company=company, phone=phone, email=email,
@@ -3053,7 +3376,7 @@ def add_customers():
             db.session.commit()
             # add alert
             flash('New Customer Created successfully.', 'success')
-            return redirect(url_for('about_user', customer_id=c.id))
+            return redirect(_post_create_customer_redirect(c))
 
         # Auto-ID path (no real phone or toggle checked)
         temp_phone = f"ID-TEMP-{uuid.uuid4().hex[:8]}"
@@ -3068,11 +3391,10 @@ def add_customers():
         db.session.commit()
         # add alert
         flash('New Customer Created successfully.', 'success')
-
-        return redirect(url_for('about_user', customer_id=c.id))
+        return redirect(_post_create_customer_redirect(c))
 
     # GET -> render blank form
-    return render_template('add_customer.html')
+    return _render_add_customer()
 
 
 @app.route('/delete_customer/<int:cid>', methods=['GET', 'POST'])
@@ -3194,7 +3516,8 @@ def select_customer():
         sel = (customer.query
                .filter(customer.isDeleted == False, customer.phone == phone)
                .first_or_404())
-        return _render_create_bill(customer=sel, inventory=item.query.all())
+        inventory_list = item.query.order_by(item.name.asc()).all()
+        return _render_create_bill(customer=sel, inventory=inventory_list)
 
     # GET: either search or show recent
     q = (request.args.get('q') or '').strip()
@@ -3211,7 +3534,8 @@ def select_customer():
         customers = (base.order_by(sort_key.asc(), customer.id.asc())
                      .all())
 
-    return render_template('select_customer.html', customers=customers)
+    draft_counts = _get_active_draft_counts([cust.id for cust in customers])
+    return render_template('select_customer.html', customers=customers, draft_counts=draft_counts)
 
 
 @app.route('/view_inventory')
@@ -3388,6 +3712,206 @@ def statements_blank():
     return redirect(url_for('accounting_statement'))
 
 
+@app.route('/bill-drafts')
+def bill_drafts():
+    search_query = (request.args.get('q') or '').strip()
+    customer_id = request.args.get('customer_id', type=int)
+
+    drafts_query = (
+        billDraft.query
+        .options(joinedload(billDraft.customer))
+        .join(customer, customer.id == billDraft.customerId)
+        .filter(
+            billDraft.status == 'draft',
+            customer.isDeleted.is_(False),
+        )
+    )
+
+    selected_customer = None
+    if customer_id:
+        selected_customer = customer.alive().filter_by(id=customer_id).first()
+        if selected_customer:
+            drafts_query = drafts_query.filter(billDraft.customerId == selected_customer.id)
+        else:
+            flash('Customer not found for draft filter.', 'warning')
+            return redirect(url_for('bill_drafts'))
+
+    if search_query:
+        like_value = f"%{search_query}%"
+        drafts_query = drafts_query.filter(
+            or_(
+                customer.name.ilike(like_value),
+                customer.company.ilike(like_value),
+                customer.phone.ilike(like_value),
+            )
+        )
+
+    drafts = (
+        drafts_query
+        .order_by(billDraft.updatedAt.desc(), billDraft.id.desc())
+        .all()
+    )
+
+    return render_template(
+        'bill_drafts.html',
+        drafts=drafts,
+        search_query=search_query,
+        customer_filter=selected_customer,
+    )
+
+
+@app.route('/bill-drafts/<int:draft_id>')
+def open_bill_draft(draft_id):
+    draft_record = (
+        billDraft.query
+        .options(joinedload(billDraft.customer))
+        .filter(
+            billDraft.id == draft_id,
+            billDraft.status == 'draft',
+        )
+        .first_or_404()
+    )
+    selected_customer = draft_record.customer
+    if not selected_customer or selected_customer.isDeleted:
+        flash('This draft belongs to a deleted customer and can no longer be opened.', 'warning')
+        return redirect(url_for('bill_drafts'))
+
+    draft_context = _build_bill_draft_form_context(draft_record)
+    inventory_list = item.query.order_by(item.name.asc()).all()
+    return _render_create_bill(
+        customer=selected_customer,
+        inventory=inventory_list,
+        draft_mode=True,
+        draft_id=draft_record.id,
+        draft_updated_at=draft_record.updatedAt,
+        **draft_context,
+    )
+
+
+@app.route('/bill-drafts/save', methods=['POST'])
+def save_bill_draft():
+    selected_phone = (request.form.get('customer_phone') or request.form.get('customer') or '').strip()
+    selected_customer = customer.alive().filter_by(phone=selected_phone).first()
+    if not selected_customer:
+        flash('Please select a valid customer before saving a draft.', 'warning')
+        return redirect(url_for('select_customer'))
+
+    draft_payload = _serialize_bill_draft_payload(request.form)
+    draft_id = request.form.get('draft_id', type=int)
+
+    if draft_id:
+        draft_record = (
+            billDraft.query
+            .filter(
+                billDraft.id == draft_id,
+                billDraft.status == 'draft',
+            )
+            .first_or_404()
+        )
+        draft_record.customerId = selected_customer.id
+        draft_record.payloadJson = draft_payload['payload_json']
+        draft_record.totalAmount = draft_payload['total_amount']
+        draft_record.itemCount = draft_payload['item_count']
+        draft_record.updatedAt = datetime.now(timezone.utc)
+        flash('Draft updated successfully.', 'success')
+    else:
+        draft_record = billDraft(
+            customerId=selected_customer.id,
+            status='draft',
+            payloadJson=draft_payload['payload_json'],
+            totalAmount=draft_payload['total_amount'],
+            itemCount=draft_payload['item_count'],
+            createdAt=datetime.now(timezone.utc),
+            updatedAt=datetime.now(timezone.utc),
+        )
+        db.session.add(draft_record)
+        flash('Draft saved successfully.', 'success')
+
+    db.session.commit()
+    return redirect(url_for('open_bill_draft', draft_id=draft_record.id))
+
+
+@app.route('/bill-drafts/<int:draft_id>/archive', methods=['POST'])
+def archive_bill_draft(draft_id):
+    draft_record = (
+        billDraft.query
+        .filter(
+            billDraft.id == draft_id,
+            billDraft.status == 'draft',
+        )
+        .first_or_404()
+    )
+    draft_record.status = 'archived'
+    draft_record.updatedAt = datetime.now(timezone.utc)
+    db.session.commit()
+    flash('Draft removed from active drafts.', 'success')
+
+    fallback = url_for('bill_drafts', customer_id=draft_record.customerId)
+    return redirect(_safe_local_redirect(request.form.get('next'), fallback))
+
+
+@app.route('/bill-drafts/archive-bulk', methods=['POST'])
+def archive_bill_drafts_bulk():
+    scope = (request.form.get('scope') or 'all').strip().lower()
+    fallback = url_for('bill_drafts')
+    redirect_target = _safe_local_redirect(request.form.get('next'), fallback)
+
+    drafts_query = (
+        billDraft.query
+        .join(customer, customer.id == billDraft.customerId)
+        .filter(
+            billDraft.status == 'draft',
+            customer.isDeleted.is_(False),
+        )
+    )
+
+    if scope == 'customer':
+        customer_id = request.form.get('customer_id', type=int)
+        selected_customer = customer.alive().filter_by(id=customer_id).first()
+        if not selected_customer:
+            flash('Customer not found for draft cleanup.', 'warning')
+            return redirect(redirect_target)
+        drafts_query = drafts_query.filter(billDraft.customerId == selected_customer.id)
+    else:
+        selected_customer = None
+
+    drafts = drafts_query.all()
+    if not drafts:
+        flash('No active drafts found for this action.', 'info')
+        return redirect(redirect_target)
+
+    now = datetime.now(timezone.utc)
+    for draft_record in drafts:
+        draft_record.status = 'archived'
+        draft_record.updatedAt = now
+
+    db.session.commit()
+    if selected_customer:
+        flash(f'Archived {len(drafts)} active draft(s) for {selected_customer.company or selected_customer.name}.', 'success')
+    else:
+        flash(f'Archived {len(drafts)} active draft(s).', 'success')
+    return redirect(redirect_target)
+
+
+@app.route('/bills/<invoice_no>/duplicate-draft', methods=['POST'])
+def duplicate_bill_as_draft(invoice_no):
+    source_invoice = invoice.query.filter_by(invoiceId=invoice_no, isDeleted=False).first_or_404()
+    draft_payload = _build_bill_draft_payload_from_invoice(source_invoice)
+    draft_record = billDraft(
+        customerId=source_invoice.customerId,
+        status='draft',
+        payloadJson=draft_payload['payload_json'],
+        totalAmount=draft_payload['total_amount'],
+        itemCount=draft_payload['item_count'],
+        createdAt=datetime.now(timezone.utc),
+        updatedAt=datetime.now(timezone.utc),
+    )
+    db.session.add(draft_record)
+    db.session.commit()
+    flash(f'Draft created from invoice {source_invoice.invoiceId}.', 'success')
+    return redirect(url_for('open_bill_draft', draft_id=draft_record.id))
+
+
 @app.route('/create-bill', methods=['GET', 'POST'])
 def start_bill():
     # --- GET: prefill if customer_id is supplied; otherwise show selector ---
@@ -3401,8 +3925,10 @@ def start_bill():
             except Exception:
                 cust = None
             if not cust:
-                flash('Customer not found', 'warning')
-                return redirect(url_for('about_user'))
+                return _redirect_missing_customer(
+                    url_for('select_customer'),
+                    message='This customer no longer exists. Please choose another customer.',
+                )
             inventory_list = item.query.order_by(item.name.asc()).all()
             return _render_create_bill(customer=cust, inventory=inventory_list)
         # GET: no customer_id, just render blank/new bill
@@ -3418,7 +3944,8 @@ def start_bill():
         if not sel:
             flash('Please pick a valid customer', 'warning')
             return redirect(url_for('select_customer'))
-        return _render_create_bill(customer=sel, inventory=item.query.all())
+        inventory_list = item.query.order_by(item.name.asc()).all()
+        return _render_create_bill(customer=sel, inventory=inventory_list)
 
     # (B) Final bill submission with line items
     submitted_token = request.form.get('form_token')
@@ -3458,7 +3985,7 @@ def start_bill():
         raw_total = qty * rate
         line_total = rounding_to_nearest_zero(raw_total) if rounded else raw_total
         total += line_total
-        item_rows.append([desc, qty, rate, line_total, dc_val])
+        item_rows.append([desc, qty, rate, line_total, dc_val, rounded])
 
     # Create invoice
     new_invoice = invoice(
@@ -3487,7 +4014,7 @@ def start_bill():
     # add alerts - not needed as persistant on in place
 
     # Add line items
-    for desc, qty, rate, line_total, dc_val in item_rows:
+    for desc, qty, rate, line_total, dc_val, rounded in item_rows:
         matched_item = item.query.filter_by(name=desc).first()
         if matched_item:
             item_id = matched_item.id
@@ -3506,8 +4033,25 @@ def start_bill():
             discount=0,
             taxPercentage=0,
             line_total=line_total,
-            dcNo=(dc_val if dc_val else None)
+            dcNo=(dc_val if dc_val else None),
+            rounded=rounded,
         ))
+
+    draft_id = request.form.get('draft_id', type=int)
+    if draft_id:
+        draft_record = (
+            billDraft.query
+            .filter(
+                billDraft.id == draft_id,
+                billDraft.customerId == selected_customer.id,
+                billDraft.status == 'draft',
+            )
+            .first()
+        )
+        if draft_record:
+            draft_record.status = 'converted'
+            draft_record.convertedInvoiceId = new_invoice.id
+            draft_record.updatedAt = datetime.now(timezone.utc)
     db.session.commit()
 
     # add alerts - Not needed, persistent one is in place
@@ -3648,7 +4192,7 @@ def view_bill_locked(invoicenumber):
 
     # build row wise lists for the template
     descriptions, quantities, rates, dc_numbers = [], [], [], []
-    line_totals = []
+    line_totals, rounded_flags = [], []
 
     total = 0.0
     for li in line_items:
@@ -3658,6 +4202,7 @@ def view_bill_locked(invoicenumber):
         rates.append(li.rate)
         dc_numbers.append(li.dcNo or '')
         line_totals.append(li.line_total)
+        rounded_flags.append('1' if getattr(li, 'rounded', False) else '0')
         total += li.line_total or 0
 
     # Determine whether to show DC column
@@ -3678,6 +4223,7 @@ def view_bill_locked(invoicenumber):
         rates=rates,
         dc_numbers=dc_numbers,
         line_totals=line_totals,
+        rounded_flags=rounded_flags,
         dcno=dcno,
         total=round(total, 2),
         invoice_no=current_invoice.invoiceId,
@@ -3976,7 +4522,7 @@ def edit_bill(invoicenumber):
 
     # Build lists for template
     descriptions, quantities, rates, dc_numbers = [], [], [], []
-    line_totals = []
+    line_totals, rounded_flags = [], []
     total = 0.0
     for li in line_items:
         itm = db.session.get(item, li.itemId)
@@ -3985,6 +4531,7 @@ def edit_bill(invoicenumber):
         rates.append(li.rate)
         dc_numbers.append(li.dcNo or '')
         line_totals.append(li.line_total or 0)
+        rounded_flags.append('1' if getattr(li, 'rounded', False) else '0')
         total += li.line_total or 0
 
     dcno = any((x or '').strip() for x in dc_numbers)
@@ -4029,6 +4576,8 @@ def edit_bill(invoicenumber):
         exclude_gst=exclude_gst,
         exclude_addr=exclude_addr,
         line_totals=line_totals,
+        rounded_flags=rounded_flags,
+        show_prefilled_rows=bool(descriptions),
     )
 
 
@@ -4085,7 +4634,7 @@ def update_bill(invoicenumber):
         raw_total = qty * rate
         line_total = rounding_to_nearest_zero(raw_total) if rounded else raw_total
         total += line_total
-        rows.append((desc, qty, rate, dc, line_total))
+        rows.append((desc, qty, rate, dc, line_total, rounded))
 
     # 4) Replace all existing line items with the new set using ORM deletes so sync events fire
     existing_items = invoiceItem.query.filter_by(invoiceId=current_invoice.id).all()
@@ -4093,7 +4642,7 @@ def update_bill(invoicenumber):
         db.session.delete(existing_item)
     db.session.flush()
 
-    for desc, qty, rate, dc, line_total in rows:
+    for desc, qty, rate, dc, line_total, rounded in rows:
         # Reuse existing item by name, or create a placeholder item if not found
         matched_item = item.query.filter_by(name=desc).first()
         if matched_item:
@@ -4112,7 +4661,8 @@ def update_bill(invoicenumber):
             discount=0,
             taxPercentage=0,
             line_total=line_total,
-            dcNo=dc if dc else None
+            dcNo=dc if dc else None,
+            rounded=rounded,
         ))
 
     # 5) Update invoice total (and updatedAt if you have it)
@@ -4207,307 +4757,6 @@ def statements_company():
     else:
         params['mode'] = 'simple'
     return redirect(url_for('accounting_statement', **params))
-
-    query = (request.args.get('query') or '').strip()
-    fmt = (request.args.get('format') or request.args.get('fmt') or 'html').strip().lower().replace('-', '_')
-    start = request.args.get('start')
-    end = request.args.get('end')
-    phone = (request.args.get('phone') or '').strip()
-
-    today = datetime.now(timezone.utc).date()
-    start_dt = datetime(today.year, 1, 1, tzinfo=timezone.utc)
-    end_dt = datetime.now(timezone.utc)
-
-    # --- Parse date range if provided ---
-    if start and end:
-        try:
-            start_dt = datetime.strptime(start, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1) - timedelta(
-                seconds=1)
-            min_allowed_start = get_default_statement_start()
-            if start_dt < min_allowed_start:
-                start_dt = min_allowed_start
-        except Exception:
-            pass
-    else:
-        start_dt = get_default_statement_start()
-
-    # --- Suggestions for autocomplete ---
-    suggestions = []
-    try:
-        suggestions = [
-            {"company": c.company or "", "name": c.name or "", "phone": c.phone}
-            for c in customer.query.filter(customer.isDeleted == False).all()
-            if (c.company or c.phone or c.name)
-        ]
-    except Exception as e:
-        print("[warn] Failed to load suggestions:", e)
-
-    selected_customer = _resolve_accounting_customer_search(phone or query)
-    customer_context = None
-    customer_filter_token = ''
-    customer_company = ''
-    customer_phone = ''
-    customer_name = ''
-    customer_invoices = []
-    customer_payments = []
-    customer_adjustments = []
-    customer_statement_summary = None
-    statement_range_label = f"{start_dt.date().strftime('%d %b %Y')} — {end_dt.date().strftime('%d %b %Y')}"
-
-    if selected_customer:
-        customer_filter_token = str(selected_customer.id)
-        customer_context = _build_accounting_statement_context(
-            start_dt,
-            end_dt,
-            start_dt.date(),
-            end_dt.date(),
-            customer_query=customer_filter_token,
-        )
-        selected_info = customer_context.get('selected_customer') or {}
-        customer_company = selected_info.get('company') or selected_info.get('name') or ''
-        customer_name = selected_info.get('name') or ''
-        customer_phone = selected_info.get('phone') or ''
-        customer_invoices = customer_context.get('customer_invoices') or []
-        customer_payments = customer_context.get('customer_payments') or []
-        customer_adjustments = customer_context.get('customer_adjustments') or []
-        customer_statement_summary = customer_context.get('customer_statement_summary')
-        statement_range_label = customer_context.get('statement_range_label') or statement_range_label
-
-    simple_pdf_title = _build_export_pdf_title(
-        customer_company or customer_name or customer_phone or query or "customer_statement",
-        kind='simple_statement',
-    )
-    accounting_pdf_title = _build_export_pdf_title(
-        customer_company or customer_name or customer_phone or query or "customer_statement",
-        kind='accounting_statement',
-    )
-
-    if fmt == 'simple_pdf' and selected_customer:
-        simple_invoice_total = round(sum(float(inv['total'] or 0) for inv in customer_invoices), 2)
-        return render_template(
-            'print_statement.html',
-            start_date=start_dt,
-            end_date=end_dt,
-            total_invoices=len(customer_invoices),
-            total_amount=simple_invoice_total,
-            inv_rows=[
-                {
-                    'invoice_no': inv['invoice_no'],
-                    'date': inv['date'].strftime('%Y-%m-%d'),
-                    'total': float(inv['total'] or 0),
-                }
-                for inv in customer_invoices
-            ],
-            customer_company=customer_company,
-            customer_phone=customer_phone,
-            phone=customer_phone,
-            date_wise=False,
-            APP_INFO=APP_INFO,
-            pdf_title=simple_pdf_title,
-            generated_on=datetime.now(),
-        )
-
-    if fmt == 'csv' and selected_customer and customer_statement_summary:
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-
-        writer.writerow([f"{APP_INFO['business']['name']} - Customer Statement"])
-        writer.writerow(["Generated On", datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
-        writer.writerow(["Customer Name", customer_name])
-        writer.writerow(["Company", customer_company])
-        writer.writerow(["Customer Phone", customer_phone])
-        writer.writerow(["Period", statement_range_label])
-        writer.writerow([])
-
-        writer.writerow(["Summary"])
-        writer.writerow(["Invoices Raised (INR)", f"{customer_statement_summary['invoice_total']:.2f}"])
-        writer.writerow(["Payments Received (INR)", f"{customer_statement_summary['payment_total']:.2f}"])
-        writer.writerow(["Outgoing (INR)", f"{customer_statement_summary['adjustment_total']:.2f}"])
-        writer.writerow(["Balance Due (INR)", f"{customer_statement_summary['balance']:.2f}"])
-        writer.writerow([])
-
-        writer.writerow(["Invoices Raised"])
-        writer.writerow(["Invoice No", "Date", "Total (INR)"])
-        for inv in customer_invoices:
-            writer.writerow([
-                inv['invoice_no'],
-                inv['date'].strftime('%Y-%m-%d'),
-                f"{float(inv['total'] or 0):.2f}",
-            ])
-        writer.writerow([])
-
-        writer.writerow(["Payments Received"])
-        writer.writerow(["Date", "Txn ID", "Mode", "Invoice", "Amount (INR)", "Remarks"])
-        for pay in customer_payments:
-            writer.writerow([
-                pay['date'].strftime('%Y-%m-%d'),
-                pay['txn_id'],
-                pay['mode'],
-                pay.get('invoice_no') or '',
-                f"{float(pay['amount'] or 0):.2f}",
-                pay.get('remarks') or '',
-            ])
-        writer.writerow([])
-
-        if customer_adjustments:
-            writer.writerow(["Outgoing"])
-            writer.writerow(["Date", "Txn ID", "Mode", "Invoice", "Amount (INR)", "Remarks"])
-            for adj in customer_adjustments:
-                writer.writerow([
-                    adj['date'].strftime('%Y-%m-%d'),
-                    adj['txn_id'],
-                    adj['mode'],
-                    adj.get('invoice_no') or '',
-                    f"{float(adj['amount'] or 0):.2f}",
-                    adj.get('remarks') or '',
-                ])
-            writer.writerow([])
-
-        writer.writerow(["Payment Information"])
-        writer.writerow(["Account Name", APP_INFO["bank"]["account_name"]])
-        writer.writerow(["Bank", f"{APP_INFO['bank']['bank_name']}, {APP_INFO['bank']['branch']}"])
-        writer.writerow(["Account Number", APP_INFO["bank"]["account_number"]])
-        writer.writerow(["IFSC", APP_INFO["bank"]["ifsc"]])
-        writer.writerow(["PhonePe/GPay", APP_INFO["bank"]["bhim"]])
-        writer.writerow([])
-        writer.writerow(["Disclaimer", "This is a system-generated statement. No signature required."])
-
-        safe_company = (customer_company or customer_name or "customer").replace(" ", "_").replace("/", "_")
-        filename = f"{safe_company}_{datetime.now().strftime('%Y-%m-%d')}_statement.csv"
-        return Response(
-            buf.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename={filename}'}
-        )
-
-    if fmt == 'xlsx' and selected_customer and customer_statement_summary:
-        import openpyxl
-        from openpyxl.styles import Font, Alignment, PatternFill
-        from openpyxl.utils import get_column_letter
-        from io import BytesIO
-
-        wb = openpyxl.Workbook()
-        ws_sum = wb.active
-        ws_sum.title = "Summary"
-        ws_inv = wb.create_sheet("Invoices")
-        ws_pay = wb.create_sheet("Payments")
-        ws_adj = wb.create_sheet("Outgoing")
-
-        bold = Font(bold=True)
-        currency_fmt = u'INR #,##0.00'
-        row = 1
-        ws_sum.cell(row=row, column=1, value=f"{APP_INFO['business']['name']} - Customer Statement").font = bold
-        row += 1
-        ws_sum.cell(row=row, column=1, value="Generated On")
-        ws_sum.cell(row=row, column=2, value=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-        row += 1
-        ws_sum.cell(row=row, column=1, value="Customer Name")
-        ws_sum.cell(row=row, column=2, value=customer_name)
-        row += 1
-        ws_sum.cell(row=row, column=1, value="Company")
-        ws_sum.cell(row=row, column=2, value=customer_company)
-        row += 1
-        ws_sum.cell(row=row, column=1, value="Customer Phone")
-        ws_sum.cell(row=row, column=2, value=customer_phone)
-        row += 1
-        ws_sum.cell(row=row, column=1, value="Period")
-        ws_sum.cell(row=row, column=2, value=statement_range_label)
-        row += 2
-
-        summary_rows = [
-            ("Invoices Raised (INR)", customer_statement_summary['invoice_total']),
-            ("Payments Received (INR)", customer_statement_summary['payment_total']),
-            ("Outgoing (INR)", customer_statement_summary['adjustment_total']),
-            ("Balance Due (INR)", customer_statement_summary['balance']),
-        ]
-        for label, amount in summary_rows:
-            ws_sum.cell(row=row, column=1, value=label).font = bold
-            amt_cell = ws_sum.cell(row=row, column=2, value=round(amount, 2))
-            amt_cell.number_format = currency_fmt
-            row += 1
-
-        def _fill_sheet(sheet, headers, rows):
-            header_fill = PatternFill(start_color="E8E8E8", end_color="E8E8E8", fill_type="solid")
-            header_align = Alignment(horizontal="center", vertical="center")
-            for index, title in enumerate(headers, start=1):
-                cell = sheet.cell(row=1, column=index, value=title)
-                cell.font = bold
-                cell.fill = header_fill
-                cell.alignment = header_align
-            for row_index, values in enumerate(rows, start=2):
-                for col_index, value in enumerate(values, start=1):
-                    cell = sheet.cell(row=row_index, column=col_index, value=value)
-                    if isinstance(value, float):
-                        cell.number_format = currency_fmt
-            for col in sheet.columns:
-                max_len = 0
-                col_letter = get_column_letter(col[0].column)
-                for cell in col:
-                    val = str(cell.value) if cell.value is not None else ""
-                    max_len = max(max_len, len(val))
-                sheet.column_dimensions[col_letter].width = min(max_len + 2, 42)
-
-        _fill_sheet(
-            ws_inv,
-            ["Invoice No", "Date", "Total (INR)"],
-            [
-                [inv['invoice_no'], inv['date'].strftime('%Y-%m-%d'), round(float(inv['total'] or 0), 2)]
-                for inv in customer_invoices
-            ],
-        )
-        _fill_sheet(
-            ws_pay,
-            ["Date", "Txn ID", "Mode", "Invoice", "Amount (INR)", "Remarks"],
-            [
-                [pay['date'].strftime('%Y-%m-%d'), pay['txn_id'], pay['mode'], pay.get('invoice_no') or '', round(float(pay['amount'] or 0), 2), pay.get('remarks') or '']
-                for pay in customer_payments
-            ],
-        )
-        _fill_sheet(
-            ws_adj,
-            ["Date", "Txn ID", "Mode", "Invoice", "Amount (INR)", "Remarks"],
-            [
-                [adj['date'].strftime('%Y-%m-%d'), adj['txn_id'], adj['mode'], adj.get('invoice_no') or '', round(float(adj['amount'] or 0), 2), adj.get('remarks') or '']
-                for adj in customer_adjustments
-            ],
-        )
-
-        wb._sheets = [ws_sum, ws_inv, ws_pay, ws_adj]
-        buf = BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-        safe_company = (customer_company or customer_name or "customer").replace(" ", "_").replace("/", "_")
-        filename = f"{safe_company}_{datetime.now().strftime('%Y-%m-%d')}_statement.xlsx"
-        return Response(
-            buf.getvalue(),
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={'Content-Disposition': f'attachment; filename={filename}'}
-        )
-
-    if fmt == 'pdf' and selected_customer and customer_context:
-        template_payload = dict(customer_context, APP_INFO=APP_INFO)
-        template_payload["suggestions"] = suggestions
-        template_payload["pdf_title"] = accounting_pdf_title
-        return render_template('print_accounting_statement.html', **template_payload)
-
-    return render_template(
-        'statements_company.html',
-        query=query,
-        start_date=start_dt.date(),
-        end_date=end_dt.date(),
-        suggestions=suggestions,
-        request=request,
-        customer_company=customer_company,
-        customer_name=customer_name,
-        customer_phone=customer_phone,
-        customer_invoices=customer_invoices,
-        customer_payments=customer_payments,
-        customer_adjustments=customer_adjustments,
-        customer_statement_summary=customer_statement_summary,
-        statement_range_label=statement_range_label,
-        selected_customer=selected_customer,
-    )
 
 
 @app.route('/accounting/statement', methods=['GET'])

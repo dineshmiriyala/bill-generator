@@ -1,43 +1,73 @@
 @echo off
+setlocal EnableExtensions
+cd /d "%~dp0"
+
+set "APP_NAME=BillGenerator_V4.5.1"
+set "BUILD_VENV=.build-venv"
+set "PYTHON_CMD="
+
 echo =====================================================
-echo   Building Bill Generator V4.5.1 Dinesh Miriyala
+echo   Building %APP_NAME%
 echo =====================================================
 
-:: Activate virtual environment
+call :resolve_python
+if errorlevel 1 goto :fail
+
 echo.
-echo Activating virtual environment...
-call ..\venv\Scripts\activate
-
-if errorlevel 1 (
-    echo Failed to activate virtual environment. Make sure "venv" exists one level above.
-    pause
-    exit /b
+if not exist "%BUILD_VENV%\Scripts\python.exe" (
+    echo Creating local build environment at %BUILD_VENV%...
+    %PYTHON_CMD% -m venv "%BUILD_VENV%"
+    if errorlevel 1 (
+        echo Failed to create the local build environment.
+        goto :fail
+    )
+) else (
+    echo Reusing local build environment at %BUILD_VENV%...
 )
 
-::call cd bill-generator
-:: Confirm dependencies are up to date
 echo.
-echo Installing/Updating required packages...
-pip install --upgrade pip
-pip install -r requirements.txt
-
+echo Activating local build environment...
+call "%BUILD_VENV%\Scripts\activate.bat"
 if errorlevel 1 (
-    echo Failed to install dependencies. Please check requirements.txt
-    pause
-    exit /b
+    echo Failed to activate %BUILD_VENV%.
+    goto :fail
 )
 
-:: Clean old build artifacts
+echo.
+echo Installing or updating build tools...
+python -m pip install --upgrade pip setuptools wheel
+if errorlevel 1 (
+    echo Failed to update pip tooling.
+    goto :fail
+)
+
+echo.
+echo Installing project dependencies...
+python -m pip install -r requirements.txt
+if errorlevel 1 (
+    echo Failed to install project dependencies.
+    goto :fail
+)
+
+echo.
+echo Installing PyInstaller...
+python -m pip install --upgrade pyinstaller
+if errorlevel 1 (
+    echo Failed to install PyInstaller.
+    goto :fail
+)
+
 echo.
 echo Cleaning old build folders...
-rmdir /s /q build
-rmdir /s /q dist
+if exist build rmdir /s /q build
+if exist dist rmdir /s /q dist
 
-:: Run PyInstaller
+set "BG_DESKTOP=1"
+
 echo.
 echo Running PyInstaller build...
-pyinstaller --noconsole --onefile ^
---name "BillGenerator_V4.5.1" ^
+python -m PyInstaller --noconsole --onefile ^
+--name "%APP_NAME%" ^
 --icon "static\img\slo_bill_icon.ico" ^
 --add-data "templates;templates" ^
 --add-data "static;static" ^
@@ -49,12 +79,38 @@ desktop_launcher.py
 
 if errorlevel 1 (
     echo Build failed.
-    pause
-    exit /b
+    goto :fail
 )
 
+echo.
 echo =====================================================
-echo Build complete! Check the 'dist' folder:
-echo     → BillGenerator_V4.5.1.exe
+echo Build complete! Check the dist folder:
+echo     %cd%\dist\%APP_NAME%.exe
 echo =====================================================
 pause
+exit /b 0
+
+:resolve_python
+where py >nul 2>nul
+if not errorlevel 1 (
+    set "PYTHON_CMD=py -3"
+    %PYTHON_CMD% --version >nul 2>nul
+    if not errorlevel 1 exit /b 0
+)
+
+where python >nul 2>nul
+if not errorlevel 1 (
+    set "PYTHON_CMD=python"
+    python --version >nul 2>nul
+    if not errorlevel 1 exit /b 0
+)
+
+echo Python 3 was not found.
+echo Install Python 3 for Windows first, then run this file again.
+exit /b 1
+
+:fail
+echo.
+echo Build stopped before completion.
+pause
+exit /b 1

@@ -4,7 +4,9 @@
   <form id="createBillForm" method="POST" action="{% if edit_mode %}{{ url_for('update_bill', invoicenumber=invoice_no) }}{% else %}{{ url_for('start_bill') }}{% endif %}">
     <input type="hidden" name="form_token" value="{{ form_token }}">
     {% if edit_mode %}<input type="hidden" name="invoice_no" value="{{ invoice_no }}">{% endif %}
+    {% if draft_mode %}<input type="hidden" name="draft_id" value="{{ draft_id }}">{% endif %}
     <input type="hidden" name="customer_phone" value="{{ customer.phone if customer else '' }}">
+    <input type="hidden" name="next" value="{% if customer %}{{ url_for('bill_drafts', customer_id=customer.id) }}{% else %}{{ url_for('bill_drafts') }}{% endif %}">
 
     <div class="create-bill-layout">
       <aside class="bill-panel bill-history-sidebar">
@@ -86,9 +88,15 @@
       <div class="create-bill-canvas">
         <div class="create-bill-header">
           <div>
-            <p class="create-bill-eyebrow mb-1">{{ 'Revise invoice' if edit_mode else 'Build invoice' }}</p>
-            <h2 class="mb-1 fw-semibold">{{ 'Edit Bill' if edit_mode else 'Create Bill' }}</h2>
-            <p class="text-muted mb-0">Review the customer details, add items, and generate the bill.</p>
+            <p class="create-bill-eyebrow mb-1">{% if edit_mode %}Revise invoice{% elif draft_mode %}Continue draft{% else %}Build invoice{% endif %}</p>
+            <h2 class="mb-1 fw-semibold">{% if edit_mode %}Edit Bill{% elif draft_mode %}Draft Bill{% else %}Create Bill{% endif %}</h2>
+            <p class="text-muted mb-0">
+              {% if draft_mode %}
+                Reopen the draft, adjust the items, and generate the final bill when ready.
+              {% else %}
+                Review the customer details, add items, and generate the bill.
+              {% endif %}
+            </p>
           </div>
           {% if edit_mode %}
           <div class="create-bill-header-actions">
@@ -105,6 +113,20 @@
               <span class="ms-3 text-muted">Created at: {{ prev_created_at }}</span>
             </div>
             <span class="badge rounded-pill text-bg-info px-3 py-2">Edit mode</span>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if draft_mode %}
+        <div class="bill-panel create-bill-banner mb-4">
+          <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div>
+              <strong>Draft</strong>
+              {% if draft_updated_at %}
+              <span class="ms-3 text-muted">Last updated: {{ draft_updated_at | datetimeformat('%d %b %Y, %I:%M %p') }}</span>
+              {% endif %}
+            </div>
+            <span class="badge rounded-pill text-bg-warning px-3 py-2">Draft mode</span>
           </div>
         </div>
         {% endif %}
@@ -176,7 +198,7 @@
               <div class="meta-stack">
                 <div class="meta-row">
                   <span class="meta-label">Mode</span>
-                  <strong class="meta-value">{{ 'Edit existing bill' if edit_mode else 'Create new bill' }}</strong>
+                  <strong class="meta-value">{% if edit_mode %}Edit existing bill{% elif draft_mode %}Continue draft{% else %}Create new bill{% endif %}</strong>
                 </div>
                 <div class="meta-row">
                   <span class="meta-label">Previous Bills</span>
@@ -196,6 +218,7 @@
 
               <div class="form-check form-switch bill-dc-toggle">
                 <input class="form-check-input" type="checkbox" id="toggleDC" {% if dcno %}checked{% endif %}>
+                <input type="hidden" name="dc_enabled" id="dcEnabledInput" value="{{ '1' if dcno else '0' }}">
                 <label class="form-check-label" for="toggleDC">Include Delivery Challan No per item</label>
               </div>
 
@@ -249,7 +272,7 @@
                   <div class="{{ actions_cls }} d-flex justify-content-center align-items-center">Actions</div>
                 </div>
 
-                {% if success or edit_mode %}
+                {% if show_prefilled_rows %}
                   {% for description, quantity, rate, line_total in zip(descriptions, quantities, rates, line_totals) %}
                   <div class="row g-2 align-items-center mb-2 item-row" data-last-edited="">
                     <div class="{{ sno_cls }} serial-col sno-col"><span class="serial-index">{{ loop.index }}</span></div>
@@ -266,7 +289,7 @@
                       <button type="button" class="btn btn-info btn-sm round-zero">Round</button>
                       <button type="button" class="btn btn-danger btn-sm remove-item" aria-label="Remove item" title="Remove item">-</button>
                     </div>
-                    <input type="hidden" name="rounded[]" value="0">
+                    <input type="hidden" name="rounded[]" value="{{ rounded_flags[loop.index0] if rounded_flags is defined and rounded_flags|length > loop.index0 else '0' }}">
                   </div>
                   {% endfor %}
                 {% else %}
@@ -297,7 +320,7 @@
             <section class="bill-panel bill-card total-panel">
               <div class="total-panel-head">
                 <span class="summary-label">Total Amount</span>
-                <div id="totalAmount" class="total-amount-display">{{ grand_total if (success or edit_mode) and grand_total else '0.00' }}</div>
+                <div id="totalAmount" class="total-amount-display">{{ grand_total if show_prefilled_rows and grand_total else '0.00' }}</div>
               </div>
 
               <div class="total-actions">
@@ -305,8 +328,15 @@
                   <button type="submit" class="btn btn-primary">Update Bill</button>
                   <button type="submit" id="createNewBillBtn" class="btn btn-success" formaction="{{ url_for('start_bill') }}" formmethod="POST">Create New Bill</button>
                   <a href="{{ url_for('select_customer') }}" class="btn btn-outline-secondary">Start Fresh</a>
+                {% elif draft_mode %}
+                  <button type="submit" class="btn btn-primary">Generate Bill</button>
+                  <button type="submit" class="btn btn-outline-primary" formaction="{{ url_for('save_bill_draft') }}" formmethod="POST" formnovalidate data-skip-bill-validation="1">Update Draft</button>
+                  <button type="submit" class="btn btn-outline-danger" formaction="{{ url_for('archive_bill_draft', draft_id=draft_id) }}" formmethod="POST" formnovalidate data-skip-bill-validation="1">Delete Draft</button>
                 {% else %}
                   <button type="submit" class="btn btn-primary">Generate Bill</button>
+                  {% if customer %}
+                  <button type="submit" class="btn btn-outline-primary" formaction="{{ url_for('save_bill_draft') }}" formmethod="POST" formnovalidate data-skip-bill-validation="1">Save Draft</button>
+                  {% endif %}
                   <button type="button" id="clearForm" class="btn btn-outline-danger">Clear Form</button>
                   {% if success and not edit_mode %}<a href="{{ url_for('latest_bill_preview') }}" target="_blank" class="btn btn-success" id="printBillBtn">Print Generated Bill</a>{% endif %}
                 {% endif %}
@@ -1144,6 +1174,31 @@ function flashImportedRow(row) {
   }, 1400);
 }
 
+function restoreRoundedState(row) {
+  if (!row) return;
+  const roundedHidden = row.querySelector('input[type="hidden"][name="rounded[]"]');
+  if (!roundedHidden || roundedHidden.value !== '1') return;
+
+  const qtyInput = row.querySelector('[name="quantity[]"]');
+  if (qtyInput) {
+    qtyInput.readOnly = true;
+    qtyInput.classList.add('bg-light');
+  }
+
+  let existingMark = row.querySelector('.rounded-mark');
+  if (!existingMark) {
+    const tick = document.createElement('span');
+    tick.className = 'rounded-mark ms-2 text-success fw-bold';
+    tick.textContent = '✓';
+    const actionCol = row.querySelector('.actions-col');
+    if (actionCol) {
+      actionCol.appendChild(tick);
+    } else {
+      row.appendChild(tick);
+    }
+  }
+}
+
 function appendInvoiceRow(values = {}, options = {}) {
   const itemsContainer = document.getElementById('items');
   const existingRows = itemsContainer.querySelectorAll('.item-row');
@@ -1174,6 +1229,11 @@ function appendInvoiceRow(values = {}, options = {}) {
     rateInput.dataset.autofilled = "false";
   }
   if (totalInput) totalInput.value = values.total || '';
+  const roundedHidden = row.querySelector('input[type="hidden"][name="rounded[]"]');
+  if (roundedHidden) {
+    roundedHidden.value = values.rounded ? '1' : '0';
+  }
+  restoreRoundedState(row);
 
   renumberRows();
   calculateTotal();
@@ -1280,7 +1340,10 @@ function toggleHistoryEntry(invoiceNo, button) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.item-row').forEach(row => setupRow(row));
+  document.querySelectorAll('.item-row').forEach(row => {
+    setupRow(row);
+    restoreRoundedState(row);
+  });
   calculateTotal();
 
   document.getElementById('addItem').addEventListener('click', () => {
@@ -1408,6 +1471,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('toggleDC').addEventListener('change', function() {
     const enabled = this.checked;
+    const dcEnabledInput = document.getElementById('dcEnabledInput');
+    if (dcEnabledInput) dcEnabledInput.value = enabled ? '1' : '0';
     document.getElementById('items').classList.toggle('items-dc-enabled', enabled);
     document.querySelectorAll('.dc-col').forEach(col => {
       col.classList.toggle('d-none', !enabled);
@@ -1453,6 +1518,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 document.getElementById('createBillForm').addEventListener('submit', function(e) {
+  const submitter = e.submitter;
+  if (submitter && submitter.dataset.skipBillValidation === '1') {
+    return;
+  }
   let valid = true;
   document.querySelectorAll(".item-row").forEach(row => {
     row.querySelectorAll("input").forEach(inp => {
