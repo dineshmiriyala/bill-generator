@@ -802,6 +802,31 @@ def _resolve_accounting_customer_search(raw_query: str):
     return matches[0]
 
 
+def _find_customer_by_exact_phone(raw_phone: str):
+    normalized = (raw_phone or '').strip().lower()
+    if not normalized:
+        return None
+    return (
+        customer.alive()
+        .filter(func.lower(func.coalesce(customer.phone, '')) == normalized)
+        .order_by(customer.id.asc())
+        .first()
+    )
+
+
+def _resolve_statement_customer_token(raw_token: str):
+    token = (raw_token or '').strip()
+    if not token:
+        return None
+
+    if token.isdigit():
+        exact_id_match = customer.alive().filter_by(id=int(token)).first()
+        if exact_id_match:
+            return exact_id_match
+
+    return _find_customer_by_exact_phone(token)
+
+
 def _get_customer_activity_date_bounds(customer_id: int) -> Dict[str, object]:
     today = datetime.now(timezone.utc).date()
 
@@ -1068,7 +1093,7 @@ def _render_customer_accounting_statement_pdf(customer_obj, start_date, end_date
         start_date,
         end_date,
         txn_type_filter='all',
-        customer_query=str(customer_obj.id),
+        selected_customer_id=customer_obj.id,
     )
     template_payload = dict(context, APP_INFO=APP_INFO, statement_mode='accounting')
     pdf_label = customer_obj.company or customer_obj.name or customer_obj.phone or 'accounting_statement'
@@ -3002,7 +3027,8 @@ def _build_accounting_statement_context(
     start_date_display,
     end_date_display,
     txn_type_filter: str = 'all',
-    customer_query: str = ''
+    customer_query: str = '',
+    selected_customer_id: Optional[int] = None,
 ) -> dict:
     """
     Aggregate accounting transactions for the printable accounting statement view.
@@ -3014,7 +3040,11 @@ def _build_accounting_statement_context(
     tz_name = (APP_INFO.get('account_defaults') or {}).get('timezone') or DEFAULT_TIMEZONE
     display_tz = tz.gettz(tz_name) or timezone.utc
 
-    selected_customer = _resolve_accounting_customer_search(customer_filter) if customer_filter else None
+    selected_customer = None
+    if selected_customer_id:
+        selected_customer = customer.alive().filter_by(id=selected_customer_id).first()
+    elif customer_filter:
+        selected_customer = _resolve_statement_customer_token(customer_filter)
 
     q = (
         accountingTransaction.query
@@ -3032,26 +3062,10 @@ def _build_accounting_statement_context(
     if selected_customer:
         q = q.outerjoin(customer, accountingTransaction.customerId == customer.id)
         q = q.filter(accountingTransaction.customerId == selected_customer.id)
-    elif customer_filter:
-        like_value = f"%{customer_filter.lower()}%"
-        q = q.join(customer, accountingTransaction.customerId == customer.id)
-        q = q.filter(
-            or_(
-                func.lower(func.coalesce(customer.name, '')).like(like_value),
-                func.lower(func.coalesce(customer.company, '')).like(like_value),
-                func.lower(func.coalesce(customer.phone, '')).like(like_value),
-            )
-        )
     else:
         q = q.outerjoin(customer, accountingTransaction.customerId == customer.id)
 
     transactions = q.order_by(accountingTransaction.created_at.desc()).all()
-
-    if customer_filter and not selected_customer:
-        for txn in transactions:
-            if txn.customer:
-                selected_customer = txn.customer
-                break
 
     income_total = 0.0
     expense_total = 0.0
@@ -3170,15 +3184,6 @@ def _build_accounting_statement_context(
     )
     if selected_customer:
         invoice_query = invoice_query.filter(invoice.customerId == selected_customer.id)
-    elif customer_filter:
-        like_value = f"%{customer_filter.lower()}%"
-        invoice_query = invoice_query.join(customer, invoice.customerId == customer.id).filter(
-            or_(
-                func.lower(func.coalesce(customer.name, '')).like(like_value),
-                func.lower(func.coalesce(customer.company, '')).like(like_value),
-                func.lower(func.coalesce(customer.phone, '')).like(like_value),
-            )
-        )
 
     invoice_rows = invoice_query.order_by(invoice.createdAt.desc(), invoice.id.desc()).all()
     for inv in invoice_rows:
@@ -4784,7 +4789,7 @@ def statements():
     start_date, end_date = _resolve_legacy_statement_dates()
     phone = (request.args.get('phone') or '').strip()
     if phone:
-        selected_customer = _resolve_accounting_customer_search(phone)
+        selected_customer = _find_customer_by_exact_phone(phone)
         if selected_customer:
             return redirect(url_for(
                 'accounting_customer_simple_statement',
@@ -4808,7 +4813,10 @@ def statements_company():
     query = (request.args.get('query') or '').strip()
     phone = (request.args.get('phone') or '').strip()
     customer_token = phone or query
-    selected_customer = _resolve_accounting_customer_search(customer_token) if customer_token else None
+    if phone:
+        selected_customer = _find_customer_by_exact_phone(phone)
+    else:
+        selected_customer = _resolve_statement_customer_token(customer_token) if customer_token else None
 
     params = {}
     start = request.args.get('start')
@@ -4898,7 +4906,7 @@ def accounting_statement_legacy():
 
     customer_token = (request.args.get('customer') or '').strip()
     export = (request.args.get('export') or '').strip().lower()
-    selected_customer = _resolve_accounting_customer_search(customer_token) if customer_token else None
+    selected_customer = _resolve_statement_customer_token(customer_token) if customer_token else None
 
     if selected_customer:
         if export == 'pdf':

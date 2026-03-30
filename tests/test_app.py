@@ -1708,12 +1708,21 @@ def test_company_statement_page_defaults_to_simple_mode_and_legacy_accounting_re
         assert 'name="type"' not in page_html
 
         legacy_response = client.get(
-            "/statements/accounting?customer=Statement%20Redirect%20Co&start=2026-03-01&end=2026-03-31&export=pdf",
+            f"/statements/accounting?customer={cust.phone}&start=2026-03-01&end=2026-03-31&export=pdf",
             follow_redirects=False,
         )
         assert legacy_response.status_code == 302
         assert legacy_response.headers["Location"].endswith(
             f"/accounting/customer/{cust.id}/statement?start=2026-03-01&end=2026-03-31"
+        )
+
+        no_match_response = client.get(
+            "/statements/accounting?customer=Statement%20Redirect%20Co&start=2026-03-01&end=2026-03-31&export=pdf",
+            follow_redirects=False,
+        )
+        assert no_match_response.status_code == 302
+        assert no_match_response.headers["Location"].endswith(
+            "/accounting/statement?start=2026-03-01&end=2026-03-31&mode=accounting&export=pdf"
         )
 
 
@@ -2210,12 +2219,15 @@ def test_accounting_customer_statement_pdf_keeps_payments_when_id_is_not_in_sear
     module = app_module
     with module.app.app_context():
         cust = module.customer(name="Alpha Ledger", company="North Works", phone="5553000000")
+        other = module.customer(name="Beta Ledger", company="South Works", phone="1111111111")
         module.db.session.add(cust)
+        module.db.session.add(other)
         module.db.session.commit()
 
         id_digits = set(str(cust.id))
         safe_digit = next(d for d in "9876543210" if d not in id_digits)
         cust.phone = safe_digit * 10
+        other.phone = f"000{cust.id}000999"
         module.db.session.commit()
 
         _seed_invoice(
@@ -2233,6 +2245,21 @@ def test_accounting_customer_statement_pdf_keeps_payments_when_id_is_not_in_sear
             invoice_no="INV-ID-FILTER-001",
             created_at=datetime(2026, 3, 13, 9, 0, tzinfo=timezone.utc),
         )
+        _seed_invoice(
+            module,
+            other,
+            "INV-ID-FILTER-OTHER",
+            85.0,
+            datetime(2026, 3, 14, 9, 0, tzinfo=timezone.utc),
+            item_names=["Other Customer Item"],
+        )
+        _seed_income_payment(
+            module,
+            other,
+            25.0,
+            invoice_no="INV-ID-FILTER-OTHER",
+            created_at=datetime(2026, 3, 15, 9, 0, tzinfo=timezone.utc),
+        )
         module.db.session.commit()
 
         client = module.app.test_client()
@@ -2247,3 +2274,7 @@ def test_accounting_customer_statement_pdf_keeps_payments_when_id_is_not_in_sear
         assert "North Works" in html
         assert "Payments Received" in html
         assert "INR 55.00" in html
+        assert "INV-ID-FILTER-001" in html
+        assert "South Works" not in html
+        assert "INV-ID-FILTER-OTHER" not in html
+        assert "INR 25.00" not in html

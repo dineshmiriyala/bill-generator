@@ -66,6 +66,7 @@ Bill Generator is built on Flask, SQLAlchemy, and SQLite with a responsive Boots
   - `Simple`: only invoice rows and one total
   - `Accounting Statement`: invoice list plus the transaction ledger
 - The company statement page now uses only a date filter. Customer search is kept on the main accounting page, not on the company statement page.
+- Customer statement routes now isolate records only by exact customer id or exact phone. They no longer use fuzzy name or company matching.
 - Statement APIs for dashboards and raw invoice exports.
 - Print-ready accounting exports exist for the whole company and for a single customer.
 - Analytics dashboard summarising trends by day, month, year, weekday, and top customers using precomputed aggregates.
@@ -259,6 +260,11 @@ All API endpoints require the application to be running locally. Authentication 
 - **Desktop alerts:** Success, warning, and error alerts now auto-close in the packaged Windows app too, so they do not stay stuck on screen after normal actions.
 
 ## Recent Changes
+
+### 2026-03-30 10:02:59 IST (+0530)
+- Customer statement PDFs and old statement redirect routes now resolve customers only by exact id or exact phone.
+- The statement engine no longer falls back to fuzzy name or company matching, so other customers' bills and payments do not get mixed into a selected customer statement.
+- The regression tests now cover the leak case where another customer's phone contains the selected customer's id digits.
 
 ### 2026-03-29 22:19:17 IST (+0530)
 - The shared transaction modal now keeps loaded bills inside a scrollable bill pane, so the save button stays easy to reach even for customers with many bills.
