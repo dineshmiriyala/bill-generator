@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import time
 from datetime import datetime, date, timezone
 from logging import exception
 from pathlib import Path
@@ -9,6 +10,10 @@ import structlog
 import requests
 
 basedir = Path(__file__).parent.resolve()
+
+LOG_RETENTION_DAYS = 30
+_LOGS_PRUNED = False
+
 
 def normalize_timestamp(ts: str) -> str:
     return ts.replace("T", " ").replace("Z", "+00")
@@ -20,6 +25,24 @@ def _desktop_data_dir(app_name: str) -> Path:
         return Path.home() / "Library" / "Application Support" / app_name
     else:
         return Path.home() / ".local" / "share" / app_name
+
+
+def _prune_old_logs(log_dir: Path) -> None:
+    """Delete analytics log files older than LOG_RETENTION_DAYS. Runs once per process."""
+    global _LOGS_PRUNED
+    if _LOGS_PRUNED:
+        return
+    _LOGS_PRUNED = True
+    cutoff = time.time() - (LOG_RETENTION_DAYS * 86400)
+    try:
+        for path in log_dir.glob("analytics_*.json"):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    path.unlink()
+            except OSError as exc:
+                print(f"[warn] could not remove old analytics log {path}: {exc}")
+    except OSError as exc:
+        print(f"[warn] could not enumerate analytics logs in {log_dir}: {exc}")
 
 
 def log_user_event(data):
@@ -36,6 +59,7 @@ def log_user_event(data):
         log_dir = basedir / "logs" / "analytics"
 
     log_dir.mkdir(parents=True, exist_ok=True)
+    _prune_old_logs(log_dir)
     log_file = log_dir / f"analytics_{today_str}.json"
 
     # Ensure all required fields exist with default None if missing
