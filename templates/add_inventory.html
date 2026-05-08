@@ -23,11 +23,10 @@
       <label for="name">Description</label>
     </div>
 
-    <div class="form-floating mb-1">
-      <input type="text" class="form-control shadow-sm" id="sku" placeholder="Auto-assigned" disabled>
-      <label for="sku">SKU (auto-assigned)</label>
+    <div class="alert alert-light border small d-flex align-items-center gap-2 py-2 mb-3" role="status">
+      <i class="bi bi-info-circle text-primary"></i>
+      <span><strong>SKU</strong> is generated automatically when you save the item.</span>
     </div>
-    <div class="form-text mb-3">SKU will be generated automatically when you save the item.</div>
 
     <div class="form-floating mb-3">
       <input type="number" class="form-control shadow-sm" id="unitPrice" name="unitPrice" placeholder="Unit Price" step="0.01" required>

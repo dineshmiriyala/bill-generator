@@ -1070,6 +1070,7 @@ function setupRow(row) {
         rateInput.value = isNaN(v) ? priceMap[key] : v.toFixed(2);
         rateInput.dataset.autofilled = "true";
         row.dataset.lastEdited = 'rate';
+        clearRoundedState(row);
         calculateTotal();
       }
     }
@@ -1083,18 +1084,21 @@ function setupRow(row) {
     rateInput.addEventListener('input', () => {
       rateInput.dataset.autofilled = "false";
       row.dataset.lastEdited = 'rate';
+      clearRoundedState(row);
       calculateTotal();
     });
   }
   if (qtyInput) {
     qtyInput.addEventListener('input', () => {
       row.dataset.lastEdited = 'quantity';
+      clearRoundedState(row);
       calculateTotal();
     });
   }
   if (totalInput) {
     totalInput.addEventListener('input', () => {
       row.dataset.lastEdited = 'total';
+      clearRoundedState(row);
       calculateTotal();
     });
   }
@@ -1180,12 +1184,6 @@ function restoreRoundedState(row) {
   const roundedHidden = row.querySelector('input[type="hidden"][name="rounded[]"]');
   if (!roundedHidden || roundedHidden.value !== '1') return;
 
-  const qtyInput = row.querySelector('[name="quantity[]"]');
-  if (qtyInput) {
-    qtyInput.readOnly = true;
-    qtyInput.classList.add('bg-light');
-  }
-
   let existingMark = row.querySelector('.rounded-mark');
   if (!existingMark) {
     const tick = document.createElement('span');
@@ -1197,6 +1195,19 @@ function restoreRoundedState(row) {
     } else {
       row.appendChild(tick);
     }
+  }
+}
+
+function clearRoundedState(row) {
+  if (!row) return;
+  const roundedHidden = row.querySelector('input[type="hidden"][name="rounded[]"]');
+  if (roundedHidden) roundedHidden.value = '0';
+  const mark = row.querySelector('.rounded-mark');
+  if (mark) mark.remove();
+  const qtyInput = row.querySelector('[name="quantity[]"]');
+  if (qtyInput) {
+    qtyInput.readOnly = false;
+    qtyInput.classList.remove('bg-light');
   }
 }
 
@@ -1364,8 +1375,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (qty > 0) {
         rateInput.value = (rounded / qty).toFixed(2);
       }
-      qtyInput.readOnly = true;
-      qtyInput.classList.add("bg-light");
       row.dataset.lastEdited = 'total';
       let roundedHidden = row.querySelector('input[type="hidden"][name="rounded[]"]');
       if (roundedHidden) {
@@ -1409,8 +1418,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (qty > 0) {
         rateInput.value = (rounded / qty).toFixed(2);
       }
-      qtyInput.readOnly = true;
-      qtyInput.classList.add("bg-light");
       row.dataset.lastEdited = 'total';
       let roundedHidden = row.querySelector('input[type="hidden"][name="rounded[]"]');
       if (roundedHidden) {

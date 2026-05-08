@@ -2,6 +2,7 @@ import atexit
 import csv
 import io
 import json
+import logging
 import os
 import shutil
 import sys
@@ -57,7 +58,7 @@ BG_DESKTOP_ENV = "BG_DESKTOP"
 DEFAULT_SECRET_KEY = "super-secret"
 DATABASE_FILENAME = "app.db"
 INFO_FILENAME = "info.json"
-APP_VERSION = "3.1.2"
+APP_VERSION = "4.5.1"
 DEFAULT_TIMEZONE = "Asia/Kolkata"
 REQUIRED_DB_TABLES = {"customer", "invoice", "invoice_item", "item"}
 BACKUP_DIRNAME = "backups"
@@ -340,7 +341,8 @@ def _get_earliest_invoice_created_at() -> Optional[datetime]:
     if isinstance(earliest, str):
         try:
             earliest = datetime.strptime(earliest, ISO_8601_UTC)
-        except Exception:
+        except (ValueError, TypeError) as exc:
+            logger.warning("Could not parse earliest invoice createdAt %r: %s", earliest, exc)
             return None
 
     return _ensure_utc(earliest)
@@ -371,6 +373,20 @@ def _validate_bill_token(submitted: str) -> bool:
         return False
     session.pop('bill_form_token', None)
     return True
+
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_commit(action_label: str) -> bool:
+    """Commit the current session; rollback and log on failure. Returns True on success."""
+    try:
+        db.session.commit()
+        return True
+    except Exception:
+        db.session.rollback()
+        logger.exception("DB commit failed during %s", action_label)
+        return False
 
 
 def _get_customer_bill_history(
@@ -1170,7 +1186,8 @@ def format_inr(value, places: int = 2) -> str:
     """Return Indian-style grouping (e.g., 12,34,567.89)."""
     try:
         amt = Decimal(str(value or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    except Exception:
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        logger.warning("format_inr: could not parse %r: %s", value, exc)
         amt = Decimal('0.00')
 
     sign = '-' if amt < 0 else ''
@@ -1196,7 +1213,8 @@ def rounding_to_nearest_zero(amount):
     """Rounding number to nearest zero"""
     try:
         d = Decimal(str(amount))
-    except Exception:
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        logger.warning("rounding_to_nearest_zero: could not parse %r: %s", amount, exc)
         d = Decimal('0')
     tens = (d / Decimal('10')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
     return float(tens * Decimal('10'))
@@ -1380,10 +1398,17 @@ def ensure_info_json():
 
 def loading_info():
     info_path = ensure_info_json()
-
-    with open(info_path, 'r', encoding='utf-8') as f:
-        json_loaded = json.load(f)
-        return json_loaded
+    try:
+        with open(info_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        logger.exception("Failed to load info.json at %s; using defaults", info_path)
+        return {
+            "app_name": APP_NAME,
+            "version": APP_VERSION,
+            "onboarding_complete": False,
+            "data": _default_info_sections(),
+        }
 
 
 def refresh_info_json():
@@ -1737,8 +1762,10 @@ def recover_page():
 def recover_customer(id):
     cust = customer.query.get_or_404(id)
     cust.isDeleted = False
-    db.session.commit()
-    flash('Customer recovered successfully.', 'success')
+    if not _safe_commit('recover customer'):
+        flash('Could not recover the customer. Please try again.', 'danger')
+    else:
+        flash('Customer recovered successfully.', 'success')
     return redirect(url_for('recover_page'))
 
 
@@ -1942,8 +1969,10 @@ def edit_user(customer_id):
 def recover_invoice(id):
     inv = invoice.query.get_or_404(id)
     inv.isDeleted = False
-    db.session.commit()
-    flash('Invoice recovered successfully.', 'success')
+    if not _safe_commit('recover invoice'):
+        flash('Could not recover the invoice. Please try again.', 'danger')
+    else:
+        flash('Invoice recovered successfully.', 'success')
     return redirect(url_for('recover_page'))
 
 
@@ -1951,8 +1980,10 @@ def recover_invoice(id):
 def recover_transaction(txn_id):
     txn = accountingTransaction.query.get_or_404(txn_id)
     txn.is_deleted = False
-    db.session.commit()
-    flash('Transaction recovered successfully.', 'success')
+    if not _safe_commit('recover transaction'):
+        flash('Could not recover the transaction. Please try again.', 'danger')
+    else:
+        flash('Transaction recovered successfully.', 'success')
     return redirect(url_for('recover_page'))
 
 
@@ -1996,9 +2027,8 @@ def config():
     layout_config = layoutConfig.get_or_create()
     layout_sizes = layout_config.get_sizes()
 
-    # --- Load existing info.json ---
-    with open(info_path, 'r', encoding='utf-8') as f:
-        info_data = json.load(f)
+    # --- Load existing info.json (with fallback if corrupted/missing) ---
+    info_data = loading_info()
 
     app_info = info_data.get("data", {})
     if not isinstance(app_info, dict):
@@ -3517,8 +3547,9 @@ def delete_customer(cid):
             if hasattr(inv, 'isDeleted'):
                 inv.isDeleted = True
                 inv.deletedAt = datetime.now(timezone.utc)
-        db.session.commit()
-        # add alert,
+        if not _safe_commit('cascade delete customer'):
+            flash('Could not delete the customer. Please try again.', 'danger')
+            return redirect(url_for('view_customers'))
         flash('Customer and related invoices deleted successfully.', 'danger')
         return redirect(url_for('view_customers'))
 
@@ -3534,8 +3565,10 @@ def delete_customer(cid):
     # No invoices -> delete immediately (GET or POST)
     if hasattr(c, 'isDeleted'):
         c.isDeleted = True
-        db.session.commit()
-        flash('Customer deleted.', 'danger')
+        if not _safe_commit('delete customer'):
+            flash('Could not delete the customer. Please try again.', 'danger')
+        else:
+            flash('Customer deleted.', 'danger')
     else:
         flash('Delete not available in this build.', 'warning')
 
@@ -4419,7 +4452,7 @@ def _build_bill_preview_context(current_invoice, *, include_due_summary=False, i
             qr_svg_base64 = None
             upi_url = None
     except Exception as e:
-        print(f"[ERROR] failed to fetch QR: {e}")
+        app.logger.warning("failed to fetch QR: %s", e)
         qr_svg_base64 = None
         upi_url = None
 
@@ -4636,8 +4669,9 @@ def edit_bill(invoicenumber):
         current_invoice.exclude_phone = request.form.get('exclude_phone') in ('on', 'true', '1')
         current_invoice.exclude_gst = request.form.get('exclude_gst') in ('on', 'true', '1')
         current_invoice.exclude_addr = request.form.get('exclude_addr') in ('on', 'true', '1')
-        db.session.commit()
-        # add alert - Not needed funcionally
+        if not _safe_commit('update invoice metadata'):
+            flash('Could not save invoice settings. Please try again.', 'danger')
+            return redirect(url_for('edit_bill', invoicenumber=current_invoice.invoiceId))
         return redirect(url_for('view_bill_locked', invoicenumber=current_invoice.invoiceId, edit_bill='true'))
 
     # Render the same template as create_bill.html but pre-filled
@@ -4670,8 +4704,9 @@ def delete_bill(invoicenumber):
     inv = invoice.query.filter_by(invoiceId=invoicenumber, isDeleted=False).first_or_404()
     inv.isDeleted = True
     inv.deletedAt = datetime.now(timezone.utc)
-    db.session.commit()
-    # add alert
+    if not _safe_commit('delete bill'):
+        flash('Could not delete the bill. Please try again.', 'danger')
+        return redirect(url_for('view_bills'))
     flash('Bill has been deleted.', 'danger')
 
     next_url = request.form.get('next') or ''
@@ -4693,8 +4728,8 @@ def update_bill(invoicenumber):
 
     submitted_token = request.form.get('form_token')
     if not _validate_bill_token(submitted_token):
-        flash('The bill form has expired. Please reopen the invoice before updating.', 'warning')
-        return redirect(url_for('view_bill_locked', invoicenumber=invoicenumber, edit_bill='true'))
+        flash('The bill form expired or was already submitted. Reopen the bill and make your changes again.', 'warning')
+        return redirect(url_for('edit_bill', invoicenumber=invoicenumber))
 
     # 2) Read form inputs
     descriptions = request.form.getlist('description[]')
@@ -4976,7 +5011,7 @@ def generate_qr():
             qr_svg_base64 = None
             upi_url = None
     except Exception as e:
-        print(f"[ERROR] failed to fetch QR: {e}")
+        app.logger.warning("failed to fetch QR: %s", e)
         qr_svg_base64 = None
         upi_url = None
 
